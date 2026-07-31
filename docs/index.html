@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>procure-it — документация</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #1f6feb;
+    --green: #3fb950;
+    --orange: #d29922;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --radius: 6px;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'SF Mono', Consolas, 'Liberation Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  /* Layout */
+  .layout { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    overflow-y: auto;
+    padding: 24px 0;
+  }
+
+  .sidebar-logo {
+    padding: 0 20px 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .sidebar-logo h1 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    font-family: var(--mono);
+  }
+  .sidebar-logo .version {
+    font-size: 11px;
+    color: var(--accent);
+    background: rgba(88,166,255,0.1);
+    border: 1px solid rgba(88,166,255,0.3);
+    border-radius: 100px;
+    padding: 1px 8px;
+    display: inline-block;
+    margin-top: 4px;
+    font-family: var(--mono);
+  }
+
+  .nav-section {
+    padding: 8px 20px 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text2);
+  }
+
+  .nav-link {
+    display: block;
+    padding: 6px 20px;
+    color: var(--text2);
+    text-decoration: none;
+    font-size: 13px;
+    border-left: 2px solid transparent;
+    transition: color 0.1s, border-color 0.1s, background 0.1s;
+  }
+  .nav-link:hover { color: var(--text); background: var(--surface2); }
+  .nav-link.active { color: var(--accent); border-left-color: var(--accent); background: rgba(88,166,255,0.06); }
+
+  /* Main */
+  .main {
+    margin-left: 260px;
+    flex: 1;
+    max-width: 860px;
+    padding: 48px 40px;
+  }
+
+  /* Hero */
+  .hero {
+    margin-bottom: 48px;
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--border);
+  }
+  .hero h1 {
+    font-size: 32px;
+    font-weight: 600;
+    font-family: var(--mono);
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .hero p {
+    font-size: 16px;
+    color: var(--text2);
+    margin-bottom: 20px;
+  }
+  .badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 100px;
+    border: 1px solid;
+    font-family: var(--mono);
+  }
+  .badge-blue   { color: var(--accent); border-color: rgba(88,166,255,0.4); background: rgba(88,166,255,0.1); }
+  .badge-green  { color: var(--green);  border-color: rgba(63,185,80,0.4);  background: rgba(63,185,80,0.1); }
+  .badge-orange { color: var(--orange); border-color: rgba(210,153,34,0.4); background: rgba(210,153,34,0.1); }
+  .badge-purple { color: var(--purple); border-color: rgba(188,140,255,0.4);background: rgba(188,140,255,0.1); }
+
+  /* Sections */
+  .section { margin-bottom: 56px; scroll-margin-top: 24px; }
+  .section h2 {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 24px 0 10px;
+  }
+  .section p { color: var(--text2); margin-bottom: 12px; }
+  .section ul { padding-left: 20px; color: var(--text2); margin-bottom: 12px; }
+  .section ul li { margin-bottom: 4px; }
+
+  /* Code */
+  pre {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    overflow-x: auto;
+    margin: 12px 0;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--text);
+  }
+  code {
+    font-family: var(--mono);
+    font-size: 0.875em;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    color: var(--text);
+  }
+  pre code { background: none; border: none; padding: 0; font-size: 1em; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; margin: 12px 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th {
+    text-align: left;
+    padding: 8px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    font-weight: 600;
+  }
+  td {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    color: var(--text2);
+    vertical-align: top;
+  }
+  td:first-child { color: var(--accent); font-family: var(--mono); font-size: 12px; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* Method badges */
+  .method {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 3px;
+    margin-right: 4px;
+  }
+  .GET    { background: rgba(63,185,80,0.15);  color: var(--green); }
+  .POST   { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .PUT    { background: rgba(210,153,34,0.15); color: var(--orange); }
+  .PATCH  { background: rgba(188,140,255,0.15);color: var(--purple); }
+  .DELETE { background: rgba(248,81,73,0.15);  color: var(--red); }
+
+  /* Steps */
+  .steps { counter-reset: step; }
+  .step {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    counter-increment: step;
+  }
+  .step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent2);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .step-body { flex: 1; }
+  .step-body strong { color: var(--text); display: block; margin-bottom: 4px; }
+
+  /* Keyboard */
+  kbd {
+    display: inline-block;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  /* Alert */
+  .alert {
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    margin: 12px 0;
+    border-left: 3px solid;
+    font-size: 13px;
+  }
+  .alert-info  { background: rgba(88,166,255,0.08); border-color: var(--accent); color: var(--text2); }
+  .alert-warn  { background: rgba(210,153,34,0.08); border-color: var(--orange); color: var(--text2); }
+  .alert-green { background: rgba(63,185,80,0.08);  border-color: var(--green);  color: var(--text2); }
+
+  /* File tree */
+  .tree {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.8;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    color: var(--text2);
+  }
+  .tree .dir  { color: var(--accent); }
+  .tree .file { color: var(--text); }
+  .tree .dim  { color: var(--text2); opacity: 0.5; }
+  .tree .comment { color: var(--text2); }
+
+  /* Branch diagram */
+  .branch-diagram {
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 2;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+  }
+  .br-main { color: var(--green); }
+  .br-dev  { color: var(--orange); }
+  .br-tag  { color: var(--purple); }
+  .br-dim  { color: var(--text2); opacity: 0.4; }
+
+  /* GitHub link */
+  .gh-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 500;
+    transition: border-color 0.1s, background 0.1s;
+  }
+  .gh-link:hover { border-color: var(--accent); background: rgba(88,166,255,0.05); }
+
+  /* Scrollspy active */
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .main { margin-left: 0; padding: 24px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h1>procure-it</h1>
+    <span class="version">26w31-b01</span>
+  </div>
+  <div class="nav-section">Начало</div>
+  <a href="#intro"     class="nav-link active">О проекте</a>
+  <a href="#quickstart" class="nav-link">Быстрый старт</a>
+  <a href="#structure" class="nav-link">Структура проекта</a>
+  <a href="#config"    class="nav-link">Конфигурация</a>
+
+  <div class="nav-section">Использование</div>
+  <a href="#requests"      class="nav-link">Заявки</a>
+  <a href="#realization"   class="nav-link">Режим реализации</a>
+  <a href="#registry"      class="nav-link">Реестр</a>
+  <a href="#excel"         class="nav-link">Excel экспорт</a>
+  <a href="#bitrix"        class="nav-link">Bitrix24</a>
+  <a href="#spec"          class="nav-link">Спецификация</a>
+  <a href="#shortcuts"     class="nav-link">Горячие клавиши</a>
+
+  <div class="nav-section">Инфраструктура</div>
+  <a href="#https"    class="nav-link">HTTPS</a>
+  <a href="#backup"   class="nav-link">Бэкап</a>
+  <a href="#api"      class="nav-link">REST API</a>
+  <a href="#health"   class="nav-link">Health check</a>
+
+  <div class="nav-section">Деплой</div>
+  <a href="#docker"      class="nav-link">Docker</a>
+
+  <div class="nav-section">Разработка</div>
+  <a href="#branches"    class="nav-link">Ветки (main / dev)</a>
+  <a href="#versioning"  class="nav-link">Версионирование</a>
+  <a href="#contributing" class="nav-link">Contributing</a>
+</aside>
+
+<!-- Main -->
+<main class="main">
+
+  <!-- Hero -->
+  <div class="hero" id="intro">
+    <h1>procure-it</h1>
+    <p>Self-hosted web tool for IT asset procurement — manage purchase requests, calculate prices, generate Excel sheets and specifications.</p>
+    <div class="badges">
+      <span class="badge badge-blue">26w31-b01</span>
+      <span class="badge badge-green">MIT</span>
+      <span class="badge badge-green">Node.js 18+</span>
+      <span class="badge badge-blue">SQLite</span>
+      <span class="badge badge-orange">HTTPS</span>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+      <a href="https://github.com/DarkyAndSparky/procure-it" class="gh-link" target="_blank">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub Repository
+      </a>
+      <a href="https://github.com/DarkyAndSparky/procure-it/issues" class="gh-link" target="_blank">🐛 Issues</a>
+    </div>
+  </div>
+
+  <!-- Quick Start -->
+  <section class="section" id="quickstart">
+    <h2>Быстрый старт</h2>
+    <p>Единственное требование — <strong>Node.js 18+</strong>. Скачать: <a href="https://nodejs.org/" style="color:var(--accent)">nodejs.org</a> (LTS версия).</p>
+
+    <h3>Windows</h3>
+    <pre>Дважды кликнуть start.bat</pre>
+    <p>При первом запуске автоматически устанавливаются зависимости (~1 мин) и генерируется TLS-сертификат.</p>
+
+    <h3>Linux / macOS</h3>
+    <pre>chmod +x start.sh && ./start.sh</pre>
+
+    <h3>Доступ</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Где</th><th>Адрес</th></tr>
+        <tr><td>Локально</td><td><code>https://localhost:9111</code></td></tr>
+        <tr><td>По сети (LAN)</td><td><code>https://[IP сервера]:9111</code></td></tr>
+        <tr><td>HTTP редирект</td><td><code>http://[IP]:9112</code> → HTTPS</td></tr>
+      </table>
+    </div>
+    <div class="alert alert-warn">
+      <strong>Предупреждение браузера:</strong> при первом открытии браузер покажет «Небезопасное соединение». Нажмите <strong>Дополнительно → Перейти на сайт</strong> (Chrome/Edge) или <strong>Принять риск</strong> (Firefox). Это происходит один раз.
+    </div>
+  </section>
+
+  <!-- Structure -->
+  <section class="section" id="structure">
+    <h2>Структура проекта</h2>
+    <div class="tree">
+      <span class="dir">procure-it/</span><br>
+      ├── <span class="file">server.js</span>         <span class="comment"># Express + SQLite backend</span><br>
+      ├── <span class="file">package.json</span><br>
+      ├── <span class="file">start.bat</span>          <span class="comment"># Запуск Windows</span><br>
+      ├── <span class="file">start.sh</span>           <span class="comment"># Запуск Linux/macOS</span><br>
+      ├── <span class="file">.env.example</span>       <span class="comment"># Шаблон переменных</span><br>
+      ├── <span class="file">CONTRIBUTING.md</span><br>
+      ├── <span class="file">LICENSE</span><br>
+      ├── <span class="dir">public/</span><br>
+      │   └── <span class="file">zakupki.html</span>   <span class="comment"># SPA фронтенд (vanilla JS)</span><br>
+      ├── <span class="dir">docs/</span><br>
+      │   └── <span class="file">index.html</span>     <span class="comment"># Эта страница</span><br>
+      └── <span class="dir dim">data/</span>              <span class="comment dim"># git-ignored, создаётся автоматически</span><br>
+          ├── <span class="dim">zakupki.db</span>     <span class="comment dim"># SQLite база данных</span><br>
+          ├── <span class="dir dim">certs/</span>         <span class="comment dim"># TLS сертификат</span><br>
+          └── <span class="dir dim">backups/</span>       <span class="comment dim"># Автоматические бэкапы</span>
+    </div>
+  </section>
+
+  <!-- Config -->
+  <section class="section" id="config">
+    <h2>Конфигурация</h2>
+    <pre>cp .env.example .env</pre>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Переменная</th><th>По умолчанию</th><th>Описание</th></tr>
+        <tr><td>PORT</td><td>9111</td><td>Порт HTTPS сервера. HTTP-редирект = PORT+1 (9112)</td></tr>
+        <tr><td>PROCURE_PASSWORD</td><td><em>пусто</em></td><td>Пароль доступа. Если не задан — аутентификация отключена</td></tr>
+        <tr><td>BACKUP_INTERVAL_MS</td><td>21600000</td><td>Интервал автобэкапа (мс). 21600000 = 6 часов</td></tr>
+      </table>
+    </div>
+    <div class="alert alert-info">
+      HTTP-редирект всегда слушает на <code>PORT + 1</code> (по умолчанию 9112).
+    </div>
+  </section>
+
+  <!-- Requests -->
+  <section class="section" id="requests">
+    <h2>Заявки</h2>
+    <p>Основная единица работы. Каждая заявка содержит:</p>
+    <ul>
+      <li><strong>Организация</strong> — выбирается из справочника, автоматически подставляет договор и адрес доставки</li>
+      <li><strong>Номер задачи Битрикс</strong> — для связи с системой задач</li>
+      <li><strong>Номер счёта поставщика</strong> — текстовое поле, ищется в реестре</li>
+      <li><strong>МОЛ</strong> — материально ответственное лицо / получатель</li>
+      <li><strong>Позиции</strong> — таблица товаров с полями: наименование, комментарий/ФИО, ссылка, кол-во, ед., цена закупа</li>
+    </ul>
+
+    <h3>Расчёт цены продажи</h3>
+    <p>Формула соответствует оригинальному Excel-шаблону:</p>
+    <pre>% от заказа  = цена_закупа_строки / итого_закупа
+доля_доставки = % от заказа × стоимость_доставки
+цена_с_дост   = цена_закупа + доля_доставки / кол-во
+цена_продажи  = цена_с_дост × (1 + наценка%)</pre>
+
+    <div class="alert alert-green">
+      Формула верифицирована по трём реальным файлам (ЯП июнь, ЛД июнь, ИП Рогулькин июль) — все 16 позиций совпали с точностью до копейки.
+    </div>
+
+    <h3>Шаблоны позиций</h3>
+    <p>Часто используемые наборы товаров можно сохранить как шаблон (кнопка «💾 Шаблон») и добавлять одним кликом из выпадашки «+ Из шаблона».</p>
+
+    <h3>Перетаскивание позиций</h3>
+    <p>Строки таблицы позиций можно перетаскивать за иконку <strong>⠿</strong> слева для изменения порядка. Нумерация и расчёты обновляются автоматически.</p>
+
+    <h3>Импорт из Excel</h3>
+    <p>Загрузи прайс-лист поставщика. Ожидаемые колонки:</p>
+    <pre>Наименование | Кол-во | Ед. | Цена</pre>
+    <p>Строка заголовка определяется автоматически.</p>
+  </section>
+
+  <!-- Realization -->
+  <section class="section" id="realization">
+    <h2>Режим реализации</h2>
+    <p>Для закупок на собственный склад (например ИП Рогулькин): в каждой строке позиции появляется выпадашка «ЮЛ / Получатель» — выбираешь кому пойдёт этот товар.</p>
+    <p>В сгенерированной спецификации отображаются <strong>только позиции самого ИП</strong>, а не все строки таблицы.</p>
+    <p>Активируется кнопкой «На реализацию» в боковом меню. Синий баннер вверху формы показывает что режим активен.</p>
+  </section>
+
+  <!-- Registry -->
+  <section class="section" id="registry">
+    <h2>Реестр заявок</h2>
+    <h3>Поиск</h3>
+    <p>Поиск работает по: названию заявки, МОЛ, организации, номеру Битрикс, номеру счёта, наименованиям позиций.</p>
+
+    <h3>Фильтры</h3>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Фильтр</th><th>Описание</th></tr>
+        <tr><td>Организация</td><td>Только заявки выбранной организации</td></tr>
+        <tr><td>Месяц</td><td>По дате заявки</td></tr>
+        <tr><td>Статус</td><td>Новая / В работе / Оплачено / Отменена</td></tr>
+        <tr><td>Поставщик</td><td>По полю «Поставщик»</td></tr>
+      </table>
+    </div>
+
+    <h3>Пагинация</h3>
+    <p>25 / 50 / 100 заявок на странице. Появляется автоматически когда заявок больше выбранного размера страницы.</p>
+
+    <h3>Статусы</h3>
+    <p>Кнопка «Статус» в строке реестра переключает по кругу. Цвета: синий → жёлтый → зелёный → красный.</p>
+  </section>
+
+  <!-- Excel -->
+  <section class="section" id="excel">
+    <h2>Excel экспорт</h2>
+    <p>Генерируется файл <code>СпецНомер_расчёты.xlsx</code> с двумя листами.</p>
+
+    <h3>Лист 1 — Расчёты</h3>
+    <p>Структура соответствует оригинальному ручному шаблону:</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Строка</th><th>Содержимое</th></tr>
+        <tr><td>1</td><td>Пустая</td></tr>
+        <tr><td>2</td><td>«Потребности пользователей» + «Доставка» + сумма</td></tr>
+        <tr><td>3</td><td>Заголовки колонок (ЮЛ, ФИО, №ПП, Наименование, ...)</td></tr>
+        <tr><td>4+</td><td>Позиции с расчётными полями</td></tr>
+        <tr><td>n+1</td><td>Итого</td></tr>
+        <tr><td>n+3</td><td>Прибыль</td></tr>
+      </table>
+    </div>
+
+    <h3>Лист 2 — Спецификация</h3>
+    <p>Таблица с ценами продажи. В режиме реализации — только позиции ИП, не все строки.</p>
+  </section>
+
+  <!-- Bitrix24 -->
+  <section class="section" id="bitrix">
+    <h2>Интеграция Bitrix24</h2>
+    <p>Кнопка <strong>🔗 Bitrix24</strong> в форме заявки отправляет данные через входящий webhook — создаёт сделку в CRM с описанием позиций и суммой.</p>
+    <h3>Настройка</h3>
+    <ol style="padding-left:20px;color:var(--text2);line-height:2">
+      <li>В Bitrix24: <strong>Настройки → Разработчикам → Входящий webhook</strong></li>
+      <li>Добавить права: <code>crm</code></li>
+      <li>Скопировать URL вида <code>https://your.bitrix24.ru/rest/1/ключ/</code></li>
+      <li>Вставить в procure-it: <strong>Конфиг → Интеграция Bitrix24 → Webhook URL</strong></li>
+    </ol>
+    <div class="alert alert-info">
+      Webhook не передаётся в JSON-бэкап и маскируется в <code>GET /api/settings</code>. Пароль сетевой папки тоже не попадает в бэкап.
+    </div>
+  </section>
+
+  <!-- Spec -->
+  <section class="section" id="spec">
+    <h2>Спецификация</h2>
+    <p>Предпросмотр спецификации в браузере: кнопка «📄 Спецификация» в форме или «Спецификация» в раскрытой строке реестра.</p>
+    <p>Печать в PDF: кнопка «Печать / PDF» → в диалоге выбрать «Сохранить как PDF».</p>
+    <p>Документ содержит: заголовок, дату, таблицу позиций, итого, условия поставки, блок подписей (Поставщик / Покупатель).</p>
+  </section>
+
+  <!-- Shortcuts -->
+  <section class="section" id="shortcuts">
+    <h2>Горячие клавиши</h2>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Клавиша</th><th>Действие</th></tr>
+        <tr><td><kbd>Ctrl+S</kbd></td><td>Сохранить заявку</td></tr>
+        <tr><td><kbd>Ctrl+N</kbd></td><td>Новая заявка (очистить форму)</td></tr>
+        <tr><td><kbd>Ctrl+R</kbd></td><td>Открыть реестр</td></tr>
+        <tr><td><kbd>Ctrl+Enter</kbd></td><td>Добавить строку позиции</td></tr>
+        <tr><td><kbd>Escape</kbd></td><td>Закрыть модалку / отменить редактирование</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Показать справку по клавишам</td></tr>
+      </table>
+    </div>
+    <p>Кнопка ⌨️ в правом верхнем углу также открывает справку.</p>
+  </section>
+
+  <!-- HTTPS -->
+  <section class="section" id="https">
+    <h2>HTTPS</h2>
+    <p>При первом запуске автоматически генерируется самоподписанный сертификат RSA-2048 сроком на 10 лет.</p>
+    <pre>data/certs/cert.pem   # сертификат
+data/certs/key.pem    # приватный ключ</pre>
+    <p>Чтобы использовать собственный сертификат — замените файлы и перезапустите сервер.</p>
+    <div class="alert alert-info">
+      HTTP-порт (PORT+1, по умолчанию 9112) автоматически редиректит на HTTPS.
+    </div>
+  </section>
+
+  <!-- Backup -->
+  <section class="section" id="backup">
+    <h2>Бэкап</h2>
+    <h3>Автоматический</h3>
+    <p>Запускается через 10 секунд после старта, затем каждые 6 часов. Файлы сохраняются в <code>data/backups/zakupki_YYYY-MM-DD_HH-MM.db</code>. Файлы старше 30 дней удаляются автоматически.</p>
+
+    <h3>Ручной (из интерфейса)</h3>
+    <p>Раздел «Организации» → кнопки:</p>
+    <ul>
+      <li><strong>💾 JSON бэкап</strong> — полный экспорт в JSON (организации, заявки, адреса, шаблоны)</li>
+      <li><strong>🗄️ DB бэкап</strong> — скачать SQLite файл</li>
+      <li><strong>📂 Восстановить</strong> — загрузить JSON бэкап</li>
+    </ul>
+
+    <h3>Через API</h3>
+    <pre>GET  /api/backup     → JSON
+GET  /api/backup/db  → SQLite файл
+POST /api/restore    → восстановить из JSON</pre>
+  </section>
+
+  <!-- API -->
+  <section class="section" id="api">
+    <h2>REST API</h2>
+
+    <h3>Организации</h3>
+    <div class="table-wrap"><table>
+      <tr><th>Метод</th><th>Путь</th><th>Описание</th></tr>
+      <tr><td><span class="method GET">GET</span>/api/orgs</td><td>Список организаций</td></tr>
+      <tr><td><span class="method POST">POST</span>/api/orgs</td><td>Создать организацию</td></tr>
+      <tr><td><span class="method PUT">PUT</span>/api/orgs/:id</td><td>Обновить организацию</td></tr>
+      <tr><td><span class="method DELETE">DELETE</span>/api/orgs/:id</td><td>Удалить (если нет заявок)</td></tr>
+    </table></div>
+
+    <h3>Заявки</h3>
+    <div class="table-wrap"><table>
+      <tr><th>Метод</th><th>Путь</th><th>Описание</th></tr>
+      <tr><td><span class="method GET">GET</span>/api/requests</td><td>Список. Query: <code>?q= &org= &month= &status= &supplier=</code></td></tr>
+      <tr><td><span class="method GET">GET</span>/api/requests/:id</td><td>Одна заявка</td></tr>
+      <tr><td><span class="method POST">POST</span>/api/requests</td><td>Создать</td></tr>
+      <tr><td><span class="method PUT">PUT</span>/api/requests/:id</td><td>Обновить</td></tr>
+      <tr><td><span class="method PATCH">PATCH</span>/api/requests/:id/status</td><td>Только статус</td></tr>
+      <tr><td><span class="method DELETE">DELETE</span>/api/requests/:id</td><td>Удалить</td></tr>
+    </table></div>
+
+    <h3>Прочее</h3>
+    <div class="table-wrap"><table>
+      <tr><th>Метод</th><th>Путь</th><th>Описание</th></tr>
+      <tr><td><span class="method GET">GET</span>/api/addresses</td><td>Последние адреса доставки</td></tr>
+      <tr><td><span class="method POST">POST</span>/api/addresses</td><td>Сохранить адрес</td></tr>
+      <tr><td><span class="method GET">GET</span>/api/templates</td><td>Шаблоны позиций</td></tr>
+      <tr><td><span class="method POST">POST</span>/api/templates</td><td>Создать шаблон</td></tr>
+      <tr><td><span class="method DELETE">DELETE</span>/api/templates/:id</td><td>Удалить шаблон</td></tr>
+      <tr><td><span class="method GET">GET</span>/api/stats</td><td>Агрегированная статистика</td></tr>
+      <tr><td><span class="method GET">GET</span>/api/backup</td><td>JSON бэкап</td></tr>
+      <tr><td><span class="method POST">POST</span>/api/restore</td><td>Восстановить из JSON</td></tr>
+      <tr><td><span class="method GET">GET</span>/api/backup/db</td><td>SQLite бэкап</td></tr>
+      <tr><td><span class="method GET">GET</span>/health</td><td>Health check</td></tr>
+      <tr><td><span class="method GET">GET</span>/api/audit</td><td>История изменений (<code>?request_id=&amp;limit=50</code>)</td></tr>
+      <tr><td><span class="method GET">GET</span>/api/auth/status</td><td>Статус авторизации</td></tr>
+      <tr><td><span class="method POST">POST</span>/api/auth/login</td><td>Войти (body: <code>{password}</code>)</td></tr>
+      <tr><td><span class="method POST">POST</span>/api/auth/logout</td><td>Выйти</td></tr>
+      <tr><td><span class="method GET">GET</span>/api/settings</td><td>Настройки приложения (логотип, цвета, webhook)</td></tr>
+      <tr><td><span class="method PUT">PUT</span>/api/settings</td><td>Сохранить настройки</td></tr>
+      <tr><td><span class="method POST">POST</span>/api/spec-docx</td><td>Сгенерировать спецификацию в .docx</td></tr>
+      <tr><td><span class="method POST">POST</span>/api/send-bitrix</td><td>Отправить заявку в Bitrix24 через webhook</td></tr>
+      <tr><td><span class="method POST">POST</span>/api/open-folder</td><td>Открыть сетевую папку (только Windows)</td></tr>
+    </table></div>
+  </section>
+
+  <!-- Health -->
+  <section class="section" id="health">
+    <h2>Health check</h2>
+    <pre>GET /health
+
+{
+  "status": "ok",
+  "requests": 42,
+  "uptime": 3600
+}</pre>
+    <p>Используется Docker healthcheck-ом и системами мониторинга. Не требует авторизации.</p>
+  </section>
+
+  <!-- Docker -->
+  <section class="section" id="docker">
+    <h2>Docker</h2>
+
+    <h3>Быстрый старт</h3>
+    <pre>git clone https://github.com/DarkyAndSparky/procure-it.git
+cd procure-it
+
+# Без пароля
+docker compose up -d
+
+# С паролем
+PROCURE_PASSWORD=yourpassword docker compose up -d</pre>
+
+    <div class="alert alert-warn">
+      При первом открытии браузер покажет предупреждение о сертификате.<br>
+      Нажмите <strong>Дополнительно → Перейти</strong>.
+    </div>
+
+    <h3>Порты</h3>
+    <div class="table-wrap"><table>
+      <tr><th>Порт</th><th>Протокол</th><th>Назначение</th></tr>
+      <tr><td>9111</td><td>HTTPS</td><td>Основной</td></tr>
+      <tr><td>9112</td><td>HTTP</td><td>Редирект на HTTPS</td></tr>
+    </table></div>
+
+    <h3>Данные</h3>
+    <p>Все данные хранятся в папке <code>./data/</code> на хосте (volume mount) — не теряются при пересборке контейнера.</p>
+    <pre>data/zakupki.db      # База данных
+data/certs/          # TLS сертификат
+data/backups/        # Автобэкапы каждые 6ч
+logs/access.log      # Логи запросов</pre>
+
+    <h3>Команды</h3>
+    <pre>docker compose ps             # статус
+docker compose logs -f        # логи в реальном времени
+docker compose down           # остановить
+docker compose up -d --build  # пересобрать после обновления
+docker exec -it procure-it sh # войти в контейнер</pre>
+
+    <h3>Переменные окружения</h3>
+    <div class="table-wrap"><table>
+      <tr><th>Переменная</th><th>По умолчанию</th><th>Описание</th></tr>
+      <tr><td>PORT</td><td>9111</td><td>HTTPS порт</td></tr>
+      <tr><td>PROCURE_PASSWORD</td><td>не задан</td><td>Пароль для входа (если задан — auth включена)</td></tr>
+      <tr><td>BACKUP_INTERVAL_MS</td><td>21600000</td><td>Интервал автобэкапа (мс)</td></tr>
+    </table></div>
+  </section>
+
+  <!-- Branches -->
+  <section class="section" id="branches">
+    <h2>Ветки: main / dev</h2>
+    <div class="branch-diagram">
+      <span class="br-dev">dev</span>  ──●──●──●──●──●──●──●──●─── (активная разработка)<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;╲&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;╲<br>
+      <span class="br-main">main</span> ─────────────────●───────────────●── (только релизы)<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="br-tag">v26w29r02</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="br-tag">v26w31-b01</span>
+    </div>
+
+    <h3>Правила</h3>
+    <ul>
+      <li>В <code>main</code> никогда не коммитим напрямую</li>
+      <li>Вся работа ведётся в <code>dev</code></li>
+      <li>Когда <code>dev</code> стабилен и проверен — merge в <code>main</code> + тег</li>
+      <li>Дефолтная ветка на GitHub — <code>dev</code></li>
+    </ul>
+  </section>
+
+  <!-- Versioning -->
+  <section class="section" id="versioning">
+    <h2>Версионирование</h2>
+    <p>Формат: <code>YYwWW-bNN</code></p>
+    <div class="table-wrap"><table>
+      <tr><th>Часть</th><th>Значение</th><th>Пример</th></tr>
+      <tr><td>YY</td><td>Год (2 цифры)</td><td>26</td></tr>
+      <tr><td>wWW</td><td>ISO-номер недели</td><td>w31</td></tr>
+      <tr><td>bNN</td><td>Номер сборки на неделе</td><td>b01</td></tr>
+    </table></div>
+    <pre>26w31-b01   # 2026, неделя 31, первая сборка
+26w31-b02   # 2026, неделя 31, вторая сборка
+26w32-b01   # 2026, неделя 32, первая сборка</pre>
+    <p>При релизе обновить: <code>package.json</code> → <code>version</code>, <code>README.md</code> badge, тег в git.</p>
+  </section>
+
+  <!-- Contributing -->
+  <section class="section" id="contributing">
+    <h2>Contributing</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>Работай в ветке dev</strong>
+          <pre>git checkout dev</pre>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>Коммить с понятным сообщением</strong>
+          <pre>git commit -m "fix: исправлен расчёт доставки"</pre>
+          <p>Типы: <code>feat</code> / <code>fix</code> / <code>refactor</code> / <code>docs</code> / <code>chore</code></p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>Релиз в main</strong>
+          <pre>git checkout main
+git merge dev
+git tag v26w31-b01
+git push origin main --tags
+git checkout dev</pre>
+        </div>
+      </div>
+    </div>
+    <a href="https://github.com/DarkyAndSparky/procure-it/blob/main/CONTRIBUTING.md" class="gh-link" target="_blank">Полный CONTRIBUTING.md →</a>
+  </section>
+
+  <div style="border-top:1px solid var(--border);margin-top:48px;padding-top:24px;color:var(--text2);font-size:12px;display:flex;justify-content:space-between;align-items:center">
+    <span>procure-it 26w31-b01 · MIT License</span>
+    <a href="https://github.com/DarkyAndSparky" style="color:var(--text2);text-decoration:none">© DarkyAndSparky</a>
+  </div>
+
+</main>
+</div>
+
+<script>
+  // Scrollspy
+  const links = document.querySelectorAll('.nav-link');
+  const sections = document.querySelectorAll('.section, .hero');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const active = document.querySelector(`.nav-link[href="#${e.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+
+  // Smooth scroll
+  links.forEach(l => {
+    l.addEventListener('click', e => {
+      e.preventDefault();
+      const id = l.getAttribute('href').slice(1);
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+</script>
+</body>
+</html>

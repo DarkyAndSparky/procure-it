@@ -1,0 +1,43 @@
+{
+  "name": "procure-it",
+  "version": "26w31-b01",
+  "description": "IT Asset Procurement Tool — web-based tool for managing IT equipment purchase requests, generating specifications and calculation sheets",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "procurement",
+    "it-assets",
+    "equipment",
+    "specifications",
+    "xlsx",
+    "sqlite"
+  ],
+  "author": "DarkyAndSparky <https://github.com/DarkyAndSparky>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DarkyAndSparky/procure-it.git"
+  },
+  "homepage": "https://github.com/DarkyAndSparky/procure-it#readme",
+  "bugs": {
+    "url": "https://github.com/DarkyAndSparky/procure-it/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "compression": "^1.7.4",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.0.0",
+    "helmet": "^8.0.0",
+    "morgan": "^1.10.0",
+    "selfsigned": "^2.4.1",
+    "sql.js": "^1.10.3",
+    "docx": "^8.5.0"
+  }
+}

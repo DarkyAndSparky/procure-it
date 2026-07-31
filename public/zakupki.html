@@ -1,0 +1,3875 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Закупки — IT Assets</title>
+<script src="/xlsx.full.min.js" onerror="window._xlsxLocal=false"></script>
+<script>
+// xlsx-js-style is a drop-in replacement for SheetJS that actually supports cellStyles
+// in the community version. Falls back to plain CDN if local copy is missing.
+if (typeof XLSX === 'undefined') {
+  const s = document.createElement('script');
+  // Try xlsx-js-style from CDN first (supports cellStyles)
+  s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+  s.crossOrigin = 'anonymous';
+  s.onerror = function() {
+    // Last-resort fallback to plain SheetJS (no styles)
+    const s2 = document.createElement('script');
+    s2.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s2.crossOrigin = 'anonymous';
+    document.head.appendChild(s2);
+  };
+  document.head.appendChild(s);
+}
+</script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f4f0;
+    --surface: #ffffff;
+    --surface-alt: #f9f8f6;
+    --border: #e0ddd6;
+    --border-strong: #c8c5bc;
+    --text: #1a1a18;
+    --text-secondary: #6b6a65;
+    --text-muted: #9b9a95;
+    --accent: #2563eb;
+    --accent-bg: #eff4ff;
+    --accent-border: #bfcfff;
+    --success: #16a34a;
+    --success-bg: #f0fdf4;
+    --warning: #d97706;
+    --warning-bg: #fffbeb;
+    --danger: #dc2626;
+    --danger-bg: #fef2f2;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+
+  :root.dark {
+    --bg: #111110;
+    --surface: #1c1c1a;
+    --surface-alt: #232320;
+    --border: #333330;
+    --border-strong: #4a4a46;
+    --text: #f0ede8;
+    --text-secondary: #a09e99;
+    --text-muted: #6a6a65;
+    --accent: #60a5fa;
+    --accent-bg: #1e3050;
+    --accent-border: #2a4a7e;
+    --success: #4ade80;
+    --success-bg: #0f3320;
+    --warning: #fbbf24;
+    --warning-bg: #332510;
+    --danger: #f87171;
+    --danger-bg: #330f0f;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light) {
+      --bg: #111110;
+      --surface: #1c1c1a;
+      --surface-alt: #232320;
+      --border: #333330;
+      --border-strong: #4a4a46;
+      --text: #f0ede8;
+      --text-secondary: #a09e99;
+      --text-muted: #6a6a65;
+      --accent: #60a5fa;
+      --accent-bg: #1e3050;
+      --accent-border: #2a4a7e;
+      --success: #4ade80;
+      --success-bg: #0f3320;
+      --warning: #fbbf24;
+      --warning-bg: #332510;
+      --danger: #f87171;
+      --danger-bg: #330f0f;
+    }
+  }
+
+  .theme-toggle {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 5px 10px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text-secondary);
+    transition: background 0.1s;
+  }
+  .theme-toggle:hover { background: var(--bg); }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  /* Layout */
+  .app { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+  }
+
+  .sidebar-logo {
+    padding: 20px 16px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-logo h1 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.2px;
+  }
+  .sidebar-logo span {
+    font-size: 11px;
+    color: var(--text-muted);
+    display: block;
+    margin-top: 2px;
+  }
+
+  .sidebar-nav {
+    padding: 8px;
+    flex: 1;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    transition: background 0.1s, color 0.1s;
+    user-select: none;
+    -webkit-user-select: none;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+  }
+  .nav-item:hover { background: var(--bg); color: var(--text); }
+  .nav-item.active { background: var(--accent-bg); color: var(--accent); }
+  .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.7; }
+  .nav-item.active svg { opacity: 1; }
+  .nav-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    padding: 6px 10px 2px;
+    margin-top: 4px;
+  }
+
+  .main {
+    margin-left: 220px;
+    flex: 1;
+    min-height: 100vh;
+  }
+
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .topbar-title {
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .content { padding: 24px; max-width: 1100px; }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .tab {
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.1s, border-color 0.1s;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  /* Form */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .form-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .form-grid.cols-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .form-full { grid-column: 1 / -1; }
+
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  /* Глобальные стили для всех инпутов (в т.ч. в таблицах позиций) */
+  input, select, textarea {
+    color: var(--text);
+    background: var(--surface);
+    color-scheme: light;
+  }
+  :root.dark input, :root.dark select, :root.dark textarea { color-scheme: dark; }
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light) input,
+    :root:not(.light) select,
+    :root:not(.light) textarea { color-scheme: dark; }
+  }
+
+  .field input, .field select, .field textarea {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--surface);
+    outline: none;
+    transition: border-color 0.1s;
+    font-family: inherit;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-bg);
+  }
+  .field textarea { resize: vertical; min-height: 64px; overflow: auto; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--text);
+    transition: background 0.1s, border-color 0.1s;
+    text-decoration: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .btn:hover { background: var(--bg); }
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover { filter: brightness(1.12); }
+  :root.dark .btn:not(.btn-primary):not(.btn-success):not(.btn-danger) { color: var(--text); }
+  :root.dark .btn:not(.btn-primary):not(.btn-success):not(.btn-danger):hover { background: var(--surface-alt); }
+  .btn-success {
+    background: var(--success);
+    border-color: var(--success);
+    color: #fff;
+  }
+  .btn-success:hover { filter: brightness(1.1); }
+  .btn-danger {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+  }
+  .btn-danger:hover { filter: brightness(1.1); }
+  .btn-sm { padding: 4px 10px; font-size: 12px; }
+  .btn-icon { padding: 6px; border-radius: var(--radius); }
+
+  .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th {
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-alt);
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface-alt); }
+
+  /* Positions table */
+  .positions-table { width: 100%; }
+  .positions-table th:last-child, .positions-table td:last-child { width: 40px; text-align: center; }
+
+  /* Badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .badge-blue { background: var(--accent-bg); color: var(--accent); }
+  .badge-green { background: var(--success-bg); color: var(--success); }
+  .badge-yellow { background: var(--warning-bg); color: var(--warning); }
+  .badge-red { background: var(--danger-bg); color: var(--danger); }
+  .badge-gray { background: var(--bg); color: var(--text-secondary); }
+
+  /* Number */
+  .num-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--accent-bg);
+    color: var(--accent);
+  }
+
+  /* Spec number display */
+  .spec-number {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.5px;
+    font-family: 'SF Mono', 'Consolas', monospace;
+  }
+  .spec-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  /* Org manager */
+  .org-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .org-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-alt);
+  }
+  .org-name { font-size: 13px; font-weight: 500; }
+
+  /* Empty state */
+  .empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-muted);
+  }
+  .empty-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.5; }
+  .empty p { font-size: 13px; margin-top: 6px; }
+
+  /* Registry row detail */
+  .registry-detail {
+    display: none;
+    padding: 12px 12px 12px 48px;
+    background: var(--surface-alt);
+    border-bottom: 1px solid var(--border);
+  }
+  .registry-detail.open { display: block; }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .detail-item { font-size: 12px; }
+  .detail-item span { color: var(--text-muted); display: block; }
+
+  /* Spec preview */
+  .spec-preview {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 32px;
+    font-family: 'Times New Roman', serif;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .spec-preview table {
+    font-family: inherit;
+    font-size: 12px;
+  }
+  .spec-preview th {
+    background: none;
+    font-family: inherit;
+    font-size: 12px;
+    text-transform: none;
+    letter-spacing: 0;
+    border: 1px solid #333;
+    padding: 6px 8px;
+    color: var(--text);
+  }
+  .spec-preview td {
+    border: 1px solid #333;
+    padding: 6px 8px;
+    vertical-align: top;
+  }
+  .spec-preview tr:hover td { background: none; }
+  .spec-preview .spec-title {
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+    margin: 20px 0 8px;
+  }
+  .spec-preview .spec-city-date {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    font-size: 12px;
+  }
+  .spec-preview .sign-block {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    margin-top: 32px;
+    border-top: 1px solid #333;
+    padding-top: 16px;
+  }
+  .spec-preview .sign-title { font-weight: bold; font-size: 12px; margin-bottom: 8px; }
+  .spec-preview .sign-line {
+    border-bottom: 1px solid #333;
+    height: 32px;
+    margin: 16px 0 4px;
+  }
+  .spec-preview .app-ref {
+    text-align: right;
+    font-size: 11px;
+    margin-bottom: 16px;
+    color: var(--text-secondary);
+  }
+
+  /* Stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+  }
+  .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+  .stat-value { font-size: 22px; font-weight: 700; margin-top: 4px; color: var(--text); }
+  .stat-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+
+  /* Status dropdown in registry */
+  .status-select {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    font-size: 11px;
+    height: 26px;
+    max-width: 100px;
+  }
+  .status-select:focus { outline: none; border-color: var(--accent); }
+
+  /* Drag & drop rows */
+  .drag-handle { opacity: 0.35; transition: opacity 0.15s; }
+  #positions-body tr:hover .drag-handle { opacity: 1; }
+  #positions-body tr.drag-over { outline: 2px solid var(--accent); outline-offset: -2px; }
+  #positions-body tr.dragging { opacity: 0.4; }
+
+  /* Del btn */
+  .del-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 16px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    line-height: 1;
+  }
+  .del-btn:hover { color: var(--danger); background: var(--danger-bg); }
+
+  /* Search */
+  .search-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .search-bar input {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 7px 10px;
+    font-size: 13px;
+    outline: none;
+    font-family: inherit;
+  }
+  .search-bar input:focus { border-color: var(--accent); }
+
+  /* Filter row */
+  .filter-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .filter-row select {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px 10px;
+    font-size: 12px;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    outline: none;
+  }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: #1a1a18;
+    color: #f0ede8;
+    padding: 10px 16px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 500;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.2s;
+    z-index: 1000;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  }
+  :root.dark #toast { background: #f0ede8; color: #1a1a18; }
+  @media (prefers-color-scheme: dark) {
+    :root:not(.light) #toast { background: #f0ede8; color: #1a1a18; }
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+
+  /* Modal */
+  #org-modal { backdrop-filter: blur(4px); }
+
+  /* Loading bar animation */
+  @keyframes loading-bar {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Card hover effect for org items */
+  .org-item {
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .org-item:hover {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+  }
+
+  /* Sticky positions table header */
+  .positions-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--surface-alt);
+  }
+
+  /* Better row input focus */
+  .positions-table td input:focus,
+  .positions-table td select:focus {
+    outline: none;
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 2px var(--accent-bg);
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Animated toast */
+  #toast {
+    transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), opacity 0.2s;
+  }
+
+  /* Better stat cards */
+  .stat-card {
+    transition: border-color 0.15s;
+  }
+  .stat-card:hover {
+    border-color: var(--accent-border);
+  }
+
+  /* Highlight mandatory empty fields */
+  .field-required input:placeholder-shown {
+    border-color: var(--warning);
+  }
+
+  /* Nav item transition */
+  .nav-item { transition: background 0.12s, color 0.12s; }
+
+  /* Pagination */
+  #pagination-bar button:disabled { opacity: 0.35; cursor: not-allowed; }
+  kbd { font-family: 'SF Mono', Consolas, monospace; }
+
+  /* Print */
+  @media print {
+    @page { margin: 15mm 20mm; size: A4 portrait; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sidebar, .topbar, .tabs, .btn-group, .search-bar, .filter-row,
+    #pagination-bar, .page:not(#page-spec) { display: none !important; }
+    .app { display: block; }
+    .main { margin-left: 0; padding: 0; }
+    #page-spec { display: block !important; }
+    .spec-preview {
+      border: none !important;
+      padding: 0 !important;
+      box-shadow: none !important;
+      background: #fff !important;
+      color: #000 !important;
+      font-size: 12pt;
+    }
+    .spec-preview table { page-break-inside: auto; }
+    .spec-preview tr { page-break-inside: avoid; page-break-after: auto; }
+    .spec-preview th, .spec-preview td { color: #000 !important; border-color: #000 !important; }
+    .spec-preview .app-ref { color: #555 !important; }
+    .spec-preview .sign-block { page-break-inside: avoid; }
+  }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+  .row-toggle { cursor: pointer; }
+  .row-toggle:hover td { background: var(--accent-bg) !important; }
+
+  .chevron {
+    display: inline-block;
+    transition: transform 0.15s;
+    font-size: 10px;
+    margin-right: 4px;
+    color: var(--text-muted);
+  }
+  .chevron.open { transform: rotate(90deg); }
+
+  /* Кастомный автокомплит */
+  .ac-wrap { position: relative; }
+  .ac-wrap input { width: 100%; }
+  .ac-dropdown {
+    position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 9999;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    max-height: 220px; overflow-y: auto; display: none;
+  }
+  .ac-dropdown.open { display: block; }
+  .ac-item {
+    padding: 8px 12px; font-size: 13px; cursor: pointer;
+    border-bottom: 1px solid var(--border); transition: background .1s;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    color: var(--text);
+  }
+  .ac-item:last-child { border-bottom: none; }
+  .ac-item:hover, .ac-item.ac-active { background: var(--accent-bg); color: var(--accent); }
+  .ac-item mark { background: none; color: var(--accent); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div id="sidebar-logo-img" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      </div>
+      <div>
+        <h1>Закупки ИТ</h1>
+        <span>Управление заявками</span>
+      </div>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-section-label">Заявки</div>
+    <button class="nav-item active" id="nav-new" onclick="showPage('new')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      Новая заявка
+    </button>
+    <button class="nav-item" id="nav-new-real" onclick="startRealization()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      На реализацию
+    </button>
+    <div class="nav-section-label" style="margin-top:8px">Данные</div>
+    <button class="nav-item" id="nav-registry" onclick="showPage('registry')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
+      Реестр заявок
+    </button>
+    <button class="nav-item" id="nav-spec" onclick="showPage('spec')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Спецификация
+    </button>
+    <div class="nav-section-label" style="margin-top:8px">Настройки</div>
+    <button class="nav-item" id="nav-orgs" onclick="showPage('orgs')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+      Организации
+    </button>
+    <button class="nav-item" id="nav-config" onclick="showPage('config')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Конфиг
+    </button>
+  </nav>
+</aside>
+
+<!-- Main -->
+<main class="main">
+  <!-- Offline banner -->
+  <div id="offline-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:1000;background:var(--danger);color:#fff;text-align:center;padding:8px;font-size:13px;font-weight:500">
+    ⚠️ Нет соединения с сервером — изменения не сохраняются
+  </div>
+
+  <!-- Global loading indicator -->
+  <div id="global-loading" style="display:none;position:fixed;top:0;left:0;right:0;height:3px;z-index:999;background:linear-gradient(90deg,var(--accent),var(--success),var(--accent));background-size:200%;animation:loading-bar 1.2s linear infinite"></div>
+
+  <div class="topbar">
+    <span class="topbar-title" id="page-title">Новая заявка</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="theme-toggle" id="logout-btn" onclick="doLogout()" title="Выйти" style="display:none;font-size:15px">🔓</button>
+      <button class="theme-toggle" onclick="showShortcutsHelp()" title="Горячие клавиши [?]" style="font-size:15px">⌨️</button>
+      <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" title="Сменить тему">🌙</button>
+      <div class="btn-group" id="topbar-actions"></div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- PAGE: New request -->
+    <div id="page-new" class="page">
+
+      <!-- Spec number -->
+      <div class="card">
+        <div class="form-grid cols-3">
+          <div class="field field-required">
+            <label>Организация <span style="color:var(--danger)">*</span></label>
+            <select id="f-org" onchange="updateSpecNum(); fillOrgDefaults()">
+              <option value="">— выбрать —</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Номер задачи Битрикс</label>
+            <input type="text" id="f-bitrix" placeholder="16590">
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:500;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:4px">Номер спецификации</label>
+            <div class="spec-number" id="spec-num-display">—</div>
+            <div class="spec-sub" id="spec-num-sub">Выберите организацию</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Realization banner — вверху формы -->
+      <div id="realization-badge" style="display:none;align-items:center;justify-content:space-between;background:#1a2540;border:1px solid var(--accent);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px">
+        <span style="font-size:13px;color:var(--accent);font-weight:600">🏪 Режим: Закупка на реализацию</span>
+        <button class="btn btn-sm" onclick="stopRealization()">Обычная закупка</button>
+      </div>
+
+      <!-- Edit banner -->
+      <div id="edit-banner" style="display:none;align-items:center;justify-content:space-between;background:var(--warning-bg);border:1px solid var(--warning);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px">
+        <span style="font-size:13px;color:var(--warning);font-weight:500">✏️ <span></span></span>
+        <button class="btn btn-sm" onclick="cancelEdit()">Отмена</button>
+      </div>
+
+      <!-- Meta -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Данные заявки</span>
+        </div>
+        <div class="form-grid">
+          <div class="field field-required">
+            <label>Название заявки <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="f-name" placeholder="Закуп ПК для архитектора">
+          </div>
+          <div class="field">
+            <label>МОЛ (ФИО получателя)</label>
+            <div class="ac-wrap" id="ac-mol-wrap">
+              <input type="text" id="f-mol" placeholder="Иванов Иван Иванович" autocomplete="off"
+                oninput="acFilter('mol')" onfocus="acOpen('mol')" onkeydown="acKey(event,'mol')">
+              <div class="ac-dropdown" id="ac-mol-drop"></div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Дата</label>
+            <input type="date" id="f-date" onchange="updateSpecNum()">
+          </div>
+          <div class="field">
+            <label>Адрес доставки</label>
+            <div class="ac-wrap" id="ac-address-wrap">
+              <input type="text" id="f-address" placeholder="г. Екатеринбург, ул. Первомайская д.15" autocomplete="off"
+                oninput="acFilter('address')" onfocus="acOpen('address')" onkeydown="acKey(event,'address')" onblur="setTimeout(()=>acClose('address'),180)">
+              <div class="ac-dropdown" id="ac-address-drop"></div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Поставщик</label>
+            <input type="text" id="f-supplier" placeholder="Название поставщика">
+          </div>
+          <div class="field">
+            <label>Номер счёта</label>
+            <input type="text" id="f-invoice-num" placeholder="СЧ-2026-0042">
+          </div>
+          <div class="field">
+            <label>Договор поставки</label>
+            <input type="text" id="f-contract" placeholder="П-202604-02 от «01» апреля 2026 г.">
+            <div id="contract-hint" style="font-size:11px;color:var(--text-muted);margin-top:2px"></div>
+          </div>
+          <div class="field">
+            <label>Статус</label>
+            <select id="f-status">
+              <option value="new">🆕 Новая</option>
+              <option value="inwork">⚙️ В работе</option>
+              <option value="paid">✅ Оплачено</option>
+              <option value="cancelled">❌ Отменена</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Positions -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Позиции</span>
+          <div style="display:flex;gap:6px;align-items:center">
+            <select id="template-select" style="border:1px solid var(--border);border-radius:var(--radius);padding:4px 8px;font-size:12px;background:var(--surface);color:var(--text);font-family:inherit" onchange="addFromTemplate()">
+              <option value="">+ Из шаблона</option>
+            </select>
+            <button class="btn btn-sm" onclick="savePositionsAsTemplate()">💾 Шаблон</button>
+            <button class="btn btn-sm" onclick="addRow()">+ Строка</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="positions-table">
+            <thead>
+              <tr>
+                <th style="width:18px"></th>
+                <th style="width:28px">№</th>
+                <th>Наименование товара</th>
+                <th style="width:130px">Комментарий / ФИО</th>
+                <th style="width:90px">Ссылка</th>
+                <th style="width:64px">Кол-во</th>
+                <th style="width:50px">Ед.</th>
+                <th style="width:110px">Цена закупа, ₽</th>
+                <th style="width:110px" id="th-sell">Цена продажи, ₽</th>
+                <th style="width:110px">Сумма продажи, ₽</th>
+                <th style="width:36px"></th>
+              </tr>
+            </thead>
+            <tbody id="positions-body"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:24px;font-size:13px">
+          <span style="color:var(--text-secondary)">Итого (продажа):</span>
+          <span id="total-display" style="font-weight:600;min-width:100px;text-align:right">0,00 ₽</span>
+        </div>
+      </div>
+
+      <!-- Delivery & markup -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Доставка и наценка</span>
+        </div>
+        <div class="form-grid cols-3">
+          <div class="field">
+            <label style="display:flex;align-items:center;gap:6px;text-transform:none;font-size:13px;font-weight:500;color:var(--text)">
+              <input type="checkbox" id="f-delivery-on" onchange="updateDelivery()" style="width:16px;height:16px;cursor:pointer">
+              Включить доставку
+            </label>
+            <input type="number" id="f-delivery-cost" placeholder="Стоимость доставки, ₽" min="0" step="0.01"
+              style="margin-top:8px;border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;font-size:13px;font-family:inherit;outline:none;opacity:0.4;pointer-events:none"
+              oninput="calcTotal()">
+          </div>
+          <div class="field">
+            <label>Наценка, %</label>
+            <input type="number" id="f-markup" value="5" min="0" step="0.1"
+              style="border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;font-size:13px;font-family:inherit;outline:none"
+              oninput="calcTotal()">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">По умолчанию 5% (как в шаблоне)</div>
+          </div>
+          <div style="background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-size:12px">
+            <div style="color:var(--text-muted);margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:0.4px">Итоги</div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text-secondary)">Закуп:</span><span id="sum-purchase" style="font-weight:500">0,00 ₽</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text-secondary)">Доставка:</span><span id="sum-delivery">0,00 ₽</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="color:var(--text-secondary)">Продажа:</span><span id="sum-sell" style="font-weight:600;color:var(--accent)">0,00 ₽</span></div>
+            <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:4px;margin-top:4px"><span style="color:var(--success)">Прибыль:</span><span id="sum-profit" style="font-weight:600;color:var(--success)">0,00 ₽</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload invoice + comment -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Счёт и комментарий</span>
+        </div>
+        <div class="form-grid">
+          <div class="field">
+            <label>Файл счёта (PDF / Excel)</label>
+            <input type="file" id="f-invoice" accept=".pdf,.xlsx,.xls" style="padding:6px">
+            <div id="invoice-name" style="font-size:12px;color:var(--text-secondary);margin-top:4px"></div>
+          </div>
+          <div class="field">
+            <label>Импорт позиций из Excel</label>
+            <input type="file" id="f-import-excel" accept=".xlsx,.xls" style="padding:6px">
+            <div id="import-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px">Формат: Наименование | Кол-во | Ед. | Цена</div>
+          </div>
+          <div class="field form-full">
+            <label>Комментарий / Заметки</label>
+            <textarea id="f-comment" placeholder="Ссылка на счёт, особые условия, примечания..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Folder path -->
+      <div class="card" id="folder-card" style="display:none">
+        <div class="card-header">
+          <span class="card-title">Путь папки</span>
+          <button class="btn btn-sm" onclick="copyFolderPath()">Копировать</button>
+        </div>
+        <div id="folder-path-display" style="font-family:'SF Mono',Consolas,monospace;font-size:13px;background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;color:var(--text);word-break:break-all;line-height:1.8"></div>
+        <div style="margin-top:8px;font-size:11px;color:var(--text-muted)">Структура: Год → Месяц → Организация → №_Название</div>
+      </div>
+
+      <!-- Actions -->
+      <div class="btn-group">
+        <button class="btn btn-primary" id="btn-save" onclick="saveRequest()" style="background:var(--success);border-color:var(--success);color:#fff">💾 Сохранить заявку</button>
+        <button class="btn" onclick="exportExcel()" style="background:var(--accent);border-color:var(--accent);color:#fff">📊 Excel</button>
+        <button class="btn" onclick="previewSpec()" style="background:#7c3aed;border-color:#7c3aed;color:#fff">📄 Спецификация</button>
+        <button class="btn" onclick="showFolderPath()" style="background:var(--warning);border-color:var(--warning);color:#fff">📁 Путь папки</button>
+        <button class="btn" id="btn-bitrix" onclick="sendToBitrix()" style="background:#1a9bf0;border-color:#1a9bf0;color:#fff" title="Отправить заявку в Bitrix24">🔗 Bitrix24</button>
+        <button class="btn" onclick="clearForm()" style="background:var(--surface);border-color:var(--border-strong);color:var(--text-secondary)">✕ Очистить</button>
+      </div>
+    </div>
+
+    <!-- PAGE: Registry -->
+    <div id="page-registry" class="page" style="display:none">
+      <div class="stats-row" id="stats-row"></div>
+      <div id="breakdown-panel" style="display:none;margin-bottom:16px"></div>
+
+      <div class="search-bar">
+        <input type="text" id="reg-search" placeholder="Поиск по названию, МОЛ, организации..." oninput="renderRegistry()">
+        <div class="filter-row" style="margin:0">
+          <select id="reg-filter-org" onchange="renderRegistry()">
+            <option value="">Все организации</option>
+          </select>
+          <select id="reg-filter-month" onchange="renderRegistry()">
+            <option value="">Все месяцы</option>
+          </select>
+          <select id="reg-filter-status" onchange="renderRegistry()">
+            <option value="">Все статусы</option>
+            <option value="new">Новая</option>
+            <option value="inwork">В работе</option>
+            <option value="paid">Оплачено</option>
+            <option value="cancelled">Отменена</option>
+          </select>
+          <select id="reg-filter-supplier" onchange="renderRegistry()">
+            <option value="">Все поставщики</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="card" style="padding:0;overflow:hidden">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:28px"></th>
+                <th>Спецификация</th>
+                <th>Дата</th>
+                <th>Организация</th>
+                <th>Заявка</th>
+                <th>МОЛ</th>
+                <th>Статус</th>
+                <th>Позиций</th>
+                <th>Сумма</th>
+                <th style="width:100px"></th>
+              </tr>
+            </thead>
+            <tbody id="registry-body"></tbody>
+          </table>
+        </div>
+        <div id="registry-empty" class="empty" style="display:none">
+          <div class="empty-icon">📋</div>
+          <div style="font-weight:500;color:var(--text-secondary)">Заявок пока нет</div>
+          <p>Создайте первую заявку на вкладке «Новая заявка»</p>
+        </div>
+      </div>
+
+      <!-- Pagination -->
+      <div id="pagination-bar" style="display:none;align-items:center;justify-content:space-between;padding:12px 4px;margin-top:4px">
+        <div style="font-size:12px;color:var(--text-muted)" id="pagination-info"></div>
+        <div style="display:flex;gap:4px;align-items:center">
+          <button class="btn btn-sm" id="pg-first"  onclick="goPage(1)"        title="Первая">«</button>
+          <button class="btn btn-sm" id="pg-prev"   onclick="goPage(currentPage-1)" title="Назад">‹</button>
+          <span id="pg-pages" style="display:flex;gap:2px"></span>
+          <button class="btn btn-sm" id="pg-next"   onclick="goPage(currentPage+1)" title="Вперёд">›</button>
+          <button class="btn btn-sm" id="pg-last"   onclick="goPage(totalPages)"    title="Последняя">»</button>
+          <select id="pg-size" onchange="changePageSize()" style="border:1px solid var(--border);border-radius:var(--radius);padding:4px 8px;font-size:12px;background:var(--surface);color:var(--text);margin-left:8px">
+            <option value="25">25 / стр.</option>
+            <option value="50">50 / стр.</option>
+            <option value="100">100 / стр.</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE: Spec preview -->
+    <div id="page-spec" class="page" style="display:none">
+      <div class="btn-group" style="margin-bottom:16px">
+        <button class="btn btn-primary" onclick="window.print()">🖨️ Печать / PDF</button>
+        <button class="btn" id="btn-save-word" onclick="saveSpecWord()" style="background:var(--success);border-color:var(--success);color:#fff">📄 Сохранить в Word</button>
+        <select id="spec-select" style="border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;font-size:13px;background:var(--surface);font-family:inherit" onchange="loadSpecFromRegistry()">
+          <option value="">— Выбрать сохранённую заявку —</option>
+        </select>
+      </div>
+      <div id="spec-preview-content" class="spec-preview">
+        <div class="empty" style="font-family:sans-serif">
+          <div class="empty-icon">📄</div>
+          <div>Спецификация появится здесь</div>
+          <p>Заполните форму и нажмите «Предпросмотр спецификации»</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAGE: Config -->
+    <div id="page-config" class="page" style="display:none">
+
+      <!-- App name & logo -->
+      <div class="card" style="max-width:680px">
+        <div class="card-header"><span class="card-title">🖼️ Название и логотип</span></div>
+        <div class="form-grid" style="align-items:start">
+          <div>
+            <div class="field" style="margin-bottom:10px">
+              <label>Название приложения</label>
+              <input type="text" id="cfg-app-name" placeholder="Закупки ИТ">
+            </div>
+            <div class="field" style="margin-bottom:10px">
+              <label>Подзаголовок</label>
+              <input type="text" id="cfg-app-subtitle" placeholder="Управление заявками">
+            </div>
+            <div class="field">
+              <label>Логотип (SVG, PNG, JPG, WebP — рекомендуется 36px высота)</label>
+              <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+                <label class="btn btn-sm" style="cursor:pointer">
+                  📂 Выбрать файл
+                  <input type="file" id="cfg-logo-file" accept=".svg,.png,.jpg,.jpeg,.webp" style="display:none" onchange="previewLogo(this)">
+                </label>
+                <button class="btn btn-sm" onclick="removeLogo()" style="color:var(--danger);border-color:var(--danger)">✕ Убрать</button>
+              </div>
+            </div>
+          </div>
+          <!-- Preview -->
+          <div>
+            <label style="font-size:12px;font-weight:500;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:8px">Предпросмотр</label>
+            <!-- Light theme preview -->
+            <div style="background:#f5f4f0;border:1px solid #e0ddd6;border-radius:8px;overflow:hidden;margin-bottom:8px">
+              <div style="background:#fff;border-bottom:1px solid #e0ddd6;padding:8px 12px;display:flex;align-items:center;gap:8px">
+                <div id="prev-logo-light" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"></div>
+                <div>
+                  <div id="prev-name-light" style="font-size:13px;font-weight:600;color:#1a1a18"></div>
+                  <div id="prev-sub-light" style="font-size:10px;color:#9b9a95"></div>
+                </div>
+              </div>
+              <div style="padding:8px 12px">
+                <div id="prev-accent-light-bar" style="height:3px;border-radius:2px;width:60px;margin-bottom:6px"></div>
+                <div style="font-size:10px;color:#6b6a65">☀️ Светлая тема</div>
+              </div>
+            </div>
+            <!-- Dark theme preview -->
+            <div style="background:#111110;border:1px solid #2e2e2b;border-radius:8px;overflow:hidden">
+              <div style="background:#1c1c1a;border-bottom:1px solid #2e2e2b;padding:8px 12px;display:flex;align-items:center;gap:8px">
+                <div id="prev-logo-dark" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center"></div>
+                <div>
+                  <div id="prev-name-dark" style="font-size:13px;font-weight:600;color:#e8e6e1"></div>
+                  <div id="prev-sub-dark" style="font-size:10px;color:#6a6a65"></div>
+                </div>
+              </div>
+              <div style="padding:8px 12px">
+                <div id="prev-accent-dark-bar" style="height:3px;border-radius:2px;width:60px;margin-bottom:6px"></div>
+                <div style="font-size:10px;color:#9b9a95">🌙 Тёмная тема</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Accent colors -->
+      <div class="card" style="max-width:680px">
+        <div class="card-header"><span class="card-title">🎨 Цвет акцента</span></div>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Цвет кнопок, активных пунктов меню и текста логотипа. Раздельно для светлой и тёмной темы.</p>
+        <div class="form-grid">
+          <div class="field">
+            <label>☀️ Светлая тема</label>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+              <input type="color" id="cfg-accent-light" value="#2563eb" style="width:48px;height:36px;border:1px solid var(--border);border-radius:var(--radius);padding:2px;cursor:pointer;background:var(--surface)" oninput="updateConfigPreview()">
+              <input type="text" id="cfg-accent-light-hex" placeholder="#2563eb" style="width:90px;border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;font-size:13px;font-family:monospace" oninput="syncColorFromHex('light')">
+            </div>
+          </div>
+          <div class="field">
+            <label>🌙 Тёмная тема</label>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+              <input type="color" id="cfg-accent-dark" value="#60a5fa" style="width:48px;height:36px;border:1px solid var(--border);border-radius:var(--radius);padding:2px;cursor:pointer;background:var(--surface)" oninput="updateConfigPreview()">
+              <input type="text" id="cfg-accent-dark-hex" placeholder="#60a5fa" style="width:90px;border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;font-size:13px;font-family:monospace" oninput="syncColorFromHex('dark')">
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--text-muted);align-self:center">Пресеты:</span>
+          <button onclick="setAccentPreset('#2563eb','#60a5fa')" style="width:28px;height:28px;border-radius:50%;background:#2563eb;border:2px solid transparent;cursor:pointer;transition:border-color 0.1s" title="#2563eb / #60a5fa" onmouseover="this.style.borderColor='#fff'" onmouseout="this.style.borderColor='transparent'"></button>
+          <button onclick="setAccentPreset('#7c3aed','#a78bfa')" style="width:28px;height:28px;border-radius:50%;background:#7c3aed;border:2px solid transparent;cursor:pointer;transition:border-color 0.1s" title="#7c3aed / #a78bfa" onmouseover="this.style.borderColor='#fff'" onmouseout="this.style.borderColor='transparent'"></button>
+          <button onclick="setAccentPreset('#dc2626','#f87171')" style="width:28px;height:28px;border-radius:50%;background:#dc2626;border:2px solid transparent;cursor:pointer;transition:border-color 0.1s" title="#dc2626 / #f87171" onmouseover="this.style.borderColor='#fff'" onmouseout="this.style.borderColor='transparent'"></button>
+          <button onclick="setAccentPreset('#16a34a','#4ade80')" style="width:28px;height:28px;border-radius:50%;background:#16a34a;border:2px solid transparent;cursor:pointer;transition:border-color 0.1s" title="#16a34a / #4ade80" onmouseover="this.style.borderColor='#fff'" onmouseout="this.style.borderColor='transparent'"></button>
+          <button onclick="setAccentPreset('#d97706','#fbbf24')" style="width:28px;height:28px;border-radius:50%;background:#d97706;border:2px solid transparent;cursor:pointer;transition:border-color 0.1s" title="#d97706 / #fbbf24" onmouseover="this.style.borderColor='#fff'" onmouseout="this.style.borderColor='transparent'"></button>
+          <button onclick="setAccentPreset('#0891b2','#22d3ee')" style="width:28px;height:28px;border-radius:50%;background:#0891b2;border:2px solid transparent;cursor:pointer;transition:border-color 0.1s" title="#0891b2 / #22d3ee" onmouseover="this.style.borderColor='#fff'" onmouseout="this.style.borderColor='transparent'"></button>
+          <button onclick="setAccentPreset('#e11d48','#fb7185')" style="width:28px;height:28px;border-radius:50%;background:#e11d48;border:2px solid transparent;cursor:pointer;transition:border-color 0.1s" title="#e11d48 / #fb7185" onmouseover="this.style.borderColor='#fff'" onmouseout="this.style.borderColor='transparent'"></button>
+          <button onclick="setAccentPreset('#475569','#94a3b8')" style="width:28px;height:28px;border-radius:50%;background:#475569;border:2px solid transparent;cursor:pointer;transition:border-color 0.1s" title="#475569 / #94a3b8" onmouseover="this.style.borderColor='#fff'" onmouseout="this.style.borderColor='transparent'"></button>
+        </div>
+      </div>
+
+      <!-- Theme switch -->
+      <div class="card" style="max-width:680px">
+        <div class="card-header"><span class="card-title">🌓 Тема оформления</span></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" id="theme-auto-btn"  onclick="applyTheme('auto');saveThemePref('auto')"  style="flex:1;justify-content:center">🖥️ Авто (система)</button>
+          <button class="btn" id="theme-light-btn" onclick="applyTheme('light');saveThemePref('light')" style="flex:1;justify-content:center">☀️ Светлая</button>
+          <button class="btn" id="theme-dark-btn"  onclick="applyTheme('dark');saveThemePref('dark')"  style="flex:1;justify-content:center">🌙 Тёмная</button>
+        </div>
+      </div>
+
+      <!-- Сетевая папка -->
+      <div class="card" style="max-width:680px;margin-top:16px">
+        <div class="card-header">📁 Сетевая папка для файлов</div>
+        <div class="card-body">
+          <div class="field" style="margin-bottom:10px">
+            <label>Путь к папке</label>
+            <input type="text" id="cfg-network-folder" placeholder="https://cloud.example.com/remote.php/dav/files/user/Оплаты" style="width:100%;font-family:monospace;font-size:12px">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+              <strong>Nextcloud / WebDAV:</strong> <code>https://cloud.example.com/remote.php/dav/files/ИМЯ/Оплаты</code><br>
+              <strong>SMB / локальная:</strong> <code>\\\\nas\Оплаты</code> или <code>/mnt/share/Оплаты</code>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="field">
+              <label>Логин (для SMB)</label>
+              <input type="text" id="cfg-network-user" placeholder="domain\\user или user">
+            </div>
+            <div class="field">
+              <label>Пароль</label>
+              <input type="password" id="cfg-network-pass" placeholder="••••••••">
+            </div>
+          </div>
+          <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
+            <button class="btn btn-sm" onclick="testFolderConnection()" style="background:var(--accent);color:#fff;border-color:var(--accent)">🔌 Проверить подключение</button>
+            <span id="folder-test-result" style="font-size:12px"></span>
+          </div>
+
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px">
+            <strong>Nextcloud:</strong> логин и пароль от аккаунта Nextcloud (или App Password).<br>
+            <strong>SMB/Windows:</strong> <code>домен\пользователь</code> — выполняется <code>net use</code> автоматически.<br>
+            Для Linux SMB — примонтируйте папку заранее через <code>mount.cifs</code>, логин/пароль не нужны.
+          </div>
+        </div>
+      </div>
+
+      <!-- Bitrix24 -->
+      <div class="card" style="max-width:680px;margin-top:16px">
+        <div class="card-header">🔗 Интеграция Bitrix24</div>
+        <div class="card-body">
+          <div class="field">
+            <label>Webhook URL</label>
+            <input type="url" id="cfg-bitrix-webhook" placeholder="https://your.bitrix24.ru/rest/1/ключ/" style="width:100%">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+              Настройки → Разработчикам → Входящий webhook. Метод: <code>crm.deal.add</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- О системе -->
+      <div class="card" style="max-width:680px;margin-top:16px">
+        <div class="card-header">ℹ️ О системе</div>
+        <div class="card-body" style="font-size:13px;line-height:1.8;color:var(--text-secondary)">
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 16px;align-items:baseline">
+            <span style="color:var(--text-muted);font-size:12px">Версия</span>
+            <span style="font-weight:600;color:var(--text);font-family:monospace" id="about-version">26w31-b01</span>
+            <span style="color:var(--text-muted);font-size:12px">Порты</span>
+            <span>HTTPS :9111 &nbsp;·&nbsp; HTTP редирект :9112</span>
+            <span style="color:var(--text-muted);font-size:12px">Стек</span>
+            <span>Node.js · Express · SQLite (sql.js)</span>
+            <span style="color:var(--text-muted);font-size:12px">Автор</span>
+            <span>
+              <a href="https://github.com/DarkyAndSparky" target="_blank"
+                 style="color:var(--accent);text-decoration:none">DarkyAndSparky</a>
+            </span>
+            <span style="color:var(--text-muted);font-size:12px">Репозиторий</span>
+            <span>
+              <a href="https://github.com/DarkyAndSparky/procure-it" target="_blank"
+                 style="color:var(--accent);text-decoration:none;font-family:monospace;font-size:12px">
+                github.com/DarkyAndSparky/procure-it
+              </a>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Save -->
+      <div class="btn-group" style="max-width:680px">
+        <button class="btn btn-primary" onclick="saveConfig()" style="background:var(--success);border-color:var(--success);color:#fff">💾 Сохранить настройки</button>
+        <button class="btn" onclick="resetConfig()" style="color:var(--danger);border-color:var(--danger)">↺ Сбросить к умолчаниям</button>
+      </div>
+    </div>
+
+    <!-- PAGE: Orgs -->
+    <div id="page-orgs" class="page" style="display:none">
+      <div class="card" style="max-width:500px">
+        <div class="card-header">
+          <span class="card-title">Управление организациями</span>
+        </div>
+        <div class="form-grid" style="grid-template-columns:1fr auto;align-items:end;gap:8px;margin-bottom:8px">
+          <div class="field">
+            <label>Полное название</label>
+            <input type="text" id="new-org-full" placeholder='ООО "Название организации"'>
+          </div>
+          <div></div>
+          <div class="field">
+            <label>Короткое название</label>
+            <input type="text" id="new-org-short" placeholder="Краткое название">
+          </div>
+          <div class="field">
+            <label>Префикс</label>
+            <input type="text" id="new-org-prefix" placeholder="ОРГ" style="width:70px">
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:12px">
+          <label>Подписант (Покупатель)</label>
+          <input type="text" id="new-org-signatory" placeholder="И. О. Фамилия">
+        </div>
+        <div class="field" style="margin-bottom:12px">
+          <label>Договор поставки (по умолчанию)</label>
+          <input type="text" id="new-org-contract" placeholder="П-202604-01 от «01» апреля 2026 г.">
+        </div>
+        <div class="field" style="margin-bottom:12px">
+          <label>Адрес доставки (по умолчанию)</label>
+          <input type="text" id="new-org-address" placeholder="г. Екатеринбург, ул. Первомайская д.15">
+        </div>
+        <button class="btn btn-primary" onclick="addOrg()" style="width:100%">Добавить организацию</button>
+
+        <hr class="divider" style="margin:20px 0">
+        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.4px">Резервная копия</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">JSON — для восстановления данных. DB — полный снапшот SQLite для техподдержки.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" onclick="downloadBackup('json')" style="flex:1;background:var(--success);border-color:var(--success);color:#fff">💾 Скачать JSON</button>
+          <button class="btn" onclick="downloadBackup('db')" style="flex:1;background:var(--surface-2);border-color:var(--border)">🗄️ Скачать DB</button>
+          <label class="btn" style="flex:1;justify-content:center;cursor:pointer">
+            📂 Восстановить из JSON
+            <input type="file" accept=".json" style="display:none" onchange="restoreBackup(this)">
+          </label>
+        </div>
+
+        <hr class="divider">
+
+        <div class="org-list" id="org-list"></div>
+      </div>
+    </div>
+
+  </div>
+</main>
+</div>
+
+<!-- Edit Org Modal -->
+<div id="org-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;width:460px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,0.4)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <span style="font-size:15px;font-weight:600">Редактировать организацию</span>
+      <button onclick="closeOrgModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);line-height:1">×</button>
+    </div>
+    <input type="hidden" id="modal-org-id">
+    <div style="display:grid;grid-template-columns:1fr 80px;gap:10px;margin-bottom:10px">
+      <div class="field"><label>Полное название</label><input type="text" id="modal-org-full"></div>
+      <div class="field"><label>Префикс</label><input type="text" id="modal-org-prefix"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="field"><label>Короткое название</label><input type="text" id="modal-org-short"></div>
+      <div class="field"><label>Подписант</label><input type="text" id="modal-org-signatory"></div>
+    </div>
+    <div class="field" style="margin-bottom:10px"><label>Договор поставки (по умолчанию)</label><input type="text" id="modal-org-contract"></div>
+    <div class="field" style="margin-bottom:20px"><label>Адрес доставки (по умолчанию)</label><input type="text" id="modal-org-address"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="closeOrgModal()">Отмена</button>
+      <button class="btn" onclick="saveOrgModal()" style="background:var(--success);border-color:var(--success);color:#fff">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+const API = '';
+
+// ── Auth token ────────────────────────────────────────────────────────────────
+let authToken = localStorage.getItem('procure_token') || '';
+
+async function checkAuth() {
+  try {
+    const r = await fetch('/api/auth/status', {
+      headers: authToken ? { 'X-Auth-Token': authToken } : {}
+    });
+    const data = await r.json();
+    if (!data.authEnabled) return true; // auth выключен
+    if (data.authenticated) {
+      const btn = document.getElementById('logout-btn');
+      if (btn) btn.style.display = 'inline-flex';
+      return true;
+    }
+    // Показать форму входа
+    showLoginModal();
+    return false;
+  } catch(e) { return true; }
+}
+
+function showLoginModal() {
+  let modal = document.getElementById('login-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'login-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:500;display:flex;align-items:center;justify-content:center';
+    modal.innerHTML = `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px;width:340px;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+        <div style="text-align:center;margin-bottom:24px">
+          <div style="font-size:32px;margin-bottom:8px">🔒</div>
+          <h2 style="font-size:18px;font-weight:600">procure-it</h2>
+          <p style="color:var(--text-secondary);font-size:13px;margin-top:4px">Введите пароль для входа</p>
+        </div>
+        <div class="field" style="margin-bottom:16px">
+          <label>Пароль</label>
+          <input type="password" id="login-password" placeholder="••••••••"
+            style="width:100%" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <div id="login-error" style="color:var(--danger);font-size:12px;margin-bottom:12px;display:none">Неверный пароль</div>
+        <button class="btn btn-primary" onclick="doLogin()"
+          style="width:100%;background:var(--accent);border-color:var(--accent);color:#fff;justify-content:center">
+          Войти
+        </button>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+  modal.style.display = 'flex';
+  setTimeout(() => document.getElementById('login-password')?.focus(), 100);
+}
+
+async function doLogin() {
+  const pwd = document.getElementById('login-password')?.value;
+  const errEl = document.getElementById('login-error');
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      authToken = data.token || '';
+      if (authToken) localStorage.setItem('procure_token', authToken);
+      document.getElementById('login-modal').style.display = 'none';
+      const btn = document.getElementById('logout-btn');
+      if (btn && authToken) btn.style.display = 'inline-flex';
+      // Reinitialize
+      await load();
+      await loadConfig();
+      populateOrgSelect();
+      populateTemplateSelect();
+      await populateAddressList();
+    } else {
+      if (errEl) { errEl.style.display = 'block'; errEl.textContent = data.error || 'Неверный пароль'; }
+    }
+  } catch(e) {
+    if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Ошибка соединения'; }
+  }
+}
+
+let db = { orgs: [], requests: [], templates: [] };
+
+// ─── Months (declared early — used in updateSpecNum, buildSpecHtml, registry filters) ──
+const months    = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+const RU_MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+
+let editingId = null;
+let currentPage = 1;
+let pageSize = 25;
+let totalPages = 1;
+let allReqs = []; // cached for pagination
+
+// ── API helpers ───────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authToken ? { 'X-Auth-Token': authToken } : {}),
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const r = await fetch(API + path, opts);
+    if (r.status === 401) {
+      // Token expired or invalid
+      authToken = '';
+      localStorage.removeItem('procure_token');
+      showLoginModal();
+      throw new Error('Сессия истекла, войдите снова');
+    }
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || r.statusText);
+    }
+    return await r.json();
+  } catch(e) {
+    toast('Ошибка: ' + e.message);
+    throw e;
+  }
+}
+
+// Совместимость — save() теперь ничего не делает (данные сохраняются через API)
+function save() {}
+
+async function load() {
+  try {
+    showLoading(true);
+    const [orgs, templates] = await Promise.all([
+      api('GET', '/api/orgs'),
+      api('GET', '/api/templates'),
+    ]);
+    db.orgs = orgs;
+    db.templates = templates;
+    // requests грузятся лениво в renderRegistry
+  } catch(e) {
+    console.error('Load error:', e);
+  } finally {
+    showLoading(false);
+  }
+}
+
+function showLoading(on) {
+  let el = document.getElementById('global-loading');
+  if (!el) return;
+  el.style.display = on ? 'flex' : 'none';
+}
+
+
+// ─── Rows (positions) ────────────────────────────────────────────────────────
+let rowCounter = 0;
+
+function addRow(name='', qty=1, unit='шт', price=0, link='', purchasePrice=0, comment='', rowOrgName='') {
+  rowCounter++;
+  const id = 'row-' + rowCounter;
+  const body = document.getElementById('positions-body');
+  const tr = document.createElement('tr');
+  tr.id = id;
+  const pp = purchasePrice || price;
+  const isRealization = document.getElementById('realization-badge')?.style.display !== 'none';
+  const commentCell = isRealization
+    ? `<td><select style="width:120px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;background:var(--surface);color:var(--text);font-family:inherit" title="Организация-получатель">${db.orgs.map(o=>`<option value="${o.short}" ${rowOrgName===o.short?'selected':''}>${o.short}</option>`).join('')}<option value="На склад" ${rowOrgName==='На склад'?'selected':''}>На склад</option></select></td>`
+    : `<td><input type="text" value="${esc(comment)}" style="width:120px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;font-family:inherit" placeholder="ФИО / куда"></td>`;
+  tr.innerHTML = `
+    <td class="drag-handle" title="Перетащить для сортировки" style="cursor:grab;text-align:center;color:var(--text-muted);font-size:16px;user-select:none;padding:0 2px">⠿</td>
+    <td style="color:var(--text-muted);font-size:12px;text-align:center">${body.children.length + 1}</td>
+    <td><input type="text" value="${esc(name)}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;font-family:inherit" placeholder="Наименование товара" oninput="renumber()"></td>
+    ${commentCell}
+    <td><input type="text" value="${esc(link)}" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;font-family:inherit" placeholder="URL" title="${esc(link)}"></td>
+    <td><input type="number" value="${qty}" min="1" step="1" style="width:58px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" oninput="calcRow('${id}')"></td>
+    <td><input type="text" value="${unit}" style="width:42px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px"></td>
+    <td><input type="text" inputmode="decimal" value="${pp||''}" style="width:100px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" oninput="this.value=this.value.replace(/[\\s\\u00a0\\u202f]/g,'');calcRow('${id}')" onpaste="setTimeout(()=>{this.value=this.value.replace(/[\\s\\u00a0\\u202f]/g,'');calcRow('${id}')},0)" title="Цена закупа за единицу"></td>
+    <td id="${id}-sell" style="font-size:12px;font-weight:500;text-align:right;padding-right:8px;color:var(--accent)">—</td>
+    <td id="${id}-sum" style="font-size:12px;font-weight:500;text-align:right;padding-right:8px">—</td>
+    <td><button class="del-btn" onclick="removeRow('${id}')">×</button></td>`;
+  body.appendChild(tr);
+  calcTotal();
+}
+
+function removeRow(id) {
+  document.getElementById(id)?.remove();
+  renumber();
+  calcTotal();
+}
+
+function renumber() {
+  const rows = document.getElementById('positions-body').children;
+  for (let i = 0; i < rows.length; i++) {
+    rows[i].children[1].textContent = i + 1; // [0]=drag handle, [1]=№
+  }
+}
+
+// ── Drag & drop row reordering ────────────────────────────────────────────────
+function initDragDrop() {
+  const tbody = document.getElementById('positions-body');
+  if (!tbody || tbody._dragInited) return;
+  tbody._dragInited = true;
+
+  let dragSrc = null;
+
+  tbody.addEventListener('mousedown', e => {
+    const handle = e.target.closest('.drag-handle');
+    if (!handle) return;
+    const tr = handle.closest('tr');
+    if (tr) tr.draggable = true;
+  });
+
+  tbody.addEventListener('dragstart', e => {
+    const tr = e.target.closest('tr');
+    if (!tr) return;
+    dragSrc = tr;
+    tr.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', tr.id);
+  });
+
+  tbody.addEventListener('dragend', e => {
+    const tr = e.target.closest('tr');
+    if (tr) { tr.classList.remove('dragging'); tr.draggable = false; }
+    tbody.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    dragSrc = null;
+  });
+
+  tbody.addEventListener('dragover', e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const tr = e.target.closest('tr');
+    if (!tr || tr === dragSrc) return;
+    tbody.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    tr.classList.add('drag-over');
+  });
+
+  tbody.addEventListener('dragleave', e => {
+    const tr = e.target.closest('tr');
+    if (tr) tr.classList.remove('drag-over');
+  });
+
+  tbody.addEventListener('drop', e => {
+    e.preventDefault();
+    const tr = e.target.closest('tr');
+    if (!tr || !dragSrc || tr === dragSrc) return;
+    tr.classList.remove('drag-over');
+    const rect = tr.getBoundingClientRect();
+    if (e.clientY < rect.top + rect.height / 2) {
+      tbody.insertBefore(dragSrc, tr);
+    } else {
+      tbody.insertBefore(dragSrc, tr.nextSibling);
+    }
+    renumber();
+    calcTotal();
+  });
+}
+
+function calcRow(id) {
+  calcTotal(); // full recalc since delivery % depends on total
+}
+
+function updateDelivery() {
+  const on = document.getElementById('f-delivery-on').checked;
+  const inp = document.getElementById('f-delivery-cost');
+  inp.style.opacity = on ? '1' : '0.4';
+  inp.style.pointerEvents = on ? 'auto' : 'none';
+  if (!on) inp.value = '';
+  calcTotal();
+}
+
+function calcTotal() {
+  const rows = document.getElementById('positions-body').children;
+  const markup = (parseNum(document.getElementById('f-markup')?.value) || 5) / 100;
+  const deliveryOn = document.getElementById('f-delivery-on')?.checked;
+  const deliveryCost = deliveryOn ? (parseNum(document.getElementById('f-delivery-cost')?.value) || 0) : 0;
+
+  // Step 1: total purchase (без доставки)
+  let totalPurchase = 0;
+  const rowData = [];
+  for (const tr of rows) {
+    // cols: [0]drag [1]№ [2]name [3]comment [4]link [5]qty [6]unit [7]purchasePrice
+    const qty = parseNum(tr.children[5].querySelector('input').value);
+    const pp  = parseNum(tr.children[7].querySelector('input').value);
+    const purchaseSum = qty * pp;
+    totalPurchase += purchaseSum;
+    rowData.push({ tr, qty, pp, purchaseSum });
+  }
+
+  // Step 2: per-row delivery share + sell price
+  let totalSell = 0;
+  for (const { tr, qty, pp, purchaseSum } of rowData) {
+    const id = tr.id;
+    // доля доставки для этой строки пропорционально её весу в закупе
+    const deliveryShare = totalPurchase > 0 ? (purchaseSum / totalPurchase) * deliveryCost : 0;
+    const ppWithDelivery = qty > 0 ? pp + deliveryShare / qty : pp;
+    const sellPerUnit = ppWithDelivery * (1 + markup);
+    const sellSum = sellPerUnit * qty;
+    totalSell += sellSum;
+    const sellEl = tr.querySelector(`#${id}-sell`);
+    const sumEl  = tr.querySelector(`#${id}-sum`);
+    if (sellEl) sellEl.textContent = fmtRub(sellPerUnit);
+    if (sumEl)  sumEl.textContent  = fmtRub(sellSum);
+  }
+
+  const profit = totalSell - totalPurchase - deliveryCost;
+
+  // Update summary
+  document.getElementById('total-display').textContent = fmtRub(totalSell);
+  const sp = document.getElementById('sum-purchase'); if(sp) sp.textContent = fmtRub(totalPurchase);
+  const sd = document.getElementById('sum-delivery'); if(sd) sd.textContent = fmtRub(deliveryCost);
+  const ss = document.getElementById('sum-sell');     if(ss) ss.textContent = fmtRub(totalSell);
+  const spr= document.getElementById('sum-profit');   if(spr) spr.textContent = fmtRub(profit);
+
+  return { totalPurchase, totalSell, deliveryCost, profit };
+}
+
+// ─── Spec number ─────────────────────────────────────────────────────────────
+function updateSpecNum() {
+  const orgId = document.getElementById('f-org').value;
+  const org = db.orgs.find(o => o.id === orgId);
+  const dateVal = document.getElementById('f-date').value;
+  const now = dateVal ? new Date(dateVal) : new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  if (!org) {
+    document.getElementById('spec-num-display').textContent = '—';
+    document.getElementById('spec-num-sub').textContent = 'Выберите организацию';
+    return;
+  }
+  const prefix = org.prefix;
+  const num = nextSpecNum(orgId, y, parseInt(m));
+  const specNum = `${prefix}${y}${m}-${String(num).padStart(2, '0')}`;
+  document.getElementById('spec-num-display').textContent = specNum;
+  document.getElementById('spec-num-sub').textContent = `${org.short} · ${months[parseInt(m)-1]} ${y} · №${num} в месяце`;
+}
+
+function nextSpecNum(orgId, year, month) {
+  // Use all cached requests (from registry) + fallback to local count
+  const pool = allReqs.length ? allReqs : db.requests;
+  const existing = pool.filter(r => {
+    const d = new Date(r.date);
+    return r.orgId === orgId && d.getFullYear() === year && d.getMonth() + 1 === month;
+  });
+  // If editing existing request, don't count it twice
+  const count = editingId
+    ? existing.filter(r => r.id !== editingId).length
+    : existing.length;
+  return count + 1;
+}
+
+// ─── Collect form ────────────────────────────────────────────────────────────
+function collectForm() {
+  const orgId = document.getElementById('f-org').value;
+  const org = db.orgs.find(o => o.id === orgId);
+  const date = document.getElementById('f-date').value || new Date().toISOString().slice(0,10);
+  const d = new Date(date);
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;
+  const prefix = org ? org.prefix : 'X';
+  const num = nextSpecNum(orgId, y, m);
+  const specNum = `${prefix}${y}${String(m).padStart(2,'0')}-${String(num).padStart(2,'0')}`;
+
+  const rows = document.getElementById('positions-body').children;
+  const markup = (parseNum(document.getElementById('f-markup')?.value) || 5) / 100;
+  const deliveryOn = document.getElementById('f-delivery-on')?.checked;
+  const deliveryCost = deliveryOn ? (parseNum(document.getElementById('f-delivery-cost')?.value) || 0) : 0;
+
+  let totalPurchase = 0;
+  const positionsRaw = [];
+  const isRealization = document.getElementById('realization-badge')?.style.display !== 'none';
+  for (const tr of rows) {
+    // cols: [0]drag [1]№ [2]name [3]comment/ЮЛ [4]link [5]qty [6]unit [7]purchasePrice [8]sell [9]sum [10]×
+    const qty = parseNum(tr.children[5].querySelector('input,select')?.value || tr.children[5].querySelector('input')?.value);
+    const pp  = parseNum(tr.children[7].querySelector('input').value);
+    const commentEl = tr.children[3].querySelector('input,select');
+    positionsRaw.push({
+      name: tr.children[2].querySelector('input').value,
+      comment: commentEl ? commentEl.value : '',
+      rowOrgName: isRealization && commentEl ? commentEl.value : '',
+      link: tr.children[4].querySelector('input').value,
+      qty,
+      unit: tr.children[6].querySelector('input').value || 'шт',
+      purchasePrice: pp,
+      purchaseSum: qty * pp
+    });
+    totalPurchase += qty * pp;
+  }
+
+  const positions = positionsRaw.map(p => {
+    const deliveryShare = totalPurchase > 0 ? (p.purchaseSum / totalPurchase) * deliveryCost : 0;
+    const ppWithDel = p.qty > 0 ? p.purchasePrice + deliveryShare / p.qty : p.purchasePrice;
+    const sellPerUnit = ppWithDel * (1 + markup);
+    const sellSum = sellPerUnit * p.qty;
+    return { ...p, deliveryShare, ppWithDel, sellPerUnit, sellSum };
+  });
+
+  const total = positions.reduce((s,p) => s + p.sellSum, 0);
+
+  return {
+    id: Date.now().toString(),
+    specNum,
+    orgId,
+    orgFull: org?.full || '',
+    orgShort: org?.short || '',
+    orgSignatory: db.orgs.find(o => o.id === orgId)?.signatory || org?.signatory || '',
+    bitrix: document.getElementById('f-bitrix').value,
+    name: document.getElementById('f-name').value,
+    mol: document.getElementById('f-mol').value,
+    date,
+    address: document.getElementById('f-address').value,
+    supplier: document.getElementById('f-supplier').value,
+    invoiceNum: document.getElementById('f-invoice-num').value,
+    contract: document.getElementById('f-contract').value,
+    status: document.getElementById('f-status').value,
+    comment: document.getElementById('f-comment').value,
+    isRealization: document.getElementById('realization-badge').style.display !== 'none',
+    deliveryCost,
+    markup: markup * 100,
+    totalPurchase,
+    positions,
+    total
+  };
+}
+
+async function testFolderConnection() {
+  const path = document.getElementById('cfg-network-folder')?.value.trim();
+  const user = document.getElementById('cfg-network-user')?.value.trim();
+  const pass = document.getElementById('cfg-network-pass')?.value;
+  const el   = document.getElementById('folder-test-result');
+  if (!path) { if (el) el.innerHTML = '<span style="color:var(--danger)">Укажите путь</span>'; return; }
+  if (el) el.innerHTML = '<span style="color:var(--text-muted)">⏳ Проверка...</span>';
+  try {
+    const r = await api('POST', '/api/test-folder', { path, user, pass });
+    if (el) el.innerHTML = r.ok
+      ? `<span style="color:var(--success)">✅ Подключено (${r.mode})</span>`
+      : `<span style="color:var(--danger)">❌ ${r.error}</span>`;
+  } catch(e) {
+    if (el) el.innerHTML = `<span style="color:var(--danger)">❌ ${e.message}</span>`;
+  }
+}
+
+// ─── Force layout files from registry ────────────────────────────────────────
+async function forceLayoutFiles(id, btn) {
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '⏳ Раскладка...'; btn.disabled = true; }
+  try {
+    // Load full request data
+    const req = await api('GET', '/api/requests/' + id);
+    if (!req) throw new Error('Заявка не найдена');
+    const result = await layoutFilesToFolder(id, req);
+    if (result?.ok) {
+      toast(`📁 Готово: ${result.files?.length || 0} файлов разложено`);
+    }
+  } catch(e) {
+    toast('Ошибка раскладки: ' + e.message);
+  } finally {
+    if (btn) { btn.textContent = orig; btn.disabled = false; }
+  }
+}
+
+// ─── Layout files to network folder ──────────────────────────────────────────
+async function layoutFilesToFolder(reqId, req) {
+  const payload = {};
+
+  // 1. Generate DOCX spec and convert to base64
+  try {
+    const res = await fetch('/api/spec-docx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': authToken },
+      body: JSON.stringify(req)
+    });
+    if (res.ok) {
+      const blob = await res.blob();
+      const b64 = await new Promise(resolve => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result.split(',')[1]);
+        fr.readAsDataURL(blob);
+      });
+      payload.docxBase64 = b64;
+    }
+  } catch(e) { console.warn('[layout] docx error:', e); }
+
+  // 2. Generate Excel and convert to base64
+  try {
+    const b64 = buildWorkbookBase64(req);
+    if (b64) payload.excelBase64 = b64;
+  } catch(e) { console.warn('[layout] xlsx error:', e); }
+
+  // 3. Attach invoice file if selected
+  const invoiceInput = document.getElementById('f-invoice');
+  if (invoiceInput?.files?.length) {
+    const file = invoiceInput.files[0];
+    const data = await new Promise(resolve => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result);
+      fr.readAsDataURL(file);
+    });
+    payload.invoiceFiles = [{ name: file.name, data }];
+  }
+
+  const result = await api('POST', `/api/requests/${reqId}/layout-files`, payload);
+  if (result.ok) {
+    toast(`📁 Файлы разложены: ${result.files?.length || 0} файлов`);
+  }
+  return result;
+}
+
+// Builds XLSX workbook and returns base64 string
+function buildWorkbookBase64(req) {
+  if (typeof XLSX === 'undefined') return null;
+  const wb = XLSX.utils.book_new();
+  buildAndDownloadExcel(req, wb); // fills wb, skips download
+  try {
+    return XLSX.write(wb, { bookType: 'xlsx', type: 'base64', cellStyles: true });
+  } catch(e) { return null; }
+}
+
+// ─── Bitrix24 ─────────────────────────────────────────────────────────────────
+async function sendToBitrix() {
+  if (!appConfig.bitrixWebhook) {
+    toast('⚠️ Webhook не настроен — укажите URL в Конфиге');
+    return;
+  }
+  const req = collectForm();
+  if (!req.name) { toast('Введите название заявки'); return; }
+  if (req.positions.length === 0) { toast('Добавьте хотя бы одну позицию'); return; }
+
+  const btn = document.getElementById('btn-bitrix');
+  const prev = btn?.textContent;
+  if (btn) { btn.textContent = '⏳ Отправка…'; btn.disabled = true; }
+  try {
+    await api('POST', '/api/send-bitrix', req);
+    toast('✓ Заявка отправлена в Bitrix24');
+  } catch(e) {
+    toast('Ошибка Bitrix: ' + e.message);
+  } finally {
+    if (btn) { btn.textContent = prev; btn.disabled = false; }
+  }
+}
+
+// ─── Save ────────────────────────────────────────────────────────────────────
+async function saveRequest() {
+  const req = collectForm();
+  if (!req.orgId) { toast('Выберите организацию'); return; }
+  if (!req.name) { toast('Введите название заявки'); return; }
+  if (req.positions.length === 0) { toast('Добавьте хотя бы одну позицию'); return; }
+
+  try {
+    let savedReq;
+    if (editingId) {
+      req.id = editingId;
+      const orig = await api('GET', '/api/requests/' + editingId).catch(() => null);
+      if (orig) req.specNum = orig.specNum;
+      savedReq = await api('PUT', '/api/requests/' + editingId, req);
+      toast('Заявка обновлена: ' + req.specNum);
+      editingId = null;
+      setEditingState(false);
+    } else {
+      savedReq = await api('POST', '/api/requests', req);
+      toast('Заявка сохранена: ' + req.specNum);
+    }
+    updateSpecNum();
+
+    // Auto-layout files to network folder if configured
+    if (appConfig.networkFolder && savedReq?.id) {
+      layoutFilesToFolder(savedReq.id, req).catch(e => {
+        console.warn('[layout]', e.message);
+        toast('⚠️ Файлы не разложены: ' + e.message);
+      });
+    }
+  } catch(e) { /* toast already shown */ }
+}
+
+// ─── Export Excel ─────────────────────────────────────────────────────────────
+function exportExcel() {
+  const req = collectForm();
+  if (req.positions.length === 0) { toast('Нет позиций для экспорта'); return; }
+  buildAndDownloadExcel(req);
+}
+
+function buildAndDownloadExcel(req, existingWb) {
+  const wb = existingWb || XLSX.utils.book_new();
+  const monthName = RU_MONTHS[new Date(req.date).getMonth()];
+  const year = new Date(req.date).getFullYear();
+  const sheetName = `${monthName} ${year}`;
+  const isRealization = req.isRealization || false;
+
+  // ── Хелперы ──────────────────────────────────────────────────────────────
+  const border = { style: 'thin', color: { rgb: '000000' } };
+  const allBorders = { top: border, bottom: border, left: border, right: border };
+
+  function applyBorders(ws, range) {
+    // range: { s: {r,c}, e: {r,c} }
+    for (let R = range.s.r; R <= range.e.r; R++) {
+      for (let C = range.s.c; C <= range.e.c; C++) {
+        const addr = XLSX.utils.encode_cell({ r: R, c: C });
+        if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+        if (!ws[addr].s) ws[addr].s = {};
+        ws[addr].s.border = allBorders;
+      }
+    }
+  }
+
+
+  // ── Лист 1: Расчёты ──────────────────────────────────────────────────────
+  const calcRows = [];
+  // Row 0 (index): пустая
+  calcRows.push(Array(15).fill(''));
+  // Row 1: шапка с доставкой
+  calcRows.push(['Потребности пользователей', '', '', '', '', '', '', 'Доставка', req.deliveryCost || 0, '', '', '', '', '', '']);
+  // Row 2: заголовки колонок
+  calcRows.push([
+    'ЮЛ','ФИО','№ ПП','Наименование','Кол-во','Где закуп',
+    'Цена ед.','Цена закупа','% от заказа для доставки','Доля доставки',
+    'Цена закупа за ед с доставкой','Цена закупа с доставкой','',
+    'Цена продажи за единицу','Стоимость продажи'
+  ]);
+
+  const dataStartRow = 3; // 0-indexed row where first data row goes
+  const totalPurchase = req.totalPurchase || 0;
+  const deliveryCost  = req.deliveryCost  || 0;
+  const markup        = req.markup ?? 5;
+  const posCount      = req.positions.length;
+  const itogExcelRow  = dataStartRow + posCount + 1; // 1-based Excel row of итого — pre-calculated for formula refs
+
+  req.positions.forEach((p, i) => {
+    const rowNum = dataStartRow + i + 1; // 1-based Excel row
+
+    const yul = isRealization
+      ? (p.rowOrgName || p.comment || '')
+      : (i === 0 ? (req.orgFull || req.orgShort || '') : '');
+    const fio = isRealization
+      ? (p.comment || p.rowOrgName || '')
+      : (i === 0 ? (p.comment || req.mol || '') : (p.comment || ''));
+
+    // Колонки (0-based): A=0 … O=14
+    // G (col 6) = purchasePrice, E (col 4) = qty
+    // H (col 7) = G*E  → формула =G{row}*E{row}
+    // I (col 8) = H/totalPurchase  → =H{row}/I2  (I2 хранит totalPurchase)
+    // J (col 9) = I * deliveryCost → =I{row}*I2
+    // K (col 10) = G + J/E         → =G{row}+J{row}/E{row}
+    // L (col 11) = K * E           → =K{row}*E{row}
+    // N (col 13) = K * (1+markup%) → =K{row}*(1+R2/100)   R2 = markup cell
+    // O (col 14) = N * E           → =N{row}*E{row}
+
+    // Для простоты считаем значения как раньше (fallback для книги без XLSX formula support)
+    // и параллельно пишем формулы — SheetJS запишет формулы в ячейки
+    const purchaseSum  = p.purchasePrice * p.qty;
+    const pctOfOrder   = totalPurchase > 0 ? purchaseSum / totalPurchase : 0;
+    const deliveryShare = pctOfOrder * deliveryCost;
+    const ppWithDel    = p.qty > 0 ? p.purchasePrice + deliveryShare / p.qty : p.purchasePrice;
+    const sellPerUnit  = p.sellPerUnit || ppWithDel * (1 + markup / 100);
+    const sellSum      = p.sellSum || sellPerUnit * p.qty;
+
+    const r = dataStartRow + i + 1; // Excel row (1-based)
+
+    calcRows.push([
+      { v: yul, t: 's' },                            // A: ЮЛ
+      { v: fio, t: 's' },                            // B: ФИО
+      { v: i + 1, t: 'n' },                          // C: №ПП
+      { v: p.name, t: 's' },                         // D: Наименование
+      { v: p.qty, t: 'n' },                          // E: Кол-во
+      { v: p.link || '', t: 's' },                   // F: Где закуп
+      { v: p.purchasePrice, t: 'n' },                // G: Цена ед.
+      { f: `G${r}*E${r}`, v: purchaseSum, t: 'n' },  // H: Цена закупа
+      { f: `IF(H${itogExcelRow}=0,0,H${r}/H${itogExcelRow})`, v: pctOfOrder, t: 'n' },        // I: % от заказа
+      { f: `I${r}*I2`, v: deliveryShare, t: 'n' },   // J: Доля доставки (I2 = deliveryCost)
+      { f: `IF(E${r}=0,G${r},G${r}+J${r}/E${r})`, v: ppWithDel, t: 'n' },  // K: Цена с дост за ед
+      { f: `K${r}*E${r}`, v: ppWithDel * p.qty, t: 'n' },          // L: Итого с доставкой
+      { v: '', t: 's' },                             // M: пусто
+      { f: `K${r}*(1+R2/100)`, v: sellPerUnit, t: 'n' },           // N: Цена продажи за ед (R2=markup)
+      { f: `N${r}*E${r}`, v: sellSum, t: 'n' },      // O: Стоимость продажи
+    ]);
+  });
+
+  // Итого строка
+  const firstDataExcel = dataStartRow + 1;
+  const lastDataExcel  = dataStartRow + posCount;
+  calcRows.push([
+    { v: 'Итого', t: 's' },
+    { v: '', t: 's' },
+    { v: '', t: 's' },
+    { v: '', t: 's' },
+    { v: '', t: 's' },
+    { v: '', t: 's' },
+    { v: '', t: 's' },
+    { f: `SUM(H${firstDataExcel}:H${lastDataExcel})`, v: totalPurchase, t: 'n' },
+    { v: '', t: 's' },
+    { f: `SUM(J${firstDataExcel}:J${lastDataExcel})`, v: deliveryCost, t: 'n' },
+    { v: '', t: 's' },
+    { f: `H${itogExcelRow}+J${itogExcelRow}`, v: totalPurchase + deliveryCost, t: 'n' },
+    { v: '', t: 's' },
+    { v: '', t: 's' },
+    { f: `SUM(O${firstDataExcel}:O${lastDataExcel})`, v: req.total, t: 'n' },
+  ]);
+
+  // Прибыль
+  calcRows.push([]);
+  const profitRow = Array.from({ length: 15 }, () => ({ v: '', t: 's' }));
+  profitRow[13] = { v: 'прибыль', t: 's' };
+  profitRow[14] = { f: `O${itogExcelRow}-H${itogExcelRow}-J${itogExcelRow}`, v: req.total - totalPurchase - deliveryCost, t: 'n' };
+  calcRows.push(profitRow);
+
+  const ws1 = XLSX.utils.aoa_to_sheet(calcRows);
+
+  // Записываем deliveryCost и markup в именованные ячейки для ссылок в формулах
+  // I2 = deliveryCost (строка 1, col 8 = I)
+  // R2 = markup (строка 1, col 17 = R)
+  ws1['I2'] = { t: 'n', v: deliveryCost };
+  ws1['R2'] = { t: 'n', v: markup };
+
+  // Применяем рамки к шапке (строка 3 = индекс 2) + данные + итого
+  // ВАЖНО: applyBorders вызывается ПОСЛЕ всех ws1[addr] присвоений,
+  // иначе aoa_to_sheet перезапишет ячейки без стилей
+  const tableRange = {
+    s: { r: 2, c: 0 },
+    e: { r: 2 + posCount + 1, c: 14 }
+  };
+  applyBorders(ws1, tableRange);
+
+  // Жирная шапка
+  for (let C = 0; C <= 14; C++) {
+    const addr = XLSX.utils.encode_cell({ r: 2, c: C });
+    if (!ws1[addr]) ws1[addr] = { t: 's', v: '' };
+    if (!ws1[addr].s) ws1[addr].s = {};
+    ws1[addr].s.font = { bold: true };
+    ws1[addr].s.fill = { fgColor: { rgb: 'D9E1F2' } };
+    ws1[addr].s.border = allBorders;
+  }
+
+  ws1['!cols'] = [
+    {wch:22},{wch:30},{wch:5},{wch:60},{wch:7},{wch:14},{wch:12},
+    {wch:14},{wch:10},{wch:12},{wch:18},{wch:18},{wch:4},{wch:18},{wch:18}
+  ];
+  XLSX.utils.book_append_sheet(wb, ws1, sheetName);
+
+  // ── Лист 2: Спецификация ─────────────────────────────────────────────────
+  {
+    let specPositions = !isRealization ? req.positions : req.positions.filter(p => {
+      const org = (p.rowOrgName || p.comment || '').toLowerCase();
+      const ipShort = (req.orgShort || '').toLowerCase();
+      return org.includes('рогулькин') || org.includes('ип') || org === ipShort || org === '';
+    });
+
+    if (specPositions.length > 0) {
+      const specRows = [];
+      // Header (строка 0)
+      specRows.push(['№ п/п', 'Наименование Товара', 'Кол-во (шт.)', 'Цена за ед., руб. (без НДС)', 'Стоимость, руб. (без НДС)']);
+
+      let specTotal = 0;
+      specPositions.forEach((p, i) => {
+        const sr = i + 2; // Excel row (1-based, header=1)
+        const sellUnit = p.sellPerUnit || p.purchasePrice * (1 + markup / 100);
+        const sellSum  = p.sellSum    || sellUnit * p.qty;
+        specTotal += sellSum;
+        specRows.push([
+          { v: i + 1, t: 'n' },
+          { v: p.name, t: 's' },
+          { v: p.qty, t: 'n' },
+          { v: sellUnit, t: 'n' },
+          { f: `C${sr}*D${sr}`, v: sellSum, t: 'n' },
+        ]);
+      });
+
+      const specCount = specPositions.length;
+      // Итого строка (индекс specCount + 1 в массиве, т.к. header = 0)
+      specRows.push([
+        { v: '', t: 's' },
+        { v: '', t: 's' },
+        { v: '', t: 's' },
+        { v: 'Итого:', t: 's' },
+        { f: `SUM(E2:E${specCount + 1})`, v: specTotal, t: 'n' },
+      ]);
+      specRows.push(['', '', '', '', '']);
+      specRows.push(['НДС: не облагается', '', '', '', '']);
+
+      const ws2 = XLSX.utils.aoa_to_sheet(specRows);
+
+      // Рамки: шапка (r=0) + данные (r=1..specCount) + итого (r=specCount+1)
+      // НЕ включаем строки НДС и пустую — они вне таблицы
+      applyBorders(ws2, {
+        s: { r: 0, c: 0 },
+        e: { r: specCount + 1, c: 4 }
+      });
+
+      // Жирная шапка спецификации
+      for (let C = 0; C <= 4; C++) {
+        const addr = XLSX.utils.encode_cell({ r: 0, c: C });
+        if (!ws2[addr]) ws2[addr] = { t: 's', v: '' };
+        if (!ws2[addr].s) ws2[addr].s = {};
+        ws2[addr].s.font = { bold: true };
+        ws2[addr].s.fill = { fgColor: { rgb: 'D9E1F2' } };
+        ws2[addr].s.border = allBorders;
+      }
+      // Жирная строка итого
+      for (let C = 0; C <= 4; C++) {
+        const addr = XLSX.utils.encode_cell({ r: specCount + 1, c: C });
+        if (!ws2[addr]) ws2[addr] = { t: 's', v: '' };
+        if (!ws2[addr].s) ws2[addr].s = {};
+        ws2[addr].s.font = { bold: true };
+        ws2[addr].s.border = allBorders;
+      }
+
+      ws2['!cols'] = [{wch:8},{wch:70},{wch:10},{wch:24},{wch:24}];
+      XLSX.utils.book_append_sheet(wb, ws2, 'Спецификация');
+    }
+  }
+
+  const fname = `${req.specNum}_расчёты.xlsx`;
+  // If existingWb was passed — caller handles the workbook, skip download
+  if (existingWb) return;
+  try {
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
+    const blob = new Blob([wbout], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+    toast('Скачан: ' + fname);
+  } catch(e) {
+    console.error('Excel download error:', e);
+    toast('Ошибка скачивания: ' + e.message);
+  }
+}
+
+async function loadToForm(id, copy=false) {
+  let req = await api('GET', '/api/requests/' + id).catch(() => null);
+  if (!req) return;
+  document.getElementById('f-org').value = req.orgId;
+  // Always use current org signatory from card (not stale saved value)
+  const orgCard = db.orgs.find(o => o.id === req.orgId);
+  if (orgCard) req.orgSignatory = orgCard.signatory || req.orgSignatory || '';
+  document.getElementById('f-bitrix').value = req.bitrix;
+  document.getElementById('f-name').value = copy ? req.name + ' (копия)' : req.name;
+  document.getElementById('f-mol').value = req.mol;
+  document.getElementById('f-date').value = req.date;
+  document.getElementById('f-address').value = req.address || '';
+  document.getElementById('f-supplier').value = req.supplier || '';
+  document.getElementById('f-invoice-num').value = req.invoiceNum || '';
+  document.getElementById('f-contract').value = req.contract || '';
+  document.getElementById('f-status').value = req.status || 'new';
+  document.getElementById('f-comment').value = req.comment || '';
+
+  // Delivery & markup
+  const delOn = (req.deliveryCost || 0) > 0;
+  document.getElementById('f-delivery-on').checked = delOn;
+  document.getElementById('f-delivery-cost').value = req.deliveryCost || '';
+  document.getElementById('f-delivery-cost').style.opacity = delOn ? '1' : '0.4';
+  document.getElementById('f-delivery-cost').style.pointerEvents = delOn ? 'auto' : 'none';
+  document.getElementById('f-markup').value = req.markup ?? 5;
+
+  // Restore realization mode if needed
+  if (req.isRealization) {
+    document.getElementById('realization-badge').style.display = 'flex';
+    const th = document.querySelector('#page-new table thead th:nth-child(4)');
+    if (th) { th.textContent = 'ЮЛ / Получатель'; th.style.color = 'var(--accent)'; }
+  } else {
+    document.getElementById('realization-badge').style.display = 'none';
+    const th = document.querySelector('#page-new table thead th:nth-child(4)');
+    if (th) { th.textContent = 'Комментарий / ФИО'; th.style.color = ''; }
+  }
+
+  document.getElementById('positions-body').innerHTML = '';
+  rowCounter = 0;
+  req.positions.forEach(p => addRow(
+    p.name, p.qty, p.unit||'шт', 0,
+    p.link||'', p.purchasePrice||p.price||0,
+    p.comment||'', p.rowOrgName||''
+  ));
+  updateSpecNum();
+  showFolderPath();
+
+  if (copy) {
+    // Refresh cache so nextSpecNum is accurate for the copy
+    try { allReqs = await api('GET', '/api/requests'); db.requests = allReqs; } catch(e) {}
+    editingId = null;
+    setEditingState(false);
+    toast('Заявка скопирована — сохраните как новую');
+  } else {
+    editingId = id;
+    setEditingState(true, req.specNum);
+  }
+  showPage('new');
+}
+
+function setEditingState(isEditing, specNum='') {
+  const btn = document.getElementById('btn-save');
+  const banner = document.getElementById('edit-banner');
+  if (!btn) return;
+  if (isEditing) {
+    btn.textContent = '💾 Сохранить изменения';
+    btn.style.background = 'var(--warning)';
+    btn.style.borderColor = 'var(--warning)';
+    btn.style.color = '#fff';
+    if (banner) { banner.style.display = 'flex'; banner.querySelector('span').textContent = 'Редактирование: ' + specNum; }
+  } else {
+    btn.textContent = '💾 Сохранить заявку';
+    btn.style.background = 'var(--success)';
+    btn.style.borderColor = 'var(--success)';
+    btn.style.color = '#fff';
+    if (banner) banner.style.display = 'none';
+  }
+}
+
+async function exportExcelById(id) {
+  // Сначала ищем в кэше, если нет — запрашиваем с сервера
+  let req = db.requests.find(r => r.id === id) || allReqs.find(r => r.id === id);
+  if (!req) {
+    req = await api('GET', '/api/requests/' + id).catch(() => null);
+  }
+  if (!req) { toast('Заявка не найдена'); return; }
+  buildAndDownloadExcel(req);
+}
+
+
+let currentSpecReq = null;
+
+function previewSpec() {
+  const req = collectForm();
+  if (!req.name || req.positions.length === 0) { toast('Заполните форму и добавьте позиции'); return; }
+  currentSpecReq = req;
+  document.getElementById('spec-preview-content').innerHTML = buildSpecHtml(req);
+  showPage('spec');
+}
+
+function loadSpec(id) {
+  const req = db.requests.find(r => r.id === id) || allReqs.find(r => r.id === id);
+  if (!req) return;
+  currentSpecReq = req;
+  document.getElementById('spec-preview-content').innerHTML = buildSpecHtml(req);
+  showPage('spec');
+}
+
+function loadSpecFromRegistry() {
+  const id = document.getElementById('spec-select').value;
+  if (!id) return;
+  const req = db.requests.find(r => r.id === id) || allReqs.find(r => r.id === id);
+  if (req) {
+    currentSpecReq = req;
+    document.getElementById('spec-preview-content').innerHTML = buildSpecHtml(req);
+  }
+}
+
+async function saveSpecWord() {
+  const req = currentSpecReq;
+  if (!req) { toast('Сначала откройте спецификацию'); return; }
+  const btn = document.getElementById('btn-save-word');
+  const origText = btn.textContent;
+  btn.textContent = '⏳ Генерация...';
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/spec-docx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': authToken },
+      body: JSON.stringify(req)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${req.specNum || 'spec'}_спецификация.docx`;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+    toast('Word сохранён');
+  } catch(e) {
+    toast('Ошибка: ' + e.message);
+    console.error(e);
+  } finally {
+    btn.textContent = origText;
+    btn.disabled = false;
+  }
+}
+
+
+function buildSpecHtml(req) {
+  const total = req.total || 0;
+  const totalStr = fmtRub(total);
+  const totalWords = numToWords(total);
+  const dateObj = new Date(req.date);
+  const dateStr = `«${String(dateObj.getDate()).padStart(2,'0')}» ${months[dateObj.getMonth()]} ${dateObj.getFullYear()} г.`;
+
+  let rows = '';
+  req.positions.forEach((p,i) => {
+    const sellUnit = p.sellPerUnit || (p.purchasePrice || p.price || 0) * (1 + (req.markup||5)/100);
+    const sellSum  = p.sellSum    || sellUnit * p.qty;
+    rows += `<tr>
+      <td style="text-align:center">${i+1}</td>
+      <td>${esc(p.name)}</td>
+      <td style="text-align:center">${p.qty}</td>
+      <td style="text-align:right">${fmtRub(sellUnit)}</td>
+      <td style="text-align:right">${fmtRub(sellSum)}</td>
+    </tr>`;
+  });
+
+  return `
+    <div class="app-ref">Приложение №1 к договору поставки № ${esc(req.contract || '—')}</div>
+    <div class="spec-title">СПЕЦИФИКАЦИЯ № ${esc(req.specNum)}</div>
+    <div class="spec-city-date">
+      <span>г. Екатеринбург</span>
+      <span>${dateStr}</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;border:1px solid #333">
+      <thead>
+        <tr>
+          <th style="width:36px;text-align:center">№ п/п</th>
+          <th>Наименование Товара</th>
+          <th style="width:60px;text-align:center">Кол-во (шт.)</th>
+          <th style="width:130px;text-align:right">Цена за ед., руб. (без НДС)</th>
+          <th style="width:130px;text-align:right">Стоимость, руб. (без НДС)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+        <tr>
+          <td colspan="4" style="text-align:right;font-weight:bold;border:1px solid #333">Итого:</td>
+          <td style="text-align:right;font-weight:bold;border:1px solid #333">${totalStr}</td>
+        </tr>
+        <tr><td colspan="5" style="border:1px solid #333;padding:4px 8px">НДС: не облагается</td></tr>
+      </tbody>
+    </table>
+    <p style="margin-top:16px">Всего наименований ${req.positions.length}, на сумму ${totalStr} рублей, без НДС</p>
+    <p style="margin-top:4px;font-style:italic">${totalWords}, НДС не облагается.</p>
+    <p style="margin-top:12px">Срок поставки Товара: 14 дней.</p>
+    <p style="margin-top:8px"><strong>Порядок оплаты:</strong><br>
+    — Аванс (предварительная оплата) в размере 100 % от стоимости Товара, подлежащего поставке по настоящей Спецификации. Цена указана с доставкой до Покупателя.</p>
+    ${req.address ? `<p style="margin-top:8px">Адрес доставки/выборки: ${esc(req.address)}</p>` : ''}
+    <p style="margin-top:8px">Качество Товара должно соответствовать установленным требованиям государственных стандартов качества.</p>
+    <p style="margin-top:8px">Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу.</p>
+    <div class="sign-block">
+      <div>
+        <div class="sign-title">Поставщик: ${esc(req.supplier || '___________')}</div>
+        <div class="sign-line"></div>
+        <div style="font-size:11px">подпись / Б.П.</div>
+      </div>
+      <div>
+        <div class="sign-title">Покупатель: ${esc(req.orgFull || '___________')}</div>
+        <div class="sign-line"></div>
+        <div style="font-size:11px">______________________/${esc(req.orgSignatory || 'Директор')}/ М.П.</div>
+      </div>
+    </div>`;
+}
+
+// ─── Pagination ──────────────────────────────────────────────────────────────
+function goPage(page) {
+  if (page < 1 || page > totalPages) return;
+  currentPage = page;
+  renderRegistryRows(allReqs);
+}
+
+function changePageSize() {
+  const sel = document.getElementById('pg-size');
+  pageSize = parseInt(sel.value);
+  currentPage = 1;
+  renderRegistryRows(allReqs);
+}
+
+function renderPaginationBar(total) {
+  const bar = document.getElementById('pagination-bar');
+  if (!bar) return;
+
+  if (total <= pageSize) {
+    bar.style.display = 'none';
+    return;
+  }
+
+  bar.style.display = 'flex';
+  totalPages = Math.ceil(total / pageSize);
+
+  document.getElementById('pagination-info').textContent =
+    `Показано ${Math.min((currentPage-1)*pageSize+1, total)}–${Math.min(currentPage*pageSize, total)} из ${total}`;
+
+  // Page buttons (show max 5 around current)
+  const pages = document.getElementById('pg-pages');
+  pages.innerHTML = '';
+  let start = Math.max(1, currentPage - 2);
+  let end   = Math.min(totalPages, start + 4);
+  start = Math.max(1, end - 4);
+
+  for (let i = start; i <= end; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-sm';
+    btn.textContent = i;
+    btn.onclick = () => goPage(i);
+    if (i === currentPage) {
+      btn.style.background = 'var(--accent)';
+      btn.style.borderColor = 'var(--accent)';
+      btn.style.color = '#fff';
+    }
+    pages.appendChild(btn);
+  }
+
+  // Disable prev/next buttons
+  document.getElementById('pg-first').disabled = currentPage === 1;
+  document.getElementById('pg-prev').disabled  = currentPage === 1;
+  document.getElementById('pg-next').disabled  = currentPage === totalPages;
+  document.getElementById('pg-last').disabled  = currentPage === totalPages;
+}
+
+function renderRegistryRows(reqs) {
+  const body = document.getElementById('registry-body');
+  const empty = document.getElementById('registry-empty');
+  body.innerHTML = '';
+
+  if (reqs.length === 0) {
+    empty.style.display = 'block';
+    document.getElementById('pagination-bar').style.display = 'none';
+    return;
+  }
+
+  empty.style.display = 'none';
+
+  // Paginate
+  const start = (currentPage - 1) * pageSize;
+  const page  = reqs.slice(start, start + pageSize);
+
+  page.forEach(r => {
+    const tr = document.createElement('tr');
+    tr.className = 'row-toggle';
+    tr.onclick = () => toggleDetail(r.id);
+    const realizBadge = r.isRealization ? ' <span style="font-size:10px;background:var(--accent-bg);color:var(--accent);padding:1px 5px;border-radius:4px;margin-left:4px">реализация</span>' : '';
+    tr.innerHTML = `
+      <td><span class="chevron" id="ch-${r.id}">▶</span></td>
+      <td><span style="font-family:monospace;font-size:12px;color:var(--accent)">${esc(r.specNum)}</span>${realizBadge}</td>
+      <td style="font-size:12px;color:var(--text-secondary)">${fmtDate(r.date)}</td>
+      <td>${esc(r.orgShort||'')}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.name)}">${esc(r.name)}</td>
+      <td style="font-size:12px;color:var(--text-secondary)">${esc(r.mol||'')}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td style="text-align:center"><span class="num-badge">${r.positions.length}</span></td>
+      <td style="font-weight:600;font-size:12px">${fmtRub(r.total)}</td>
+      <td>
+        <button class="btn btn-sm" onclick="event.stopPropagation();loadToForm('${r.id}')">Ред.</button>
+        <select class="btn btn-sm status-select" onchange="event.stopPropagation();changeStatus('${r.id}',this.value)" onclick="event.stopPropagation()" style="margin-left:4px;padding:2px 4px;font-size:11px;cursor:pointer">
+          ${Object.entries(STATUS_MAP).map(([k,v])=>`<option value="${k}" ${r.status===k?'selected':''}>${v.label}</option>`).join('')}
+        </select>
+      </td>`;
+    body.appendChild(tr);
+
+    const detail = document.createElement('tr');
+    detail.innerHTML = `<td colspan="10" style="padding:0">
+      <div id="detail-${r.id}" class="registry-detail">
+        <div class="detail-grid">
+          <div class="detail-item"><span>Поставщик</span>${esc(r.supplier||'—')}</div>
+          <div class="detail-item"><span>Номер счёта</span>${r.invoiceNum ? `<span style="font-family:monospace;color:var(--accent)">${esc(r.invoiceNum)}</span>` : '—'}</div>
+          <div class="detail-item"><span>Договор</span>${esc(r.contract||'—')}</div>
+          <div class="detail-item"><span>Битрикс</span>${r.bitrix?'#'+esc(r.bitrix):'—'}</div>
+          <div class="detail-item"><span>Адрес</span>${esc(r.address||'—')}</div>
+          ${r.comment?`<div class="detail-item" style="grid-column:1/-1"><span>Комментарий</span>${esc(r.comment)}</div>`:''}
+          <div class="detail-item" style="grid-column:1/-1"><span>Путь папки</span><span style="font-family:monospace;font-size:11px;color:var(--accent);cursor:pointer" onclick="navigator.clipboard.writeText('${esc(buildFolderPath(r))}')" title="Нажать для копирования">📁 ${esc(buildFolderPath(r))}</span></div>
+        </div>
+        <table style="font-size:12px;width:100%;border-collapse:collapse">
+          <tr><th style="padding:4px 8px;background:none;border-bottom:1px solid var(--border);font-size:11px">Наименование</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:120px">${r.isRealization?'ЮЛ / Кому':'Комментарий'}</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:60px">Кол-во</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:90px">Закуп</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:90px">Продажа</th></tr>
+          ${r.positions.map(p=>`<tr><td style="padding:3px 8px;border:none">${esc(p.name)}</td><td style="padding:3px 4px;border:none;font-size:11px;color:var(--text-secondary)">${esc(p.comment||p.rowOrgName||'—')}</td><td style="padding:3px 4px;border:none">${p.qty} ${p.unit||'шт'}</td><td style="padding:3px 4px;border:none;text-align:right">${fmtRub(p.purchasePrice)}</td><td style="padding:3px 4px;border:none;text-align:right;color:var(--accent)">${fmtRub(p.sellPerUnit||0)}</td></tr>`).join('')}
+        </table>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-sm btn-success" onclick="exportExcelById('${r.id}')">📊 Excel</button>
+          ${!r.isRealization?`<button class="btn btn-sm" onclick="loadSpec('${r.id}')">📄 Спецификация</button>`:''}
+          <button class="btn btn-sm" onclick="loadToForm('${r.id}',true)">📋 Копировать</button>
+          <label class="btn btn-sm" style="cursor:pointer;background:${r.signedSpecPdf?'var(--success)':'var(--surface-2)'};border-color:${r.signedSpecPdf?'var(--success)':'var(--border)'};color:${r.signedSpecPdf?'#fff':'var(--text)'}" title="${r.signedSpecPdf?'Подписанная спецификация прикреплена. Нажмите чтобы заменить':'Прикрепить подписанную спецификацию PDF'}">
+            ${r.signedSpecPdf?'✅ Подписано':'📎 Прикрепить подпись'}
+            <input type="file" accept=".pdf" style="display:none" onchange="uploadSignedSpec('${r.id}',this)">
+          </label>
+          ${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${r.id}','${esc(r.specNum)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}
+          ${appConfig.networkFolder?`<button class="btn btn-sm" id="layout-btn-${r.id}" onclick="forceLayoutFiles('${r.id}',this)" title="Разложить файлы в сетевую папку" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">📁 Разложить файлы</button>`:''}
+          <button class="btn btn-sm" style="margin-left:auto;color:var(--danger);border-color:var(--danger)" onclick="deleteRequest('${r.id}')">Удалить</button>
+        </div>
+        <div id="audit-${r.id}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;font-size:12px"></div>
+      </div>
+    </td>`;
+    body.appendChild(detail);
+  });
+
+  renderPaginationBar(reqs.length);
+}
+
+async function renderRegistry() {
+  const search    = (document.getElementById('reg-search')?.value || '').toLowerCase();
+  const filterOrg = document.getElementById('reg-filter-org')?.value || '';
+  const filterMonth = document.getElementById('reg-filter-month')?.value || '';
+  const filterStatus = document.getElementById('reg-filter-status')?.value || '';
+
+  // Build query
+  const params = new URLSearchParams();
+  if (search)      params.set('q', search);
+  if (filterOrg)      params.set('org', filterOrg);
+  if (filterMonth)    params.set('month', filterMonth);
+  if (filterStatus)   params.set('status', filterStatus);
+  const filterSupplier = document.getElementById('reg-filter-supplier')?.value || '';
+  if (filterSupplier) params.set('supplier', filterSupplier);
+
+  let reqs = [];
+  try {
+    reqs = await api('GET', '/api/requests?' + params.toString());
+    db.requests = reqs; // cache for stats
+  } catch(e) { return; }
+
+  // Cache all results and paginate
+  allReqs = reqs;
+  currentPage = 1;
+  renderRegistryRows(reqs);
+
+    // Stats from API
+  try {
+    const stats = await api('GET', '/api/stats');
+    const isFiltered = !!(search || filterOrg || filterMonth || filterStatus);
+    const filteredTotal = reqs.reduce((s,r)=>s+r.total,0);
+    document.getElementById('stats-row').innerHTML = `
+      <div class="stat-card">
+        <div class="stat-label">Всего заявок</div>
+        <div class="stat-value">${stats.totalRequests}</div>
+        ${isFiltered ? `<div class="stat-sub" style="color:var(--accent)">Найдено: ${reqs.length}</div>` : `<div class="stat-sub">В этом месяце: ${stats.thisMonth}</div>`}
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">${isFiltered ? 'Сумма выборки' : 'Продажи всего'}</div>
+        <div class="stat-value" style="font-size:16px">${fmtRub(isFiltered ? filteredTotal : stats.totalSell)}</div>
+        ${isFiltered ? `<div class="stat-sub">Всего: ${fmtRub(stats.totalSell)}</div>` : ''}
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Закуп всего</div>
+        <div class="stat-value" style="font-size:16px">${fmtRub(stats.totalPurchase)}</div>
+        <div class="stat-sub">Прибыль: ${fmtRub(stats.totalSell - stats.totalPurchase)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Действия</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
+          <button class="btn btn-sm" onclick="exportRegistryExcel()" style="background:var(--accent);border-color:var(--accent);color:#fff">📊 Экспорт реестра</button>
+          <button class="btn btn-sm" onclick="toggleBreakdown()" id="breakdown-btn">📈 Разбивка по орг.</button>
+        </div>
+      </div>`;
+    renderBreakdown(reqs);
+
+    // Update org filter options
+    const orgSel = document.getElementById('reg-filter-org');
+    const curOrg = orgSel.value;
+    orgSel.innerHTML = '<option value="">Все организации</option>';
+    db.orgs.forEach(o => {
+      if (reqs.some(r=>r.orgId===o.id) || db.requests.some(r=>r.orgId===o.id))
+        orgSel.innerHTML += `<option value="${o.id}" ${curOrg===o.id?'selected':''}>${o.short}</option>`;
+    });
+
+    // Supplier filter
+    const supplierSel = document.getElementById('reg-filter-supplier');
+    if (supplierSel) {
+      const curSupplier = supplierSel.value;
+      const suppliers = [...new Set(db.requests.map(r=>r.supplier).filter(Boolean))].sort();
+      supplierSel.innerHTML = '<option value="">Все поставщики</option>';
+      suppliers.forEach(s => {
+        supplierSel.innerHTML += `<option value="${esc(s)}" ${curSupplier===s?'selected':''}>${esc(s)}</option>`;
+      });
+    }
+
+    // Month filter
+    const monthSel = document.getElementById('reg-filter-month');
+    const curM = monthSel.value;
+    const allMonths = [...new Set(db.requests.map(r=>r.date?.slice(0,7)).filter(Boolean))].sort().reverse();
+    monthSel.innerHTML = '<option value="">Все месяцы</option>';
+    allMonths.forEach(m => {
+      const [y,mo] = m.split('-');
+      monthSel.innerHTML += `<option value="${m}" ${curM===m?'selected':''}>${months[parseInt(mo)-1]} ${y}</option>`;
+    });
+  } catch(e) { console.error('Stats error', e); }
+}
+
+function toggleDetail(id) {
+  const el = document.getElementById('detail-' + id);
+  const ch = document.getElementById('ch-' + id);
+  const isOpen = el.classList.contains('open');
+  document.querySelectorAll('.registry-detail').forEach(e => e.classList.remove('open'));
+  document.querySelectorAll('.chevron').forEach(c => c.classList.remove('open'));
+  if (!isOpen) { el.classList.add('open'); ch.classList.add('open'); }
+}
+
+async function deleteRequest(id) {
+  if (!confirm('Удалить заявку?')) return;
+  await api('DELETE', '/api/requests/' + id);
+  renderRegistry();
+  toast('Заявка удалена');
+}
+
+async function addOrg() {
+  const full = document.getElementById('new-org-full').value.trim();
+  const short = document.getElementById('new-org-short').value.trim();
+  const prefix = document.getElementById('new-org-prefix').value.trim().toUpperCase();
+  const signatory = document.getElementById('new-org-signatory').value.trim();
+  const contract  = document.getElementById('new-org-contract').value.trim();
+  const address   = document.getElementById('new-org-address').value.trim();
+  if (!full || !short || !prefix) { toast('Заполните все поля'); return; }
+  const org = await api('POST', '/api/orgs', { full, short, prefix, signatory, contract, address });
+  db.orgs.push(org);
+  ['full','short','prefix','signatory','contract','address'].forEach(f => {
+    const el = document.getElementById('new-org-' + f); if (el) el.value = '';
+  });
+  renderOrgs();
+  populateOrgSelect();
+  toast('Организация добавлена');
+}
+
+async function deleteOrg(id) {
+  try {
+    await api('DELETE', '/api/orgs/' + id);
+    db.orgs = db.orgs.filter(o => o.id !== id);
+    renderOrgs();
+    populateOrgSelect();
+    toast('Организация удалена');
+  } catch(e) { /* error shown by api() */ }
+}
+
+function renderOrgs() {
+  const list = document.getElementById('org-list');
+  if (db.orgs.length === 0) {
+    list.innerHTML = '<div class="empty"><p>Нет организаций</p></div>';
+    return;
+  }
+  list.innerHTML = db.orgs.map(o => `
+    <div class="org-item" style="cursor:pointer" onclick="openOrgModal('${o.id}')">
+      <div style="flex:1">
+        <div class="org-name">${esc(o.full)}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${esc(o.short)} · Префикс: <strong>${esc(o.prefix)}</strong> · ${esc(o.signatory||'—')}</div>
+        ${o.contract ? `<div style="font-size:11px;color:var(--accent);margin-top:2px">📄 ${esc(o.contract)}</div>` : '<div style="font-size:11px;color:var(--danger);margin-top:2px">📄 договор не задан</div>'}
+        ${o.address  ? `<div style="font-size:11px;color:var(--text-muted);margin-top:1px">📍 ${esc(o.address)}</div>`  : ''}
+      </div>
+      <div style="display:flex;gap:4px;align-items:center">
+        <button class="btn btn-sm" onclick="event.stopPropagation();openOrgModal('${o.id}')" style="font-size:11px">✏️ Ред.</button>
+        <button class="del-btn" onclick="event.stopPropagation();deleteOrg('${o.id}')">×</button>
+      </div>
+    </div>`).join('');
+}
+
+function populateOrgSelect() {
+  const sel = document.getElementById('f-org');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">— выбрать —</option>';
+  db.orgs.forEach(o => {
+    sel.innerHTML += `<option value="${o.id}" ${cur===o.id?'selected':''}>${o.short}</option>`;
+  });
+
+  const specSel = document.getElementById('spec-select');
+  const pool = allReqs.length ? allReqs : db.requests;
+  specSel.innerHTML = '<option value="">— Выбрать сохранённую заявку —</option>';
+  pool.forEach(r => {
+    specSel.innerHTML += `<option value="${r.id}">${r.specNum} — ${r.name}</option>`;
+  });
+}
+
+// ─── Pages ───────────────────────────────────────────────────────────────────
+const pageTitles = {
+  new: 'Новая заявка',
+  registry: 'Реестр заявок',
+  spec: 'Спецификация',
+  orgs: 'Организации',
+  config: 'Конфиг'
+};
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+  document.getElementById('page-' + name).style.display = 'block';
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navEl = document.getElementById('nav-' + name);
+  if (navEl) navEl.classList.add('active');
+  document.getElementById('page-title').textContent = pageTitles[name] || name;
+
+  if (name === 'registry') renderRegistry();
+  if (name === 'orgs') renderOrgs();
+  if (name === 'spec') populateOrgSelect();
+  if (name === 'config') populateConfigPage();
+  if (name === 'new') initDragDrop();
+}
+
+function clearForm() {
+  editingId = null;
+  setEditingState(false);
+  // Reset realization mode
+  document.getElementById('realization-badge').style.display = 'none';
+  const th = document.querySelector('#page-new table thead th:nth-child(4)');
+  if (th) { th.textContent = 'Комментарий / ФИО'; th.style.color = ''; }
+  document.getElementById('f-org').value = '';
+  document.getElementById('f-bitrix').value = '';
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-mol').value = '';
+  document.getElementById('f-date').value = '';
+  document.getElementById('f-address').value = '';
+  document.getElementById('f-supplier').value = '';
+  document.getElementById('f-contract').value = '';
+  document.getElementById('f-invoice-num').value = '';
+  document.getElementById('f-status').value = 'new';
+  document.getElementById('f-comment').value = '';
+  document.getElementById('folder-card').style.display = 'none';
+  document.getElementById('positions-body').innerHTML = '';
+  rowCounter = 0;
+  document.getElementById('invoice-name').textContent = '';
+  updateSpecNum();
+  calcTotal();
+}
+
+// ─── Audit log ───────────────────────────────────────────────────────────────
+const ACTION_LABELS = {
+  CREATE: { label: 'Создана',  color: 'var(--success)' },
+  UPDATE: { label: 'Изменена', color: 'var(--accent)'  },
+  STATUS: { label: 'Статус',   color: 'var(--warning)' },
+  DELETE: { label: 'Удалена',  color: 'var(--danger)'  },
+};
+
+async function toggleAuditLog(id) {
+  const panel = document.getElementById('audit-' + id);
+  if (!panel) return;
+
+  if (panel.style.display !== 'none') {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = 'block';
+  panel.innerHTML = '<div style="color:var(--text-muted);padding:8px">Загрузка истории...</div>';
+
+  try {
+    const logs = await api('GET', `/api/audit?request_id=${id}&limit=50`);
+    if (!logs.length) {
+      panel.innerHTML = '<div style="color:var(--text-muted);padding:8px">История изменений пуста</div>';
+      return;
+    }
+
+    panel.innerHTML = `
+      <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px">
+        📋 История изменений (${logs.length})
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        ${logs.map(log => {
+          const action = ACTION_LABELS[log.action] || { label: log.action, color: 'var(--text-muted)' };
+          const meta = log.meta ? (() => { try { return JSON.parse(log.meta); } catch(e) { return {}; } })() : {};
+          const ts = log.ts ? new Date(log.ts).toLocaleString('ru-RU') : '—';
+          let detail = '';
+          if (log.action === 'STATUS') {
+            detail = `${statusBadge(log.old_value)} → ${statusBadge(log.new_value)}`;
+          } else if (log.action === 'CREATE') {
+            detail = `<span style="color:var(--text-secondary)">${esc(log.new_value || '')}</span>`;
+          } else if (log.action === 'UPDATE') {
+            const diff = meta.diff;
+            if (diff && diff.length) {
+              const FIELD_LABELS = {
+                name: 'Название', mol: 'МОЛ', date: 'Дата', address: 'Адрес',
+                supplier: 'Поставщик', contract: 'Договор',
+                delivery_cost: 'Доставка', markup: 'Наценка %',
+                comment: 'Комментарий', positions_count: 'Позиций', total: 'Сумма'
+              };
+              detail = `<div style="display:flex;flex-direction:column;gap:3px;margin-top:2px">` +
+                diff.map(d => {
+                  const label = FIELD_LABELS[d.field] || d.field;
+                  const oldV = d.old.length > 40 ? d.old.slice(0, 40) + '…' : d.old;
+                  const newV = d.new.length > 40 ? d.new.slice(0, 40) + '…' : d.new;
+                  return `<div style="font-size:11px">
+                    <span style="color:var(--text-muted)">${esc(label)}:</span>
+                    <span style="color:var(--danger);text-decoration:line-through;margin:0 4px">${esc(oldV||'—')}</span>
+                    <span style="color:var(--success)">${esc(newV||'—')}</span>
+                  </div>`;
+                }).join('') + `</div>`;
+            } else {
+              detail = `<span style="color:var(--text-secondary)">обновлена</span>`;
+            }
+          } else if (log.action === 'DELETE') {
+            detail = `<span style="color:var(--danger)">удалена</span>`;
+          }
+          return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--surface-alt);border-radius:4px">
+            <span style="font-size:10px;font-weight:600;color:${action.color};min-width:56px">${action.label}</span>
+            <span style="color:var(--text-muted);min-width:120px">${ts}</span>
+            <span>${detail}</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+  } catch(e) {
+    panel.innerHTML = `<div style="color:var(--danger);padding:8px">Ошибка загрузки истории: ${esc(e.message)}</div>`;
+  }
+}
+
+// ─── Breakdown ───────────────────────────────────────────────────────────────
+let breakdownOpen = false;
+
+function toggleBreakdown() {
+  breakdownOpen = !breakdownOpen;
+  const panel = document.getElementById('breakdown-panel');
+  if (panel) panel.style.display = breakdownOpen ? 'block' : 'none';
+  const btn = document.getElementById('breakdown-btn');
+  if (btn) btn.textContent = breakdownOpen ? '📈 Скрыть разбивку' : '📈 Разбивка по орг.';
+}
+
+function renderBreakdown(reqs) {
+  const panel = document.getElementById('breakdown-panel');
+  if (!panel) return;
+  if (!breakdownOpen) { panel.style.display = 'none'; return; }
+  if (reqs.length === 0) { panel.innerHTML = ''; panel.style.display = 'none'; return; }
+
+  // Group by org
+  const byOrg = {};
+  reqs.forEach(r => {
+    const key = r.orgShort || r.orgId || '—';
+    if (!byOrg[key]) byOrg[key] = { name: key, count: 0, purchase: 0, sell: 0, profit: 0, delivery: 0 };
+    byOrg[key].count++;
+    byOrg[key].purchase += r.totalPurchase || 0;
+    byOrg[key].sell     += r.total || 0;
+    byOrg[key].delivery += r.deliveryCost || 0;
+    byOrg[key].profit   += (r.total || 0) - (r.totalPurchase || 0) - (r.deliveryCost || 0);
+  });
+
+  const rows = Object.values(byOrg).sort((a,b) => b.sell - a.sell);
+  const totalSell = rows.reduce((s,r) => s + r.sell, 0);
+
+  let html = `<div class="card" style="padding:0;overflow:hidden">
+    <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:13px;font-weight:600">Разбивка по организациям</span>
+      <span style="font-size:12px;color:var(--text-muted)">${reqs.length} заявок</span>
+    </div>
+    <div class="table-wrap"><table style="font-size:12px">
+      <thead><tr>
+        <th>Организация</th>
+        <th style="text-align:center">Заявок</th>
+        <th style="text-align:right">Закуп</th>
+        <th style="text-align:right">Доставка</th>
+        <th style="text-align:right">Продажа</th>
+        <th style="text-align:right">Прибыль</th>
+        <th style="text-align:right;width:80px">Доля</th>
+      </tr></thead>
+      <tbody>`;
+
+  rows.forEach(r => {
+    const pct = totalSell > 0 ? (r.sell / totalSell * 100).toFixed(1) : '0.0';
+    const barW = totalSell > 0 ? Math.round(r.sell / totalSell * 60) : 0;
+    html += `<tr>
+      <td style="font-weight:500">${esc(r.name)}</td>
+      <td style="text-align:center"><span class="num-badge">${r.count}</span></td>
+      <td style="text-align:right;color:var(--text-secondary)">${fmtRub(r.purchase)}</td>
+      <td style="text-align:right;color:var(--text-secondary)">${fmtRub(r.delivery)}</td>
+      <td style="text-align:right;font-weight:600;color:var(--accent)">${fmtRub(r.sell)}</td>
+      <td style="text-align:right;color:var(--success)">${fmtRub(r.profit)}</td>
+      <td style="text-align:right">
+        <div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
+          <div style="width:${barW}px;height:6px;background:var(--accent);border-radius:3px;opacity:0.6"></div>
+          <span style="color:var(--text-muted);min-width:32px">${pct}%</span>
+        </div>
+      </td>
+    </tr>`;
+  });
+
+  // Totals row
+  const totSell = rows.reduce((s,r)=>s+r.sell,0);
+  const totPur  = rows.reduce((s,r)=>s+r.purchase,0);
+  const totDel  = rows.reduce((s,r)=>s+r.delivery,0);
+  const totPro  = rows.reduce((s,r)=>s+r.profit,0);
+  html += `<tr style="background:var(--surface-alt);font-weight:600;border-top:2px solid var(--border)">
+    <td>Итого</td>
+    <td style="text-align:center">${reqs.length}</td>
+    <td style="text-align:right;color:var(--text-secondary)">${fmtRub(totPur)}</td>
+    <td style="text-align:right;color:var(--text-secondary)">${fmtRub(totDel)}</td>
+    <td style="text-align:right;color:var(--accent)">${fmtRub(totSell)}</td>
+    <td style="text-align:right;color:var(--success)">${fmtRub(totPro)}</td>
+    <td></td>
+  </tr>`;
+
+  html += `</tbody></table></div></div>`;
+  panel.innerHTML = html;
+  panel.style.display = 'block';
+}
+
+// ─── Signed spec PDF ─────────────────────────────────────────────────────────
+async function uploadSignedSpec(id, input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.type !== 'application/pdf') { toast('Только PDF файлы'); input.value=''; return; }
+  if (file.size > 10 * 1024 * 1024) { toast('Файл слишком большой (макс. 10МБ)'); input.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      await api('POST', `/api/requests/${id}/signed-spec`, { pdf: e.target.result });
+      toast('✅ Подписанная спецификация прикреплена');
+      renderRegistry();
+    } catch(err) { toast('Ошибка загрузки: ' + err.message); }
+    input.value = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function downloadSignedSpec(id, specNum) {
+  try {
+    const res = await fetch(`/api/requests/${id}/signed-spec`, {
+      headers: authToken ? { 'X-Auth-Token': authToken } : {}
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${specNum}_подписано.pdf`;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  } catch(e) { toast('Ошибка скачивания: ' + e.message); }
+}
+
+// ─── Backup download (auth-aware) ─────────────────────────────────────────────
+async function downloadBackup(type) {
+  const url = type === 'db' ? '/api/backup/db' : '/api/backup';
+  try {
+    const res = await fetch(url, {
+      headers: authToken ? { 'X-Auth-Token': authToken } : {}
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const cd   = res.headers.get('content-disposition') || '';
+    const nameMatch = cd.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+    const filename  = nameMatch ? nameMatch[1].replace(/['"]/g,'') : (type === 'db' ? 'backup.db' : 'backup.json');
+    const url2 = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url2; a.download = filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url2); }, 1000);
+  } catch(e) { toast('Ошибка скачивания бэкапа: ' + e.message); }
+}
+
+// ─── Backup/Restore ──────────────────────────────────────────────────────────
+async function restoreBackup(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (!confirm('Восстановить данные из резервной копии? Текущие данные будут перезаписаны.')) {
+    input.value = ''; return;
+  }
+  const text = await file.text();
+  let data;
+  try { data = JSON.parse(text); } catch(e) { toast('Ошибка: файл повреждён'); return; }
+  await api('POST', '/api/restore', data);
+  // Server invalidated all sessions after restore — clear local token and reload
+  localStorage.removeItem('procure_token');
+  toast('✓ Данные восстановлены. Страница перезагрузится...');
+  setTimeout(() => location.reload(), 1200);
+  input.value = '';
+}
+
+// ─── Org modal ───────────────────────────────────────────────────────────────
+function openOrgModal(id) {
+  const org = db.orgs.find(o => o.id === id);
+  if (!org) return;
+  document.getElementById('modal-org-id').value = org.id;
+  document.getElementById('modal-org-full').value = org.full || '';
+  document.getElementById('modal-org-short').value = org.short || '';
+  document.getElementById('modal-org-prefix').value = org.prefix || '';
+  document.getElementById('modal-org-signatory').value = org.signatory || '';
+  document.getElementById('modal-org-contract').value = org.contract || '';
+  document.getElementById('modal-org-address').value = org.address || '';
+  document.getElementById('org-modal').style.display = 'flex';
+}
+
+function closeOrgModal() {
+  document.getElementById('org-modal').style.display = 'none';
+}
+
+async function saveOrgModal() {
+  const id = document.getElementById('modal-org-id').value;
+  const data = {
+    full:      document.getElementById('modal-org-full').value.trim(),
+    short:     document.getElementById('modal-org-short').value.trim(),
+    prefix:    document.getElementById('modal-org-prefix').value.trim().toUpperCase(),
+    signatory: document.getElementById('modal-org-signatory').value.trim(),
+    contract:  document.getElementById('modal-org-contract').value.trim(),
+    address:   document.getElementById('modal-org-address').value.trim(),
+  };
+  if (!data.full || !data.short || !data.prefix) { toast('Заполните обязательные поля'); return; }
+  const updated = await api('PUT', '/api/orgs/' + id, data);
+  const idx = db.orgs.findIndex(o => o.id === id);
+  if (idx !== -1) db.orgs[idx] = updated;
+  renderOrgs();
+  populateOrgSelect();
+  closeOrgModal();
+  toast('Организация обновлена');
+}
+
+// Close modal on backdrop click
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('org-modal');
+  if (e.target === modal) closeOrgModal();
+});
+
+// ── Logout ───────────────────────────────────────────────────────────────────
+async function doLogout() {
+  try { await api('POST', '/api/auth/logout'); } catch(e) {}
+  authToken = '';
+  localStorage.removeItem('procure_token');
+  showLoginModal();
+  toast('Вы вышли из системы');
+}
+
+// ─── Autocomplete ───────────────────────────────────────────────────────────
+const acData = { mol: [], address: [] };
+let acIdx = { mol: -1, address: -1 };
+
+async function loadAcData() {
+  const [mols, addrs] = await Promise.all([
+    api('GET', '/api/mol').catch(() => []),
+    api('GET', '/api/addresses').catch(() => [])
+  ]);
+  acData.mol = mols;
+  acData.address = addrs;
+}
+
+function acMatches(key, val) {
+  if (!val) return acData[key];
+  const q = val.toLowerCase();
+  return acData[key].filter(s => s.toLowerCase().includes(q));
+}
+
+function acHighlight(text, query) {
+  if (!query) return esc(text);
+  const idx = text.toLowerCase().indexOf(query.toLowerCase());
+  if (idx < 0) return esc(text);
+  return esc(text.slice(0, idx)) + '<mark>' + esc(text.slice(idx, idx + query.length)) + '</mark>' + esc(text.slice(idx + query.length));
+}
+
+function acRender(key) {
+  const inp = document.getElementById(`f-${key}`);
+  const drop = document.getElementById(`ac-${key}-drop`);
+  const matches = acMatches(key, inp.value);
+  acIdx[key] = -1;
+  if (!matches.length) { drop.classList.remove('open'); return; }
+  drop.innerHTML = matches.map((m, i) =>
+    `<div class="ac-item" data-i="${i}" onmousedown="acPick('${key}','${m.replace(/'/g,"\\'")}')">
+      ${acHighlight(m, inp.value)}
+    </div>`
+  ).join('');
+  drop.classList.add('open');
+}
+
+function acFilter(key) { acRender(key); }
+
+function acOpen(key) {
+  // Добавляем onblur только для mol (address уже имеет)
+  if (key === 'mol') {
+    const inp = document.getElementById('f-mol');
+    if (!inp._acBlur) {
+      inp._acBlur = true;
+      inp.addEventListener('blur', () => setTimeout(() => acClose('mol'), 180));
+    }
+  }
+  acRender(key);
+}
+
+function acClose(key) {
+  const drop = document.getElementById(`ac-${key}-drop`);
+  if (drop) drop.classList.remove('open');
+  acIdx[key] = -1;
+  // Сохраняем адрес при закрытии
+  if (key === 'address') saveAddress();
+}
+
+function acPick(key, val) {
+  document.getElementById(`f-${key}`).value = val;
+  acClose(key);
+  if (key === 'address') saveAddress();
+}
+
+function acKey(e, key) {
+  const drop = document.getElementById(`ac-${key}-drop`);
+  const items = drop.querySelectorAll('.ac-item');
+  if (!drop.classList.contains('open') || !items.length) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    acIdx[key] = Math.min(acIdx[key] + 1, items.length - 1);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    acIdx[key] = Math.max(acIdx[key] - 1, 0);
+  } else if (e.key === 'Enter' && acIdx[key] >= 0) {
+    e.preventDefault();
+    acPick(key, items[acIdx[key]].textContent.trim());
+    return;
+  } else if (e.key === 'Escape') {
+    acClose(key); return;
+  } else { return; }
+  items.forEach((el, i) => el.classList.toggle('ac-active', i === acIdx[key]));
+  if (acIdx[key] >= 0) items[acIdx[key]].scrollIntoView({ block: 'nearest' });
+}
+
+async function saveAddress() {
+  const val = document.getElementById('f-address').value.trim();
+  if (!val) return;
+  await api('POST', '/api/addresses', { address: val }).catch(() => {});
+  if (!acData.address.includes(val)) { acData.address.unshift(val); }
+}
+
+async function populateAddressList() {
+  // Совместимость — обновляем данные через новую систему
+  await loadAcData();
+}
+
+
+// ─── Org defaults ─────────────────────────────────────────────────────────────
+function fillOrgDefaults() {
+  const orgId = document.getElementById('f-org').value;
+  const org = db.orgs.find(o => o.id === orgId);
+  if (!org) return;
+
+  // Fill contract if field is empty or was previously auto-filled
+  const contractEl = document.getElementById('f-contract');
+  if (org.contract) {
+    contractEl.value = org.contract;
+    const hint = document.getElementById('contract-hint');
+    if (hint) hint.textContent = '↑ подставлен по умолчанию для ' + org.short;
+  }
+
+  // Fill address if field is empty
+  const addrEl = document.getElementById('f-address');
+  if (!addrEl.value && org.address) {
+    addrEl.value = org.address;
+  }
+}
+
+// ─── Status ──────────────────────────────────────────────────────────────────
+const STATUS_MAP = {
+  new:       { label: 'Новая',    cls: 'badge-blue' },
+  inwork:    { label: 'В работе', cls: 'badge-yellow' },
+  paid:      { label: 'Оплачено', cls: 'badge-green' },
+  cancelled: { label: 'Отменена', cls: 'badge-red' }
+};
+
+function statusBadge(s) {
+  const m = STATUS_MAP[s] || STATUS_MAP['new'];
+  return `<span class="badge ${m.cls}">${m.label}</span>`;
+}
+
+async function changeStatus(id, newStatus) {
+  if (!newStatus || !STATUS_MAP[newStatus]) return;
+  try {
+    await api('PATCH', '/api/requests/' + id + '/status', { status: newStatus });
+    renderRegistry();
+    toast('Статус: ' + STATUS_MAP[newStatus].label);
+  } catch(e) {
+    toast('Ошибка смены статуса: ' + e.message);
+    renderRegistry(); // revert select visually
+  }
+}
+function buildFolderPath(req) {
+  if (!req.date || !req.orgShort) return '';
+  const d = new Date(req.date);
+  const year = d.getFullYear();
+  const monthName = RU_MONTHS[d.getMonth()];
+  const org = req.orgShort;
+  // порядковый номер в месяце из номера спецификации
+  const numMatch = req.specNum ? req.specNum.match(/-(\d+)$/) : null;
+  const num = numMatch ? parseInt(numMatch[1]) : '?';
+  // Sanitize name for folder
+  const safeName = (req.name || 'Заявка').replace(/[\\/:*?"<>|]/g, '_').slice(0, 50);
+  return `${year}\\${monthName}\\${org}\\${num}_${safeName}`;
+}
+
+function showFolderPath() {
+  const req = collectForm();
+  const path = buildFolderPath(req);
+  if (!path) { toast('Выберите организацию и укажите дату'); return; }
+  document.getElementById('folder-path-display').textContent = path;
+  document.getElementById('folder-card').style.display = 'block';
+  document.getElementById('folder-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function copyFolderPath() {
+  const text = document.getElementById('folder-path-display').textContent;
+  navigator.clipboard.writeText(text).then(() => toast('Путь скопирован')).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    toast('Путь скопирован');
+  });
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Парсинг числа из поля ввода — убирает пробелы и неразрывные пробелы (вставка из буфера)
+function parseNum(val) {
+  if (val === null || val === undefined) return 0;
+  return parseFloat(String(val).replace(/[\s\u00a0\u202f]/g, '').replace(',', '.')) || 0;
+}
+
+function fmtRub(n) {
+  if (isNaN(n)) return '0,00';
+  return new Intl.NumberFormat('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}
+
+function fmtDate(s) {
+  if (!s) return '—';
+  const d = new Date(s);
+  return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+}
+
+function numToWords(n) {
+  // Simple Russian number-to-words for rubles
+  const r = Math.floor(n);
+  const k = Math.round((n - r) * 100);
+  const ones = ['','один','два','три','четыре','пять','шесть','семь','восемь','девять'];
+  const ones_f = ['','одна','две','три','четыре','пять','шесть','семь','восемь','девять'];
+  const teens = ['десять','одиннадцать','двенадцать','тринадцать','четырнадцать','пятнадцать','шестнадцать','семнадцать','восемнадцать','девятнадцать'];
+  const tens = ['','','двадцать','тридцать','сорок','пятьдесят','шестьдесят','семьдесят','восемьдесят','девяносто'];
+  const hundreds = ['','сто','двести','триста','четыреста','пятьсот','шестьсот','семьсот','восемьсот','девятьсот'];
+
+  function chunk(n, female) {
+    let s = '';
+    const h = Math.floor(n/100); n %= 100;
+    s += hundreds[h] ? hundreds[h]+' ' : '';
+    if (n >= 10 && n < 20) { s += teens[n-10]+' '; }
+    else {
+      s += tens[Math.floor(n/10)] ? tens[Math.floor(n/10)]+' ' : '';
+      n %= 10;
+      s += (female ? ones_f[n] : ones[n]) ? (female ? ones_f[n] : ones[n])+' ' : '';
+    }
+    return s;
+  }
+
+  function rubWord(n) {
+    const n2 = n % 100; const n1 = n % 10;
+    if (n2 >= 11 && n2 <= 19) return 'рублей';
+    if (n1 === 1) return 'рубль';
+    if (n1 >= 2 && n1 <= 4) return 'рубля';
+    return 'рублей';
+  }
+  function kopWord(n) {
+    const n2 = n % 100; const n1 = n % 10;
+    if (n2 >= 11 && n2 <= 19) return 'копеек';
+    if (n1 === 1) return 'копейка';
+    if (n1 >= 2 && n1 <= 4) return 'копейки';
+    return 'копеек';
+  }
+
+  let result = '';
+  const millions = Math.floor(r / 1000000);
+  const thousands = Math.floor((r % 1000000) / 1000);
+  const rubs = r % 1000;
+
+  if (millions) {
+    result += chunk(millions, false);
+    const m2 = millions%100; const m1 = millions%10;
+    if (m2>=11&&m2<=19) result += 'миллионов ';
+    else if (m1===1) result += 'миллион ';
+    else if (m1>=2&&m1<=4) result += 'миллиона ';
+    else result += 'миллионов ';
+  }
+  if (thousands) {
+    result += chunk(thousands, true);
+    const t2 = thousands%100; const t1 = thousands%10;
+    if (t2>=11&&t2<=19) result += 'тысяч ';
+    else if (t1===1) result += 'тысяча ';
+    else if (t1>=2&&t1<=4) result += 'тысячи ';
+    else result += 'тысяч ';
+  }
+  if (rubs || !result) {
+    result += chunk(rubs, false);
+  }
+
+  result = result.trim();
+  if (!result) result = 'ноль';
+  result = result.charAt(0).toUpperCase() + result.slice(1);
+  result += ' ' + rubWord(r);
+
+  // Копейки — тоже прописью (женский род: одна, две)
+  let kopStr = '';
+  if (k === 0) {
+    kopStr = 'ноль';
+  } else {
+    kopStr = chunk(k, true).trim();
+    if (!kopStr) kopStr = 'ноль';
+  }
+  kopStr = kopStr.charAt(0).toUpperCase() + kopStr.slice(1);
+  result += ' ' + kopStr + ' ' + kopWord(k);
+  return result;
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function startRealization() {
+  clearForm();
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('nav-new-real')?.classList.add('active');
+  // Set realization org — prefer org with prefix 'ИП', otherwise first org
+  const ipOrg = db.orgs.find(o => o.prefix === 'ИП') || db.orgs[0];
+  if (ipOrg) document.getElementById('f-org').value = ipOrg.id;
+  updateSpecNum();
+
+  // Show badge
+  document.getElementById('realization-badge').style.display = 'flex';
+
+  // Update comment column header
+  const th = document.querySelector('#page-new table thead th:nth-child(4)');
+  if (th) { th.textContent = 'ЮЛ / Получатель'; th.style.color = 'var(--accent)'; }
+
+  // Hide spec number sub (no spec in realization mode)
+  document.getElementById('spec-num-sub').textContent = 'Спецификация не формируется';
+
+  showPage('new');
+  // Re-render existing rows with org select instead of text
+  const body = document.getElementById('positions-body');
+  body.innerHTML = '';
+  rowCounter = 0;
+  addRow('', 1, 'шт', 0, '', 0, '', '');
+  toast('Режим реализации: ЮЛ указывается на каждую строку');
+}
+
+function stopRealization() {
+  document.getElementById('realization-badge').style.display = 'none';
+  const th = document.querySelector('#page-new table thead th:nth-child(4)');
+  if (th) { th.textContent = 'Комментарий / ФИО'; th.style.color = ''; }
+  clearForm();
+  toast('Обычный режим закупки');
+}
+
+function cancelEdit() {
+  editingId = null;
+  setEditingState(false);
+  clearForm();
+  toast('Редактирование отменено');
+}
+
+// ─── Registry export ──────────────────────────────────────────────────────────
+function exportRegistryExcel() {
+  const list = db.requests;
+  if (!list || list.length === 0) { toast('Нет заявок для экспорта'); return; }
+  const rows = [['№', 'Спецификация', 'Дата', 'Организация', 'Заявка', 'МОЛ', 'Поставщик', 'Битрикс', 'Позиций', 'Сумма', 'Статус', 'Путь папки']];
+  list.forEach((r, i) => {
+    rows.push([
+      i+1, r.specNum, r.date, r.orgShort, r.name, r.mol,
+      r.supplier||'', r.bitrix||'', r.positions.length, r.total,
+      STATUS_MAP[r.status||'new']?.label||'', buildFolderPath(r)
+    ]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:4},{wch:16},{wch:12},{wch:14},{wch:40},{wch:22},{wch:20},{wch:10},{wch:8},{wch:14},{wch:12},{wch:50}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Реестр заявок');
+  const fname2 = `Реестр_заявок_${new Date().toISOString().slice(0,10)}.xlsx`;
+  const wbout2 = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
+  const blob2 = new Blob([wbout2], { type: 'application/octet-stream' });
+  const url2 = URL.createObjectURL(blob2);
+  const a2 = document.createElement('a');
+  a2.href = url2; a2.download = fname2;
+  document.body.appendChild(a2); a2.click();
+  setTimeout(() => { document.body.removeChild(a2); URL.revokeObjectURL(url2); }, 1000);
+  toast('Реестр экспортирован');
+}
+
+// ─── Templates ────────────────────────────────────────────────────────────────
+function populateTemplateSelect() {
+  const sel = document.getElementById('template-select');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">+ Из шаблона</option>';
+  (db.templates||[]).forEach((t,i) => {
+    sel.innerHTML += `<option value="${i}">${esc(t.name)} (${t.positions.length} поз.)</option>`;
+  });
+}
+
+async function savePositionsAsTemplate() {
+  const rows = document.getElementById('positions-body').children;
+  if (rows.length === 0) { toast('Нет позиций для сохранения'); return; }
+  const name = prompt('Название шаблона:', 'Стандартный комплект');
+  if (!name) return;
+  const positions = [];
+  for (const tr of rows) {
+    const commentEl = tr.children[3].querySelector('input,select');
+    positions.push({
+      name: tr.children[2].querySelector('input').value,
+      comment: commentEl ? commentEl.value : '',
+      link: tr.children[4].querySelector('input').value,
+      qty: parseNum(tr.children[5].querySelector('input').value)||1,
+      unit: tr.children[6].querySelector('input').value||'шт',
+      purchasePrice: parseNum(tr.children[7].querySelector('input').value)||0
+    });
+  }
+  await api('POST', '/api/templates', { name, positions });
+  db.templates = await api('GET', '/api/templates');
+  populateTemplateSelect();
+  toast('Шаблон сохранён: ' + name);
+}
+
+function addFromTemplate() {
+  const sel = document.getElementById('template-select');
+  const idx = parseInt(sel.value);
+  if (isNaN(idx)) return;
+  const t = db.templates[idx];
+  if (!t) return;
+  t.positions.forEach(p => addRow(p.name, p.qty, p.unit||'шт', 0, p.link||'', p.purchasePrice||p.price||0, p.comment||'', ''));
+  sel.value = '';
+  toast(`Добавлено ${t.positions.length} позиций из шаблона «${t.name}»`);
+}
+
+// ─── Theme ───────────────────────────────────────────────────────────────────
+function applyTheme(theme) {
+  const root = document.documentElement;
+  root.classList.remove('dark', 'light');
+  if (theme === 'dark') { root.classList.add('dark'); document.getElementById('theme-btn').textContent = '☀️'; }
+  else if (theme === 'light') { root.classList.add('light'); document.getElementById('theme-btn').textContent = '🌙'; }
+  else {
+    const sys = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.getElementById('theme-btn').textContent = sys ? '☀️' : '🌙';
+  }
+  try { localStorage.setItem('zakupki_theme', theme); } catch(e) {}
+  // Reapply custom accent for new theme
+  if (appConfig && appConfig.accentLight) applyConfig();
+}
+
+function toggleTheme() {
+  const cur = localStorage.getItem('zakupki_theme') || 'auto';
+  const next = cur === 'auto' ? 'dark' : cur === 'dark' ? 'light' : 'auto';
+  applyTheme(next);
+}
+
+// ─── Excel import ─────────────────────────────────────────────────────────────
+function importFromExcel(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      let added = 0;
+      for (const row of data) {
+        if (!row || row.length < 2) continue;
+        // Try to detect header row — skip if first cell looks like a header
+        const first = String(row[0]).toLowerCase();
+        if (first.includes('наимен') || first.includes('товар') || first === '№' || first === 'n') continue;
+
+        const name  = String(row[0] || '').trim();
+        const qty   = parseFloat(String(row[1]).replace(',','.')) || 1;
+        const unit  = row.length >= 3 ? String(row[2] || 'шт').trim() : 'шт';
+        const price = row.length >= 4 ? parseFloat(String(row[3]).replace(',','.')) || 0 : 0;
+
+        if (!name) continue;
+        addRow(name, qty, unit, price);
+        added++;
+      }
+      document.getElementById('import-hint').textContent = added > 0
+        ? `✅ Добавлено ${added} позиций`
+        : '⚠️ Позиции не найдены. Формат: Наименование | Кол-во | Ед. | Цена';
+      document.getElementById('import-hint').style.color = added > 0 ? 'var(--success)' : 'var(--warning)';
+    } catch(err) {
+      document.getElementById('import-hint').textContent = '❌ Ошибка чтения файла';
+      document.getElementById('import-hint').style.color = 'var(--danger)';
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+document.addEventListener('keydown', function(e) {
+  // Ignore when typing in inputs/textareas
+  const tag = document.activeElement?.tagName?.toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+  const ctrl = e.ctrlKey || e.metaKey;
+
+  // Ctrl+S — сохранить заявку
+  if (ctrl && e.key === 's') {
+    e.preventDefault();
+    const page = document.getElementById('page-new');
+    if (page && page.style.display !== 'none') saveRequest();
+    return;
+  }
+
+  // Ctrl+N — новая заявка
+  if (ctrl && e.key === 'n') {
+    e.preventDefault();
+    clearForm();
+    showPage('new');
+    return;
+  }
+
+  // Ctrl+R — реестр
+  if (ctrl && e.key === 'r') {
+    e.preventDefault();
+    showPage('registry');
+    return;
+  }
+
+  // Ctrl+Enter — добавить строку позиции
+  if (ctrl && e.key === 'Enter') {
+    e.preventDefault();
+    const page = document.getElementById('page-new');
+    if (page && page.style.display !== 'none') addRow();
+    return;
+  }
+
+  // Escape — закрыть модалку / отменить редактирование
+  if (e.key === 'Escape') {
+    const modal = document.getElementById('org-modal');
+    if (modal && modal.style.display !== 'none') { closeOrgModal(); return; }
+    if (editingId) { cancelEdit(); return; }
+    return;
+  }
+
+  // ? — показать подсказки
+  if (e.key === '?' && !ctrl) {
+    showShortcutsHelp();
+    return;
+  }
+});
+
+function showShortcutsHelp() {
+  const existing = document.getElementById('shortcuts-modal');
+  if (existing) { existing.remove(); return; }
+  const modal = document.createElement('div');
+  modal.id = 'shortcuts-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.4)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <span style="font-size:15px;font-weight:600">Горячие клавиши</span>
+        <button onclick="document.getElementById('shortcuts-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted)">×</button>
+      </div>
+      ${[
+        ['Ctrl+S', 'Сохранить заявку'],
+        ['Ctrl+N', 'Новая заявка'],
+        ['Ctrl+R', 'Открыть реестр'],
+        ['Ctrl+Enter', 'Добавить строку позиции'],
+        ['Escape', 'Закрыть / Отменить'],
+        ['?', 'Показать эту подсказку'],
+      ].map(([k,v]) => `
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <span style="color:var(--text-secondary)">${v}</span>
+          <kbd style="background:var(--surface-alt);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:12px;font-family:monospace">${k}</kbd>
+        </div>`).join('')}
+    </div>`;
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  document.body.appendChild(modal);
+}
+
+// ── Config / Settings ────────────────────────────────────────────────────────
+const DEFAULT_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>`;
+
+let appConfig = {
+  appName: 'Закупки ИТ',
+  appSubtitle: 'Управление заявками',
+  logoBase64: '',
+  accentLight: '#2563eb',
+  accentDark: '#60a5fa',
+};
+
+async function loadConfig() {
+  try {
+    const cfg = await api('GET', '/api/settings');
+    appConfig = { ...appConfig, ...cfg };
+    applyConfig();
+  } catch(e) { /* use defaults */ }
+}
+
+function applyConfig() {
+  // App name & subtitle in sidebar
+  const h1 = document.querySelector('.sidebar-logo h1');
+  const sub = document.querySelector('.sidebar-logo span');
+  if (h1) h1.textContent = appConfig.appName || 'Закупки ИТ';
+  if (sub) sub.textContent = appConfig.appSubtitle || 'Управление заявками';
+
+  // Logo
+  const logoEl = document.getElementById('sidebar-logo-img');
+  if (logoEl) {
+    if (appConfig.logoBase64) {
+      logoEl.innerHTML = `<img src="${appConfig.logoBase64}" style="height:28px;width:auto;display:block" alt="logo">`;
+    } else {
+      logoEl.innerHTML = DEFAULT_LOGO_SVG;
+    }
+  }
+
+  // Accent colors based on current theme
+  const isDark = document.documentElement.classList.contains('dark') ||
+    (!document.documentElement.classList.contains('light') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const accent = isDark ? (appConfig.accentDark || '#60a5fa') : (appConfig.accentLight || '#2563eb');
+  document.documentElement.style.setProperty('--accent', accent);
+
+  // Update page title
+  document.title = (appConfig.appName || 'Закупки ИТ') + ' — IT Assets';
+}
+
+async function saveConfig() {
+  const name    = document.getElementById('cfg-app-name')?.value.trim();
+  const sub     = document.getElementById('cfg-app-subtitle')?.value.trim();
+  const accL    = document.getElementById('cfg-accent-light')?.value;
+  const accD    = document.getElementById('cfg-accent-dark')?.value;
+
+  const payload = {
+    appName:       name    || 'Закупки ИТ',
+    appSubtitle:   sub     || 'Управление заявками',
+    logoBase64:    appConfig.logoBase64 || '',
+    accentLight:   accL    || '#2563eb',
+    accentDark:    accD    || '#60a5fa',
+    bitrixWebhook: document.getElementById('cfg-bitrix-webhook')?.value.trim() || '',
+    networkFolder: document.getElementById('cfg-network-folder')?.value.trim() || '',
+    networkUser:   document.getElementById('cfg-network-user')?.value.trim() || '',
+    networkPass:   document.getElementById('cfg-network-pass')?.value || '',
+  };
+
+  await api('PUT', '/api/settings', payload);
+  appConfig = { ...appConfig, ...payload };
+  applyConfig();
+  toast('✓ Настройки сохранены');
+}
+
+async function resetConfig() {
+  if (!confirm('Сбросить все настройки к умолчаниям?')) return;
+  const defaults = {
+    appName: 'Закупки ИТ', appSubtitle: 'Управление заявками',
+    logoBase64: '', accentLight: '#2563eb', accentDark: '#60a5fa',
+  };
+  await api('PUT', '/api/settings', defaults);
+  appConfig = { ...defaults };
+  applyConfig();
+  // Reset form
+  if (document.getElementById('cfg-app-name')) {
+    document.getElementById('cfg-app-name').value = defaults.appName;
+    document.getElementById('cfg-app-subtitle').value = defaults.appSubtitle;
+    document.getElementById('cfg-accent-light').value = defaults.accentLight;
+    document.getElementById('cfg-accent-light-hex').value = defaults.accentLight;
+    document.getElementById('cfg-accent-dark').value = defaults.accentDark;
+    document.getElementById('cfg-accent-dark-hex').value = defaults.accentDark;
+  }
+  updateConfigPreview();
+  toast('↺ Настройки сброшены');
+}
+
+function saveThemePref(theme) {
+  localStorage.setItem('zakupki_theme', theme);
+  applyConfig(); // reapply accent for new theme
+  // Highlight active theme button
+  ['auto','light','dark'].forEach(t => {
+    const btn = document.getElementById(`theme-${t}-btn`);
+    if (btn) {
+      btn.style.background = t === theme ? 'var(--accent)' : '';
+      btn.style.borderColor = t === theme ? 'var(--accent)' : '';
+      btn.style.color = t === theme ? '#fff' : '';
+    }
+  });
+}
+
+function previewLogo(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    appConfig.logoBase64 = e.target.result;
+    updateConfigPreview();
+    // Show in sidebar immediately
+    applyConfig();
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeLogo() {
+  appConfig.logoBase64 = '';
+  document.getElementById('cfg-logo-file').value = '';
+  updateConfigPreview();
+  applyConfig();
+}
+
+function updateConfigPreview() {
+  const name    = document.getElementById('cfg-app-name')?.value || 'Закупки ИТ';
+  const sub     = document.getElementById('cfg-app-subtitle')?.value || 'Управление заявками';
+  const accL    = document.getElementById('cfg-accent-light')?.value || '#2563eb';
+  const accD    = document.getElementById('cfg-accent-dark')?.value || '#60a5fa';
+  const logoHtml = appConfig.logoBase64
+    ? `<img src="${appConfig.logoBase64}" style="height:24px;width:auto" alt="logo">`
+    : DEFAULT_LOGO_SVG.replace('width="28" height="28"', 'width="24" height="24"');
+
+  ['light','dark'].forEach(t => {
+    const n = document.getElementById(`prev-name-${t}`);
+    const s = document.getElementById(`prev-sub-${t}`);
+    const l = document.getElementById(`prev-logo-${t}`);
+    const b = document.getElementById(`prev-accent-${t}-bar`);
+    if (n) n.textContent = name;
+    if (s) s.textContent = sub;
+    if (l) l.innerHTML = logoHtml;
+    if (b) b.style.background = t === 'light' ? accL : accD;
+  });
+
+  // Sync hex inputs
+  const hexL = document.getElementById('cfg-accent-light-hex');
+  const hexD = document.getElementById('cfg-accent-dark-hex');
+  if (hexL && hexL !== document.activeElement) hexL.value = accL;
+  if (hexD && hexD !== document.activeElement) hexD.value = accD;
+}
+
+function syncColorFromHex(theme) {
+  const hex = document.getElementById(`cfg-accent-${theme}-hex`)?.value.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+    document.getElementById(`cfg-accent-${theme}`).value = hex;
+    updateConfigPreview();
+  }
+}
+
+function setAccentPreset(light, dark) {
+  document.getElementById('cfg-accent-light').value = light;
+  document.getElementById('cfg-accent-dark').value = dark;
+  document.getElementById('cfg-accent-light-hex').value = light;
+  document.getElementById('cfg-accent-dark-hex').value = dark;
+  updateConfigPreview();
+}
+
+function populateConfigPage() {
+  if (!document.getElementById('cfg-app-name')) return;
+  document.getElementById('cfg-app-name').value = appConfig.appName || 'Закупки ИТ';
+  document.getElementById('cfg-app-subtitle').value = appConfig.appSubtitle || 'Управление заявками';
+  document.getElementById('cfg-accent-light').value = appConfig.accentLight || '#2563eb';
+  document.getElementById('cfg-accent-light-hex').value = appConfig.accentLight || '#2563eb';
+  document.getElementById('cfg-accent-dark').value = appConfig.accentDark || '#60a5fa';
+  document.getElementById('cfg-accent-dark-hex').value = appConfig.accentDark || '#60a5fa';
+  const wh = document.getElementById('cfg-bitrix-webhook');
+  if (wh) wh.value = appConfig.bitrixWebhook || '';
+  const nf = document.getElementById('cfg-network-folder');
+  if (nf) nf.value = appConfig.networkFolder || '';
+  const nu = document.getElementById('cfg-network-user');
+  if (nu) nu.value = appConfig.networkUser || '';
+  // Don't pre-fill password field for security
+
+  // Fetch actual version from server
+  fetch('/api/version').then(r => r.json()).then(d => {
+    const el = document.getElementById('about-version');
+    if (el && d.version) el.textContent = d.version;
+  }).catch(() => {});
+
+  // Highlight active theme btn
+  const curTheme = localStorage.getItem('zakupki_theme') || 'auto';
+  saveThemePref(curTheme);
+
+  updateConfigPreview();
+}
+
+// ── Offline detection ────────────────────────────────────────────────────────
+function updateOnlineStatus() {
+  const banner = document.getElementById('offline-banner');
+  if (!banner) return;
+  banner.style.display = navigator.onLine ? 'none' : 'block';
+}
+window.addEventListener('online',  updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
+
+// Also ping the server periodically
+setInterval(async () => {
+  try {
+    await fetch('/api/stats', { method: 'HEAD', cache: 'no-store' });
+    document.getElementById('offline-banner').style.display = 'none';
+  } catch(e) {
+    document.getElementById('offline-banner').style.display = 'block';
+  }
+}, 30000);
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+applyTheme(localStorage.getItem('zakupki_theme') || 'auto');
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  if ((localStorage.getItem('zakupki_theme') || 'auto') === 'auto') applyTheme('auto');
+});
+
+// Set today date immediately and re-set after async init
+(function() {
+  const today = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const iso = today.getFullYear() + '-' + pad(today.getMonth()+1) + '-' + pad(today.getDate());
+  const el = document.getElementById('f-date');
+  if (el) el.value = iso;
+  window._today = iso;
+})();
+
+document.getElementById('f-invoice').addEventListener('change', function() {
+  const f = this.files[0];
+  if (f) document.getElementById('invoice-name').textContent = '📎 ' + f.name;
+});
+document.getElementById('f-import-excel').addEventListener('change', function() {
+  const f = this.files[0];
+  if (f) importFromExcel(f);
+});
+
+// Async init
+(async () => {
+  const authed = await checkAuth();
+  if (!authed) return; // ждём логина
+  await load();
+  await loadConfig();
+  populateOrgSelect();
+  populateTemplateSelect();
+  await populateAddressList();
+  addRow('', 1, 'шт', 0);
+  initDragDrop();
+  // Re-apply today's date in case it was reset
+  const el = document.getElementById('f-date');
+  if (el && !el.value && window._today) el.value = window._today;
+})();
+</script>
+</body>
+</html>

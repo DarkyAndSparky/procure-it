@@ -1,0 +1,21 @@
+# Dependencies — reinstalled inside image via npm ci
+node_modules/
+
+# Runtime data — mounted as volumes, must not bake into image
+data/
+logs/
+
+# Dev / repo files
+.git/
+.github/
+docs/
+*.md
+.env
+.env.*
+!.env.example
+
+# OS noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

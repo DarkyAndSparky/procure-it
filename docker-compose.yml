@@ -1,0 +1,28 @@
+services:
+  procure-it:
+    build: .
+    image: procure-it:26w31-b01
+    container_name: procure-it
+    restart: unless-stopped
+    ports:
+      - "9111:9111"   # HTTPS
+      - "9112:9112"   # HTTP → HTTPS redirect
+    volumes:
+      - ./data:/app/data     # БД, сертификаты, бэкапы (персистентные)
+      - ./logs:/app/logs     # Access logs
+    environment:
+      - PORT=9111
+      - PROCURE_PASSWORD=${PROCURE_PASSWORD:-}
+      - BACKUP_INTERVAL_MS=${BACKUP_INTERVAL_MS:-21600000}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--no-check-certificate", "https://localhost:9111/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s   # time for first TLS cert generation
+    # Resource limits (optional — uncomment if needed)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 512m
+    #       cpus: '1.0'

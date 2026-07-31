@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Database & data — ignore contents but keep directory structure
+data/**
+!data/.gitkeep
+!data/backups/
+!data/backups/.gitkeep
+!data/certs/
+!data/certs/.gitkeep
+*.db
+*.db-wal
+*.db-shm
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs — ignore contents but keep directory
+logs/**
+!logs/.gitkeep
+*.log
+npm-debug.log*
+
+# Note: docs/ is intentionally NOT ignored — GitHub Pages reads docs/index.html

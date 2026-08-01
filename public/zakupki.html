@@ -2543,7 +2543,7 @@ function renderRegistryRows(reqs) {
           ${!r.isRealization?`<button class="btn btn-sm" onclick="loadSpec('${r.id}')">📄 Спецификация</button>`:''}
           <button class="btn btn-sm" onclick="loadToForm('${r.id}',true)">📋 Копировать</button>
           <label class="btn btn-sm" style="cursor:pointer;background:${r.signedSpecPdf?'var(--success)':'var(--surface-2)'};border-color:${r.signedSpecPdf?'var(--success)':'var(--border)'};color:${r.signedSpecPdf?'#fff':'var(--text)'}" title="${r.signedSpecPdf?'Подписанная спецификация прикреплена. Нажмите чтобы заменить':'Прикрепить подписанную спецификацию PDF'}">
-            ${r.signedSpecPdf?'✅ Подписано':'📎 Прикрепить подпись'}
+            ${(r.signedSpecPdf&&r.signedSpecPdf!=='')?'✅ Подписано':'📎 Прикрепить подпись'}
             <input type="file" accept=".pdf" style="display:none" onchange="uploadSignedSpec('${r.id}',this)">
           </label>
           ${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${r.id}','${esc(r.specNum)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}

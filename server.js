@@ -385,12 +385,15 @@ function run(sql, params = []) {
   catch(e) { console.error('Run error:', sql, e.message); return false; }
 }
 
-function rowToRequest(row) {
+function rowToRequest(row, includePdf = false) {
   if (!row) return null;
   return {
     id: row.id, specNum: row.spec_num, orgId: row.org_id,
     orgFull: row.org_full, orgShort: row.org_short, orgSignatory: row.org_signatory,
-    signedSpecPdf: row.signed_spec_pdf || '',
+    // PDF blob only included when fetching single request — prevents huge list responses
+    signedSpecPdf: includePdf
+      ? (row.signed_spec_pdf || '')
+      : (row.signed_spec_pdf ? '__has_pdf__' : ''),
     bitrix: row.bitrix, name: row.name, mol: row.mol, date: row.date,
     address: row.address, supplier: row.supplier, invoiceNum: row.invoice_num, contract: row.contract,
     status: row.status, comment: row.comment,
@@ -467,7 +470,7 @@ app.get('/api/requests', authMiddleware, (req, res) => {
 app.get('/api/requests/:id', authMiddleware, (req, res) => {
   const row = query('SELECT * FROM requests WHERE id=?', [req.params.id])[0];
   if (!row) return res.status(404).json({ error: 'Не найдено' });
-  res.json(rowToRequest(row));
+  res.json(rowToRequest(row, true)); // include PDF blob for single fetch
 });
 
 app.post('/api/requests', authMiddleware, (req, res) => {
@@ -1192,9 +1195,11 @@ app.post('/api/requests/:id/layout-files', authMiddleware, express.json({ limit:
       if (Array.isArray(req.body.invoiceFiles)) {
         for (const inv of req.body.invoiceFiles) {
           if (!inv.name || !inv.data) continue;
-          await davPut(seg(year, monthFolder, orgFolder, requestFolderName, 'Расчеты', inv.name),
+          // Sanitize filename — strip path separators to prevent traversal
+          const safeName = nodePath.basename(inv.name).replace(/[^\w.\-\u0400-\u04ff ]/g, '_').slice(0, 120);
+          await davPut(seg(year, monthFolder, orgFolder, requestFolderName, 'Расчеты', safeName),
             Buffer.from(inv.data.replace(/^data:[^;]+;base64,/, ''), 'base64'));
-          results.push({ type: 'invoice', name: inv.name });
+          results.push({ type: 'invoice', name: safeName });
         }
       }
 
@@ -1204,10 +1209,13 @@ app.post('/api/requests/:id/layout-files', authMiddleware, express.json({ limit:
 
     // ── Local / SMB ───────────────────────────────────────────────────────────
     const nodePath = require('path');
-    if (cfg.networkUser && cfg.networkPass && process.platform === 'win32' && rootPath.startsWith('\\\\')) {
+    if (cfg.networkUser && cfg.networkPass && process.platform === 'win32' && rootPath.startsWith('\\\\\\\\')) {
+      const safeUser = (cfg.networkUser || '').replace(/["&|<>]/g, '');
+      const safePass = (cfg.networkPass || '').replace(/["&|<>]/g, '');
+      const safePath = rootPath.replace(/["&|<>]/g, '');
       try {
         require('child_process').execSync(
-          `net use "${rootPath}" /user:"${cfg.networkUser}" "${cfg.networkPass}" /persistent:no`,
+          `net use "${safePath}" /user:"${safeUser}" "${safePass}" /persistent:no`,
           { stdio: 'pipe' }
         );
       } catch(e) { /* already mounted */ }
@@ -1253,8 +1261,9 @@ app.post('/api/requests/:id/layout-files', authMiddleware, express.json({ limit:
     if (Array.isArray(req.body.invoiceFiles)) {
       for (const inv of req.body.invoiceFiles) {
         if (!inv.name || !inv.data) continue;
-        fs.writeFileSync(nodePath.join(calcPath, inv.name), wb64(inv.data));
-        results.push({ type: 'invoice', name: inv.name });
+        const safeName = nodePath.basename(inv.name).replace(/[^\w.\-\u0400-\u04ff ]/g, '_').slice(0, 120);
+        fs.writeFileSync(nodePath.join(calcPath, safeName), wb64(inv.data));
+        results.push({ type: 'invoice', name: safeName });
       }
     }
 

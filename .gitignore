@@ -8,6 +8,8 @@ data/**
 !data/backups/.gitkeep
 !data/certs/
 !data/certs/.gitkeep
+!data/signed_specs/
+!data/signed_specs/.gitkeep
 *.db
 *.db-wal
 *.db-shm

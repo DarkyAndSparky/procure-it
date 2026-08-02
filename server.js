@@ -23,10 +23,12 @@ const PORT     = parseInt(process.env.PORT || '9111');
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE  = path.join(DATA_DIR, 'zakupki.db');
 const CERT_DIR = path.join(DATA_DIR, 'certs');
+const SIGNED_DIR = path.join(DATA_DIR, 'signed_specs');
 
 // ── Ensure dirs ───────────────────────────────────────────────────────────────
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
-if (!fs.existsSync(CERT_DIR)) fs.mkdirSync(CERT_DIR, { recursive: true });
+if (!fs.existsSync(DATA_DIR))   fs.mkdirSync(DATA_DIR);
+if (!fs.existsSync(CERT_DIR))   fs.mkdirSync(CERT_DIR, { recursive: true });
+if (!fs.existsSync(SIGNED_DIR)) fs.mkdirSync(SIGNED_DIR, { recursive: true });
 
 // ── Self-signed cert ──────────────────────────────────────────────────────────
 const CERT_FILE = path.join(CERT_DIR, 'cert.pem');
@@ -206,9 +208,22 @@ app.use(morgan('dev')); // also to console
 // Security headers
 if (helmet) {
   app.use(helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc:  ["'self'"],
+        scriptSrc:   ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net", "cdnjs.cloudflare.com"],
+        styleSrc:    ["'self'", "'unsafe-inline'"],
+        imgSrc:      ["'self'", "data:", "blob:"],
+        connectSrc:  ["'self'"],
+        fontSrc:     ["'self'", "data:"],
+        objectSrc:   ["'none'"],
+        frameSrc:    ["'none'"],
+        baseUri:     ["'self'"],
+        formAction:  ["'self'"],
+      },
+    },
     crossOriginEmbedderPolicy: false,
-    hsts: { maxAge: 31536000, includeSubDomains: true }, // HSTS 1 год
+    hsts: { maxAge: 31536000, includeSubDomains: true },
   }));
 }
 
@@ -354,6 +369,13 @@ async function initDb() {
     address TEXT UNIQUE NOT NULL, used_at TEXT DEFAULT (datetime('now'))
   )`);
 
+  // Indexes for commonly filtered/sorted fields
+  db.run(`CREATE INDEX IF NOT EXISTS idx_requests_org_id    ON requests (org_id)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_requests_date      ON requests (date)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_requests_status    ON requests (status)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_requests_created   ON requests (created_at DESC)`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_audit_request_id   ON audit_log (request_id)`);
+
   db.run(`CREATE TABLE IF NOT EXISTS templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL, positions TEXT DEFAULT '[]',
@@ -390,10 +412,15 @@ function rowToRequest(row, includePdf = false) {
   return {
     id: row.id, specNum: row.spec_num, orgId: row.org_id,
     orgFull: row.org_full, orgShort: row.org_short, orgSignatory: row.org_signatory,
+<<<<<<< HEAD
     // PDF blob only included when fetching single request — prevents huge list responses
     signedSpecPdf: includePdf
       ? (row.signed_spec_pdf || '')
       : (row.signed_spec_pdf ? '__has_pdf__' : ''),
+=======
+    // PDF stored as filename on disk — return sentinel or empty, never the raw blob
+    signedSpecPdf: row.signed_spec_pdf ? '__has_pdf__' : '',
+>>>>>>> 9688f37ffeea024a8c5438b101516f127bae5df1
     bitrix: row.bitrix, name: row.name, mol: row.mol, date: row.date,
     address: row.address, supplier: row.supplier, invoiceNum: row.invoice_num, contract: row.contract,
     status: row.status, comment: row.comment,
@@ -464,13 +491,34 @@ app.get('/api/requests', authMiddleware, (req, res) => {
     params.push(q, q, q, q, q);
   }
   sql += ' ORDER BY created_at DESC';
-  res.json(query(sql, params).map(rowToRequest));
+
+  // Server-side pagination — default 100 per page, max 500
+  const limit  = Math.min(parseInt(req.query.limit  || '100'), 500);
+  const offset = Math.max(parseInt(req.query.offset || '0'),   0);
+
+  // Count total matching rows for pagination metadata
+  const countSql = sql.replace(/^SELECT \*/, 'SELECT COUNT(*) as total');
+  const total = query(countSql, params)[0]?.total || 0;
+
+  sql += ` LIMIT ? OFFSET ?`;
+  params.push(limit, offset);
+
+  res.json({
+    items:  query(sql, params).map(rowToRequest),
+    total,
+    limit,
+    offset,
+  });
 });
 
 app.get('/api/requests/:id', authMiddleware, (req, res) => {
   const row = query('SELECT * FROM requests WHERE id=?', [req.params.id])[0];
   if (!row) return res.status(404).json({ error: 'Не найдено' });
+<<<<<<< HEAD
   res.json(rowToRequest(row, true)); // include PDF blob for single fetch
+=======
+  res.json(rowToRequest(row)); // PDF served via /api/requests/:id/signed-spec
+>>>>>>> 9688f37ffeea024a8c5438b101516f127bae5df1
 });
 
 app.post('/api/requests', authMiddleware, (req, res) => {
@@ -523,9 +571,32 @@ app.put('/api/requests/:id', authMiddleware, (req, res) => {
       const o = String(oldV ?? ''), n = String(newV ?? '');
       if (o !== n) diffFields.push({ field, old: o, new: n });
     }
-    // Positions diff: count and total
+    // Positions diff — detailed: added, removed, changed items
     const prevPos = JSON.parse(prev.positions || '[]');
     const newPos  = r.positions || [];
+
+    const prevNames = new Set(prevPos.map(p => p.name));
+    const newNames  = new Set(newPos.map(p => p.name));
+
+    const added   = newPos.filter(p => !prevNames.has(p.name)).map(p => p.name);
+    const removed = prevPos.filter(p => !newNames.has(p.name)).map(p => p.name);
+
+    // Changed: same name but different qty or price
+    const changed = [];
+    for (const np of newPos) {
+      const pp = prevPos.find(p => p.name === np.name);
+      if (!pp) continue;
+      const changes = [];
+      if (String(pp.qty) !== String(np.qty))
+        changes.push(`кол-во: ${pp.qty}→${np.qty}`);
+      if (String(pp.purchasePrice) !== String(np.purchasePrice))
+        changes.push(`цена: ${pp.purchasePrice}→${np.purchasePrice}`);
+      if (changes.length) changed.push(`${np.name} (${changes.join(', ')})`);
+    }
+
+    if (added.length)   diffFields.push({ field: 'positions_added',   old: '', new: added.join('; ') });
+    if (removed.length) diffFields.push({ field: 'positions_removed', old: removed.join('; '), new: '' });
+    if (changed.length) diffFields.push({ field: 'positions_changed', old: '', new: changed.join('; ') });
     if (prevPos.length !== newPos.length) {
       diffFields.push({ field: 'positions_count', old: String(prevPos.length), new: String(newPos.length) });
     }
@@ -550,10 +621,47 @@ app.patch('/api/requests/:id/status', authMiddleware, (req, res) => {
   if (!status || !ALLOWED.includes(status)) {
     return res.status(400).json({ error: `Недопустимый статус. Допустимые: ${ALLOWED.join(', ')}` });
   }
-  const old = query('SELECT status, spec_num FROM requests WHERE id=?', [req.params.id])[0];
+  const old = query('SELECT status, spec_num, name, org_short, total FROM requests WHERE id=?', [req.params.id])[0];
   if (!old) return res.status(404).json({ error: 'Заявка не найдена' });
   run("UPDATE requests SET status=?,updated_at=datetime('now') WHERE id=?", [status, req.params.id]);
   auditLog('STATUS', req.params.id, 'status', old.status, status, { specNum: old.spec_num });
+
+  // Fire status webhook asynchronously — don't block response
+  (async () => {
+    try {
+      const whRows = db.exec("SELECT value FROM settings WHERE key='statusWebhook'");
+      const webhookUrl = whRows[0]?.values?.[0]?.[0] || '';
+      if (!webhookUrl) return;
+      const payload = {
+        event:    'status_changed',
+        specNum:  old.spec_num,
+        name:     old.name,
+        org:      old.org_short,
+        total:    old.total,
+        oldStatus: old.status,
+        newStatus: status,
+        changedAt: new Date().toISOString(),
+      };
+      const https = require('https');
+      const http  = require('http');
+      const body  = JSON.stringify(payload);
+      const parsed = new URL(webhookUrl);
+      const lib = parsed.protocol === 'https:' ? https : http;
+      await new Promise((resolve, reject) => {
+        const r2 = lib.request({
+          hostname: parsed.hostname,
+          port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+          path: parsed.pathname + parsed.search,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+        }, res2 => { res2.resume(); res2.on('end', resolve); });
+        r2.on('error', reject);
+        r2.write(body);
+        r2.end();
+      });
+    } catch(e) { console.warn('[statusWebhook]', e.message); }
+  })();
+
   res.json({ ok: true });
 });
 
@@ -702,7 +810,8 @@ const DEFAULT_SETTINGS = {
   accentDark:     '#60a5fa',
   successLight:   '#16a34a',
   successDark:    '#4ade80',
-  bitrixWebhook:  '',
+  bitrixWebhook:  '',   // URL вида https://your.bitrix24.ru/rest/1/key/
+  statusWebhook:  '',   // POST JSON при смене статуса заявки
   networkFolder:  '',   // Путь к сетевой папке, напр. \\\\server\\share или /mnt/share
   networkUser:    '',   // Логин для сетевой папки (Windows: домен\\пользователь)
   networkPass:    '',   // Пароль для сетевой папки
@@ -1041,7 +1150,17 @@ app.post('/api/requests/:id/signed-spec', authMiddleware, express.json({ limit: 
     if (!pdf || !pdf.startsWith('data:application/pdf')) {
       return res.status(400).json({ error: 'Ожидается PDF в формате base64' });
     }
-    run('UPDATE requests SET signed_spec_pdf=? WHERE id=?', [pdf, req.params.id]);
+    const row = query('SELECT spec_num FROM requests WHERE id=?', [req.params.id])[0];
+    if (!row) return res.status(404).json({ error: 'Заявка не найдена' });
+
+    // Save PDF to disk — avoids bloating SQLite with binary data
+    const fname = `${req.params.id}.pdf`;
+    const fpath = path.join(SIGNED_DIR, fname);
+    const buf   = Buffer.from(pdf.replace(/^data:application\/pdf;base64,/, ''), 'base64');
+    fs.writeFileSync(fpath, buf);
+
+    // Store only the filename in DB (not the full base64)
+    run("UPDATE requests SET signed_spec_pdf=? WHERE id=?", [fname, req.params.id]);
     saveDb();
     auditLog('UPDATE', req.params.id, 'signed_spec', '', 'uploaded', { name: 'подписанная спецификация' });
     res.json({ ok: true });
@@ -1053,11 +1172,25 @@ app.get('/api/requests/:id/signed-spec', authMiddleware, (req, res) => {
   try {
     const row = query('SELECT signed_spec_pdf, spec_num FROM requests WHERE id=?', [req.params.id])[0];
     if (!row?.signed_spec_pdf) return res.status(404).json({ error: 'Подписанная спецификация не прикреплена' });
-    const base64 = row.signed_spec_pdf.replace(/^data:application\/pdf;base64,/, '');
-    const buf = Buffer.from(base64, 'base64');
+
+    // Support both old format (base64 in DB) and new format (filename on disk)
+    if (row.signed_spec_pdf.startsWith('data:')) {
+      // Legacy: base64 stored in DB — serve and migrate on the fly
+      const buf = Buffer.from(row.signed_spec_pdf.replace(/^data:application\/pdf;base64,/, ''), 'base64');
+      const fname = `${req.params.id}.pdf`;
+      fs.writeFileSync(path.join(SIGNED_DIR, fname), buf);
+      run("UPDATE requests SET signed_spec_pdf=? WHERE id=?", [fname, req.params.id]);
+      saveDb();
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${row.spec_num}_подписано.pdf"`);
+      return res.send(buf);
+    }
+
+    const fpath = path.join(SIGNED_DIR, path.basename(row.signed_spec_pdf));
+    if (!fs.existsSync(fpath)) return res.status(404).json({ error: 'Файл не найден на диске' });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${row.spec_num}_подписано.pdf"`);
-    res.send(buf);
+    res.send(fs.readFileSync(fpath));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1181,11 +1314,13 @@ app.post('/api/requests/:id/layout-files', authMiddleware, express.json({ limit:
         await davPut(seg(year, monthFolder, orgFolder, requestFolderName, name), Buffer.from(req.body.docxBase64, 'base64'));
         results.push({ type: 'docx', name });
       }
-      if (r.signedSpecPdf) {
-        const name = `${r.specNum}_спецификация_подписано.pdf`;
-        await davPut(seg(year, monthFolder, orgFolder, requestFolderName, name),
-          Buffer.from(r.signedSpecPdf.replace(/^data:application\/pdf;base64,/, ''), 'base64'));
-        results.push({ type: 'signed_spec', name });
+      if (r.signedSpecPdf === '__has_pdf__') {
+        const pdfPath = path.join(SIGNED_DIR, path.basename(query('SELECT signed_spec_pdf FROM requests WHERE id=?', [reqId])[0]?.signed_spec_pdf || ''));
+        if (fs.existsSync(pdfPath)) {
+          const name = `${r.specNum}_спецификация_подписано.pdf`;
+          await davPut(seg(year, monthFolder, orgFolder, requestFolderName, name), fs.readFileSync(pdfPath));
+          results.push({ type: 'signed_spec', name });
+        }
       }
       if (req.body.excelBase64) {
         const name = `${r.specNum}_расчеты.xlsx`;
@@ -1248,10 +1383,14 @@ app.post('/api/requests/:id/layout-files', authMiddleware, express.json({ limit:
       fs.writeFileSync(nodePath.join(requestPath, name), Buffer.from(req.body.docxBase64, 'base64'));
       results.push({ type: 'docx', name });
     }
-    if (r.signedSpecPdf) {
-      const name = `${r.specNum}_спецификация_подписано.pdf`;
-      fs.writeFileSync(nodePath.join(requestPath, name), wb64(r.signedSpecPdf));
-      results.push({ type: 'signed_spec', name });
+    if (r.signedSpecPdf === '__has_pdf__') {
+      const pdfRow = query('SELECT signed_spec_pdf FROM requests WHERE id=?', [reqId])[0];
+      const pdfPath = path.join(SIGNED_DIR, nodePath.basename(pdfRow?.signed_spec_pdf || ''));
+      if (fs.existsSync(pdfPath)) {
+        const name = `${r.specNum}_спецификация_подписано.pdf`;
+        fs.writeFileSync(nodePath.join(requestPath, name), fs.readFileSync(pdfPath));
+        results.push({ type: 'signed_spec', name });
+      }
     }
     if (req.body.excelBase64) {
       const name = `${r.specNum}_расчеты.xlsx`;

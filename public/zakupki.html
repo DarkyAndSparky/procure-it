@@ -686,6 +686,52 @@ if (typeof XLSX === 'undefined') {
   #pagination-bar button:disabled { opacity: 0.35; cursor: not-allowed; }
   kbd { font-family: 'SF Mono', Consolas, monospace; }
 
+  /* Mobile — screens narrower than 768px */
+  @media (max-width: 768px) {
+    .sidebar {
+      position: fixed;
+      left: -220px;
+      transition: left 0.25s ease;
+      z-index: 100;
+    }
+    .sidebar.mobile-open { left: 0; box-shadow: 4px 0 24px rgba(0,0,0,0.18); }
+    .sidebar-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 99;
+    }
+    .sidebar-overlay.visible { display: block; }
+    .main { margin-left: 0; }
+    .topbar { padding: 0 12px; }
+    .topbar-menu-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px; height: 36px;
+      border: none; background: none;
+      cursor: pointer;
+      color: var(--text);
+      font-size: 20px;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .topbar-menu-btn:hover { background: var(--bg); }
+    .content { padding: 12px; }
+    /* Positions table — horizontal scroll on mobile */
+    .positions-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    /* Cards stack vertically */
+    .form-row { flex-direction: column; }
+    .form-row .field { width: 100% !important; }
+    /* Registry rows — hide less important columns */
+    .reg-col-supplier,
+    .reg-col-contract { display: none; }
+    /* Btn group wraps */
+    .btn-group { flex-wrap: wrap; gap: 6px; }
+    /* Spec preview full width */
+    .spec-preview { padding: 16px !important; }
+  }
+
   /* Print */
   @media print {
     @page { margin: 15mm 20mm; size: A4 portrait; }
@@ -695,19 +741,35 @@ if (typeof XLSX === 'undefined') {
     .app { display: block; }
     .main { margin-left: 0; padding: 0; }
     #page-spec { display: block !important; }
+
+    /* Always print on white regardless of UI theme */
     .spec-preview {
       border: none !important;
       padding: 0 !important;
       box-shadow: none !important;
-      background: #fff !important;
-      color: #000 !important;
+      background: #ffffff !important;
+      color: #000000 !important;
       font-size: 12pt;
     }
-    .spec-preview table { page-break-inside: auto; }
-    .spec-preview tr { page-break-inside: avoid; page-break-after: auto; }
-    .spec-preview th, .spec-preview td { color: #000 !important; border-color: #000 !important; }
-    .spec-preview .app-ref { color: #555 !important; }
+    .spec-preview * {
+      background: transparent !important;
+      color: #000000 !important;
+    }
+    .spec-preview table {
+      page-break-inside: auto;
+      border-collapse: collapse !important;
+    }
+    .spec-preview tr  { page-break-inside: avoid; page-break-after: auto; }
+    .spec-preview th,
+    .spec-preview td  {
+      color: #000000 !important;
+      border-color: #000000 !important;
+      background: #ffffff !important;
+    }
+    .spec-preview thead th { background: #f0f0f0 !important; }
+    .spec-preview .app-ref { color: #555555 !important; }
     .spec-preview .sign-block { page-break-inside: avoid; }
+    .spec-preview .nds-block { color: #333333 !important; }
   }
 
   .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
@@ -748,8 +810,11 @@ if (typeof XLSX === 'undefined') {
 <body>
 <div class="app">
 
+<!-- Mobile sidebar overlay -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleMobileSidebar()"></div>
+
 <!-- Sidebar -->
-<aside class="sidebar">
+<aside class="sidebar" id="sidebar">
   <div class="sidebar-logo">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <div id="sidebar-logo-img" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0">
@@ -803,7 +868,10 @@ if (typeof XLSX === 'undefined') {
   <div id="global-loading" style="display:none;position:fixed;top:0;left:0;right:0;height:3px;z-index:999;background:linear-gradient(90deg,var(--accent),var(--success),var(--accent));background-size:200%;animation:loading-bar 1.2s linear infinite"></div>
 
   <div class="topbar">
-    <span class="topbar-title" id="page-title">Новая заявка</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="topbar-menu-btn" id="mobile-menu-btn" onclick="toggleMobileSidebar()" title="Меню" aria-label="Открыть меню">☰</button>
+      <span class="topbar-title" id="page-title">Новая заявка</span>
+    </div>
     <div style="display:flex;align-items:center;gap:8px">
       <button class="theme-toggle" id="logout-btn" onclick="doLogout()" title="Выйти" style="display:none;font-size:15px">🔓</button>
       <button class="theme-toggle" onclick="showShortcutsHelp()" title="Горячие клавиши [?]" style="font-size:15px">⌨️</button>
@@ -1260,6 +1328,13 @@ if (typeof XLSX === 'undefined') {
               Настройки → Разработчикам → Входящий webhook. Метод: <code>crm.deal.add</code>
             </div>
           </div>
+          <div class="field" style="margin-top:12px">
+            <label>Webhook при смене статуса</label>
+            <input type="url" id="cfg-status-webhook" placeholder="https://hooks.example.com/procure-it" style="width:100%">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+              POST JSON: <code>{"event","specNum","oldStatus","newStatus","total",...}</code>. Совместим с n8n, Make, Zapier.
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1619,7 +1694,7 @@ function initDragDrop() {
   });
 
   tbody.addEventListener('dragleave', e => {
-    const tr = e.target.closest('tr');
+    const tr = e.target.closest('tr')
     if (tr) tr.classList.remove('drag-over');
   });
 
@@ -1636,6 +1711,25 @@ function initDragDrop() {
     }
     renumber();
     calcTotal();
+  });
+
+  // ── Keyboard reordering: Alt+Up / Alt+Down ────────────────────────────────
+  tbody.addEventListener('keydown', e => {
+    if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    const input = e.target.closest('input,select,textarea');
+    if (!input) return;
+    const tr = input.closest('tr');
+    if (!tr) return;
+    e.preventDefault();
+    if (e.key === 'ArrowUp' && tr.previousElementSibling) {
+      tbody.insertBefore(tr, tr.previousElementSibling);
+    } else if (e.key === 'ArrowDown' && tr.nextElementSibling) {
+      tbody.insertBefore(tr.nextElementSibling, tr);
+    }
+    renumber();
+    calcTotal();
+    // Keep focus on the same input after move
+    input.focus();
   });
 }
 
@@ -1741,8 +1835,17 @@ function collectForm() {
   const y = d.getFullYear();
   const m = d.getMonth() + 1;
   const prefix = org ? org.prefix : 'X';
-  const num = nextSpecNum(orgId, y, m);
-  const specNum = `${prefix}${y}${String(m).padStart(2,'0')}-${String(num).padStart(2,'0')}`;
+
+  // Use displayed specNum if editing (preserves original number)
+  // Otherwise compute fresh — same algorithm as updateSpecNum
+  let specNum;
+  if (editingId) {
+    specNum = document.getElementById('spec-num-display')?.textContent || '';
+  }
+  if (!specNum || specNum === '—') {
+    const num = nextSpecNum(orgId, y, m);
+    specNum = `${prefix}${y}${String(m).padStart(2,'0')}-${String(num).padStart(2,'0')}`;
+  }
 
   const rows = document.getElementById('positions-body').children;
   const markup = (parseNum(document.getElementById('f-markup')?.value) || 5) / 100;
@@ -1891,13 +1994,45 @@ async function layoutFilesToFolder(reqId, req) {
 
 // Builds XLSX workbook and returns base64 string
 function buildWorkbookBase64(req) {
-  if (typeof XLSX === 'undefined') return null;
+  if (typeof XLSX === 'undefined') {
+    toast('⚠️ Excel библиотека не загружена — файл расчётов не будет приложен');
+    return null;
+  }
   const wb = XLSX.utils.book_new();
   buildAndDownloadExcel(req, wb); // fills wb, skips download
   try {
     return XLSX.write(wb, { bookType: 'xlsx', type: 'base64', cellStyles: true });
-  } catch(e) { return null; }
+  } catch(e) {
+    console.warn('[buildWorkbookBase64]', e);
+    toast('⚠️ Не удалось сформировать Excel: ' + e.message);
+    return null;
+  }
 }
+
+// ── Mobile sidebar ────────────────────────────────────────────────────────────
+function toggleMobileSidebar() {
+  const sidebar  = document.getElementById('sidebar');
+  const overlay  = document.getElementById('sidebar-overlay');
+  const isOpen   = sidebar.classList.contains('mobile-open');
+  sidebar.classList.toggle('mobile-open', !isOpen);
+  overlay.classList.toggle('visible', !isOpen);
+}
+
+// Hide burger button on wide screens
+(function() {
+  const btn = document.getElementById('mobile-menu-btn');
+  if (!btn) return;
+  const mq = window.matchMedia('(max-width: 768px)');
+  const update = (e) => { btn.style.display = e.matches ? 'flex' : 'none'; };
+  update(mq);
+  mq.addEventListener('change', update);
+  // Close sidebar when nav item clicked on mobile
+  document.getElementById('sidebar')?.addEventListener('click', (e) => {
+    if (e.target.closest('.nav-item') && window.innerWidth <= 768) {
+      toggleMobileSidebar();
+    }
+  });
+})();
 
 // ─── Bitrix24 ─────────────────────────────────────────────────────────────────
 async function sendToBitrix() {
@@ -2257,7 +2392,11 @@ async function loadToForm(id, copy=false) {
 
   if (copy) {
     // Refresh cache so nextSpecNum is accurate for the copy
-    try { allReqs = await api('GET', '/api/requests'); db.requests = allReqs; } catch(e) {}
+    try {
+      const resp = await api('GET', '/api/requests');
+      allReqs = Array.isArray(resp) ? resp : (resp.items || []);
+      db.requests = allReqs;
+    } catch(e) {}
     editingId = null;
     setEditingState(false);
     toast('Заявка скопирована — сохраните как новую');
@@ -2575,8 +2714,15 @@ async function renderRegistry() {
   if (filterSupplier) params.set('supplier', filterSupplier);
 
   let reqs = [];
+  let totalCount = 0;
   try {
-    reqs = await api('GET', '/api/requests?' + params.toString());
+    const resp = await api('GET', '/api/requests?' + params.toString());
+    // Support both paginated {items, total} and legacy array response
+    if (Array.isArray(resp)) {
+      reqs = resp; totalCount = resp.length;
+    } else {
+      reqs = resp.items || []; totalCount = resp.total || reqs.length;
+    }
     db.requests = reqs; // cache for stats
   } catch(e) { return; }
 
@@ -2826,7 +2972,11 @@ async function toggleAuditLog(id) {
                 name: 'Название', mol: 'МОЛ', date: 'Дата', address: 'Адрес',
                 supplier: 'Поставщик', contract: 'Договор',
                 delivery_cost: 'Доставка', markup: 'Наценка %',
-                comment: 'Комментарий', positions_count: 'Позиций', total: 'Сумма'
+                comment: 'Комментарий', positions_count: 'Позиций (кол-во)',
+                positions_added: '➕ Добавлены',
+                positions_removed: '➖ Удалены',
+                positions_changed: '✏️ Изменены',
+                total: 'Сумма'
               };
               detail = `<div style="display:flex;flex-direction:column;gap:3px;margin-top:2px">` +
                 diff.map(d => {
@@ -3404,29 +3554,84 @@ function cancelEdit() {
 
 // ─── Registry export ──────────────────────────────────────────────────────────
 function exportRegistryExcel() {
-  const list = db.requests;
+  const list = allReqs.length ? allReqs : db.requests;
   if (!list || list.length === 0) { toast('Нет заявок для экспорта'); return; }
-  const rows = [['№', 'Спецификация', 'Дата', 'Организация', 'Заявка', 'МОЛ', 'Поставщик', 'Битрикс', 'Позиций', 'Сумма', 'Статус', 'Путь папки']];
+
+  // Collect active filters for filename and header
+  const filterOrg      = document.getElementById('reg-filter-org')?.value || '';
+  const filterMonth    = document.getElementById('reg-filter-month')?.value || '';
+  const filterStatus   = document.getElementById('reg-filter-status')?.value || '';
+  const filterSupplier = document.getElementById('reg-filter-supplier')?.value || '';
+  const search         = document.getElementById('reg-search')?.value || '';
+
+  const filterParts = [];
+  if (filterOrg)      filterParts.push(db.orgs.find(o=>o.id===filterOrg)?.short || filterOrg);
+  if (filterMonth)    filterParts.push(filterMonth);
+  if (filterStatus)   filterParts.push(STATUS_MAP[filterStatus]?.label || filterStatus);
+  if (filterSupplier) filterParts.push(filterSupplier);
+  if (search)         filterParts.push(`поиск:${search}`);
+
+  const filterLabel = filterParts.length ? ` [${filterParts.join(', ')}]` : '';
+  const dateStr     = new Date().toISOString().slice(0, 10);
+  const fname       = `Реестр_заявок${filterLabel}_${dateStr}.xlsx`.replace(/[\\/:*?"<>|]/g, '_');
+
+  // Header row
+  const rows = [['№', 'Спецификация', 'Дата', 'Организация', 'Заявка', 'МОЛ',
+    'Поставщик', 'Договор', 'Битрикс', 'Позиций', 'Сумма (₽)', 'Статус', 'Путь папки']];
+
+  // Info row if filtered
+  if (filterParts.length) {
+    rows.push([`Фильтр: ${filterParts.join(' · ')} — ${list.length} из всего`]);
+  }
+
   list.forEach((r, i) => {
     rows.push([
-      i+1, r.specNum, r.date, r.orgShort, r.name, r.mol,
-      r.supplier||'', r.bitrix||'', r.positions.length, r.total,
-      STATUS_MAP[r.status||'new']?.label||'', buildFolderPath(r)
+      i + 1,
+      r.specNum,
+      r.date,
+      r.orgShort,
+      r.name,
+      r.mol || '',
+      r.supplier || '',
+      r.contract || '',
+      r.bitrix || '',
+      r.positions.length,
+      r.total,
+      STATUS_MAP[r.status || 'new']?.label || '',
+      buildFolderPath(r),
     ]);
   });
+
+  // Totals row
+  const sumRow = Array(13).fill('');
+  sumRow[0]  = 'Итого:';
+  sumRow[9]  = list.reduce((s, r) => s + r.positions.length, 0);
+  sumRow[10] = list.reduce((s, r) => s + (r.total || 0), 0);
+  rows.push(sumRow);
+
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{wch:4},{wch:16},{wch:12},{wch:14},{wch:40},{wch:22},{wch:20},{wch:10},{wch:8},{wch:14},{wch:12},{wch:50}];
+  ws['!cols'] = [
+    {wch:4},{wch:16},{wch:12},{wch:14},{wch:40},
+    {wch:22},{wch:20},{wch:14},{wch:10},{wch:8},{wch:14},{wch:12},{wch:50}
+  ];
+
+  // Bold header
+  const headerStyle = { font: { bold: true }, fill: { fgColor: { rgb: 'EFF6FF' } } };
+  for (let c = 0; c < 13; c++) {
+    const addr = XLSX.utils.encode_cell({ r: 0, c });
+    if (ws[addr]) ws[addr].s = headerStyle;
+  }
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Реестр заявок');
-  const fname2 = `Реестр_заявок_${new Date().toISOString().slice(0,10)}.xlsx`;
-  const wbout2 = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
-  const blob2 = new Blob([wbout2], { type: 'application/octet-stream' });
-  const url2 = URL.createObjectURL(blob2);
-  const a2 = document.createElement('a');
-  a2.href = url2; a2.download = fname2;
-  document.body.appendChild(a2); a2.click();
-  setTimeout(() => { document.body.removeChild(a2); URL.revokeObjectURL(url2); }, 1000);
-  toast('Реестр экспортирован');
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array', cellStyles: true });
+  const blob  = new Blob([wbout], { type: 'application/octet-stream' });
+  const url   = URL.createObjectURL(blob);
+  const a     = document.createElement('a');
+  a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  toast(`Экспортировано ${list.length} заявок`);
 }
 
 // ─── Templates ────────────────────────────────────────────────────────────────
@@ -3601,6 +3806,7 @@ function showShortcutsHelp() {
         ['Ctrl+N', 'Новая заявка'],
         ['Ctrl+R', 'Открыть реестр'],
         ['Ctrl+Enter', 'Добавить строку позиции'],
+        ['Alt+↑ / Alt+↓', 'Переместить строку позиции (фокус в поле строки)'],
         ['Escape', 'Закрыть / Отменить'],
         ['?', 'Показать эту подсказку'],
       ].map(([k,v]) => `
@@ -3672,6 +3878,7 @@ async function saveConfig() {
     accentLight:   accL    || '#2563eb',
     accentDark:    accD    || '#60a5fa',
     bitrixWebhook: document.getElementById('cfg-bitrix-webhook')?.value.trim() || '',
+    statusWebhook: document.getElementById('cfg-status-webhook')?.value.trim() || '',
     networkFolder: document.getElementById('cfg-network-folder')?.value.trim() || '',
     networkUser:   document.getElementById('cfg-network-user')?.value.trim() || '',
     networkPass:   document.getElementById('cfg-network-pass')?.value || '',
@@ -3792,6 +3999,8 @@ function populateConfigPage() {
   document.getElementById('cfg-accent-dark-hex').value = appConfig.accentDark || '#60a5fa';
   const wh = document.getElementById('cfg-bitrix-webhook');
   if (wh) wh.value = appConfig.bitrixWebhook || '';
+  const swh = document.getElementById('cfg-status-webhook');
+  if (swh) swh.value = appConfig.statusWebhook || '';
   const nf = document.getElementById('cfg-network-folder');
   if (nf) nf.value = appConfig.networkFolder || '';
   const nu = document.getElementById('cfg-network-user');

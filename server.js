@@ -145,20 +145,49 @@ function ensureCert() {
 
 
 // ── Auth config ──────────────────────────────────────────────────────────────
-const AUTH_PASSWORD = process.env.PROCURE_PASSWORD || '';
-const AUTH_ENABLED  = AUTH_PASSWORD.length > 0;
+// Legacy single-password support: if PROCURE_PASSWORD set and no users in DB,
+// it acts as the admin password (backward compatible).
+const LEGACY_PASSWORD = process.env.PROCURE_PASSWORD || '';
+const AUTH_ENABLED    = true; // always true — viewer role = no password
 
 function generateToken() {
   return require('crypto').randomBytes(32).toString('hex');
 }
 
-// Session helpers — backed by SQLite so tokens survive container restarts.
-// db may not be ready yet at module load; these functions are called only
-// after initDb() resolves, so db is always available when they run.
-function sessionCreate(token) {
+// ── User helpers ──────────────────────────────────────────────────────────────
+function hashPassword(pw) {
+  return require('crypto').createHash('sha256').update(pw + 'procure-it-salt').digest('hex');
+}
+
+function getUsers() {
+  try {
+    const rows = db.exec('SELECT id, username, role FROM users ORDER BY id');
+    return rows[0] ? rows[0].values.map(([id, username, role]) => ({ id, username, role })) : [];
+  } catch(e) { return []; }
+}
+
+function findUserByCredentials(username, password) {
+  try {
+    const hash = hashPassword(password);
+    const rows = db.exec('SELECT id, username, role FROM users WHERE username=? AND password=?', [username, hash]);
+    if (rows[0]?.values?.length) {
+      const [id, uname, role] = rows[0].values[0];
+      return { id, username: uname, role };
+    }
+    // Legacy fallback: if no users in DB, accept LEGACY_PASSWORD as admin
+    const userCount = db.exec('SELECT COUNT(*) FROM users')[0]?.values[0][0] || 0;
+    if (userCount === 0 && LEGACY_PASSWORD && password === LEGACY_PASSWORD) {
+      return { id: 0, username: 'admin', role: 'admin' };
+    }
+    return null;
+  } catch(e) { return null; }
+}
+
+// ── Session helpers ───────────────────────────────────────────────────────────
+function sessionCreate(token, userId) {
   const expiresAt = Date.now() + 8 * 60 * 60 * 1000; // 8 hours
   try {
-    db.run('INSERT OR REPLACE INTO sessions (token, expires_at) VALUES (?,?)', [token, expiresAt]);
+    db.run('INSERT OR REPLACE INTO sessions (token, expires_at, user_id) VALUES (?,?,?)', [token, expiresAt, userId || 0]);
     saveDb();
   } catch(e) { console.error('[sessions] create error:', e.message); }
 }
@@ -167,29 +196,49 @@ function sessionDelete(token) {
   try { db.run('DELETE FROM sessions WHERE token = ?', [token]); saveDb(); } catch(e) {}
 }
 
-function sessionExists(token) {
+function sessionGetUser(token) {
   try {
-    const rows = db.exec('SELECT expires_at FROM sessions WHERE token = ?', [token]);
-    if (!rows.length || !rows[0].values.length) return false;
-    const expiresAt = rows[0].values[0][0];
-    if (Date.now() > expiresAt) {
-      sessionDelete(token);
-      return false;
-    }
-    return true;
-  } catch(e) { return false; }
+    const rows = db.exec('SELECT expires_at, user_id FROM sessions WHERE token = ?', [token]);
+    if (!rows.length || !rows[0].values.length) return null;
+    const [expiresAt, userId] = rows[0].values[0];
+    if (Date.now() > expiresAt) { sessionDelete(token); return null; }
+    if (!userId) return { id: 0, username: 'admin', role: 'admin' }; // legacy
+    const urows = db.exec('SELECT id, username, role FROM users WHERE id=?', [userId]);
+    if (!urows[0]?.values?.length) return null;
+    const [id, username, role] = urows[0].values[0];
+    return { id, username, role };
+  } catch(e) { return null; }
 }
 
-function isAuthenticated(req) {
-  if (!AUTH_ENABLED) return true;
+function getRequestRole(req) {
+  // viewer: no token needed — read-only access
   const token = req.headers['x-auth-token'] || (req.cookies && req.cookies['auth-token']);
-  return token && sessionExists(token);
+  if (!token) return 'viewer';
+  return sessionGetUser(token)?.role || 'viewer';
 }
 
+function isAuthenticated(req) { return true; } // viewer always gets in
+
+// Role-based middleware factories
 function authMiddleware(req, res, next) {
-  if (isAuthenticated(req)) return next();
-  res.status(401).json({ error: 'Unauthorized' });
+  // All authenticated roles (operator, admin) + viewer for GET
+  const role = getRequestRole(req);
+  req.userRole = role;
+  req.username = token => sessionGetUser(token)?.username || 'viewer';
+  next();
 }
+
+function requireRole(...roles) {
+  return (req, res, next) => {
+    const role = getRequestRole(req);
+    req.userRole = role;
+    if (roles.includes(role)) return next();
+    res.status(403).json({ error: `Доступ запрещён. Требуется роль: ${roles.join(' или ')}` });
+  };
+}
+
+const operatorOrAdmin = requireRole('operator', 'admin');
+const adminOnly       = requireRole('admin');
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 // Compression (gzip)
@@ -272,18 +321,27 @@ app.get('/', (req, res) => {
 
 // ── Auth endpoints ────────────────────────────────────────────────────────────
 app.get('/api/auth/status', (req, res) => {
-  res.json({ authEnabled: AUTH_ENABLED, authenticated: isAuthenticated(req) });
+  const token = req.headers['x-auth-token'] || (req.cookies && req.cookies['auth-token']);
+  const user  = token ? sessionGetUser(token) : null;
+  const users = getUsers();
+  res.json({
+    authEnabled:   true,
+    authenticated: !!user,
+    role:          user?.role || 'viewer',
+    username:      user?.username || null,
+    hasUsers:      users.length > 0 || !!LEGACY_PASSWORD,
+    viewerAllowed: true,
+  });
 });
 
 app.post('/api/auth/login', strictLimiter, (req, res) => {
-  if (!AUTH_ENABLED) return res.json({ ok: true, token: null });
-  const { password } = req.body;
-  if (!password || password !== AUTH_PASSWORD) {
-    return res.status(401).json({ error: 'Неверный пароль' });
-  }
+  const { username, password } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'Логин и пароль обязательны' });
+  const user = findUserByCredentials(username, password);
+  if (!user) return res.status(401).json({ error: 'Неверный логин или пароль' });
   const token = generateToken();
-  sessionCreate(token);
-  res.json({ ok: true, token });
+  sessionCreate(token, user.id);
+  res.json({ ok: true, token, role: user.role, username: user.username });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -384,8 +442,22 @@ async function initDb() {
 
   db.run(`CREATE TABLE IF NOT EXISTS sessions (
     token      TEXT PRIMARY KEY,
-    expires_at INTEGER NOT NULL
+    expires_at INTEGER NOT NULL,
+    user_id    INTEGER
   )`);
+  // Migration: add user_id to existing sessions table
+  try { db.run(`ALTER TABLE sessions ADD COLUMN user_id INTEGER`); } catch(e) {}
+
+  db.run(`CREATE TABLE IF NOT EXISTS users (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    username   TEXT NOT NULL UNIQUE,
+    password   TEXT NOT NULL,
+    role       TEXT NOT NULL DEFAULT 'operator',
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+  // Migration: add users table to existing DBs
+  try { db.run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'operator', created_at TEXT DEFAULT (datetime('now')))`); } catch(e) {}
+
   // Purge expired sessions left over from previous runs
   db.run(`DELETE FROM sessions WHERE expires_at < ?`, [Date.now()]);
 
@@ -440,11 +512,11 @@ function auditLog(action, requestId, field, oldValue, newValue, meta) {
 }
 
 // ── ORGS ──────────────────────────────────────────────────────────────────────
-app.get('/api/orgs', authMiddleware, (req, res) => {
+app.get('/api/orgs', (req, res) => {
   res.json(query('SELECT * FROM orgs ORDER BY short'));
 });
 
-app.post('/api/orgs', authMiddleware, (req, res) => {
+app.post('/api/orgs', operatorOrAdmin, (req, res) => {
   const { full, short, prefix, signatory='', contract='', address='' } = req.body;
   if (!full || !short || !prefix) return res.status(400).json({ error: 'Обязательные поля: full, short, prefix' });
   const id = Date.now().toString();
@@ -453,7 +525,7 @@ app.post('/api/orgs', authMiddleware, (req, res) => {
   res.json(query('SELECT * FROM orgs WHERE id=?', [id])[0]);
 });
 
-app.put('/api/orgs/:id', authMiddleware, (req, res) => {
+app.put('/api/orgs/:id', operatorOrAdmin, (req, res) => {
   const { full, short, prefix, signatory='', contract='', address='' } = req.body;
   if (!full || !short || !prefix) return res.status(400).json({ error: 'Обязательные поля: full, short, prefix' });
   const exists = query('SELECT id FROM orgs WHERE id=?', [req.params.id])[0];
@@ -463,7 +535,7 @@ app.put('/api/orgs/:id', authMiddleware, (req, res) => {
   res.json(query('SELECT * FROM orgs WHERE id=?', [req.params.id])[0]);
 });
 
-app.delete('/api/orgs/:id', authMiddleware, (req, res) => {
+app.delete('/api/orgs/:id', operatorOrAdmin, (req, res) => {
   const used = query('SELECT COUNT(*) as c FROM requests WHERE org_id=?', [req.params.id]);
   if ((used[0]?.c || 0) > 0) return res.status(400).json({ error: 'Нельзя удалить — есть заявки' });
   run('DELETE FROM orgs WHERE id=?', [req.params.id]);
@@ -471,7 +543,7 @@ app.delete('/api/orgs/:id', authMiddleware, (req, res) => {
 });
 
 // ── REQUESTS ──────────────────────────────────────────────────────────────────
-app.get('/api/requests', authMiddleware, (req, res) => {
+app.get('/api/requests', (req, res) => {
   let sql = 'SELECT * FROM requests WHERE 1=1';
   const params = [];
   if (req.query.org)    { sql += ' AND org_id=?';    params.push(req.query.org); }
@@ -504,13 +576,13 @@ app.get('/api/requests', authMiddleware, (req, res) => {
   });
 });
 
-app.get('/api/requests/:id', authMiddleware, (req, res) => {
+app.get('/api/requests/:id', (req, res) => {
   const row = query('SELECT * FROM requests WHERE id=?', [req.params.id])[0];
   if (!row) return res.status(404).json({ error: 'Не найдено' });
   res.json(rowToRequest(row)); // PDF served via /api/requests/:id/signed-spec
 });
 
-app.post('/api/requests', authMiddleware, (req, res) => {
+app.post('/api/requests', operatorOrAdmin, (req, res) => {
   const r = req.body;
   if (!r.name) return res.status(400).json({ error: 'Название обязательно' });
   // Validate positions
@@ -535,7 +607,7 @@ app.post('/api/requests', authMiddleware, (req, res) => {
   res.json(rowToRequest(query('SELECT * FROM requests WHERE id=?', [id])[0]));
 });
 
-app.put('/api/requests/:id', authMiddleware, (req, res) => {
+app.put('/api/requests/:id', operatorOrAdmin, (req, res) => {
   const r = req.body;
   if (!r.name) return res.status(400).json({ error: 'Название обязательно' });
   if (r.positions && !Array.isArray(r.positions)) return res.status(400).json({ error: 'positions должен быть массивом' });
@@ -604,7 +676,7 @@ app.put('/api/requests/:id', authMiddleware, (req, res) => {
   res.json(rowToRequest(query('SELECT * FROM requests WHERE id=?', [req.params.id])[0]));
 });
 
-app.patch('/api/requests/:id/status', authMiddleware, (req, res) => {
+app.patch('/api/requests/:id/status', operatorOrAdmin, (req, res) => {
   const { status } = req.body;
   const ALLOWED = ['new','ordered','partial','delivered','cancelled'];
   if (!status || !ALLOWED.includes(status)) {
@@ -654,7 +726,7 @@ app.patch('/api/requests/:id/status', authMiddleware, (req, res) => {
   res.json({ ok: true });
 });
 
-app.delete('/api/requests/:id', authMiddleware, (req, res) => {
+app.delete('/api/requests/:id', operatorOrAdmin, (req, res) => {
   const old = query('SELECT spec_num, name FROM requests WHERE id=?', [req.params.id])[0];
   if (!old) return res.status(404).json({ error: 'Заявка не найдена' });
   run('DELETE FROM requests WHERE id=?', [req.params.id]);
@@ -663,17 +735,17 @@ app.delete('/api/requests/:id', authMiddleware, (req, res) => {
 });
 
 // ── ADDRESSES ─────────────────────────────────────────────────────────────────
-app.get('/api/mol', authMiddleware, (req, res) => {
+app.get('/api/mol', (req, res) => {
   const rows = query(`SELECT DISTINCT mol FROM requests WHERE mol != '' ORDER BY mol LIMIT 50`);
   res.json(rows.map(r => r.mol));
 });
 
 
-app.get('/api/addresses', authMiddleware, (req, res) => {
+app.get('/api/addresses', (req, res) => {
   res.json(query('SELECT address FROM addresses ORDER BY used_at DESC LIMIT 30').map(r => r.address));
 });
 
-app.post('/api/addresses', authMiddleware, (req, res) => {
+app.post('/api/addresses', operatorOrAdmin, (req, res) => {
   const { address } = req.body;
   if (!address) return res.status(400).json({ error: 'address required' });
   run(`INSERT INTO addresses (address, used_at) VALUES (?, datetime('now'))
@@ -682,12 +754,12 @@ app.post('/api/addresses', authMiddleware, (req, res) => {
 });
 
 // ── TEMPLATES ─────────────────────────────────────────────────────────────────
-app.get('/api/templates', authMiddleware, (req, res) => {
+app.get('/api/templates', (req, res) => {
   res.json(query('SELECT * FROM templates ORDER BY created_at DESC')
     .map(r => ({ ...r, positions: JSON.parse(r.positions || '[]') })));
 });
 
-app.post('/api/templates', authMiddleware, (req, res) => {
+app.post('/api/templates', operatorOrAdmin, (req, res) => {
   const { name, positions=[] } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   db.run('INSERT INTO templates (name, positions) VALUES (?,?)', [name, JSON.stringify(positions)]);
@@ -696,13 +768,60 @@ app.post('/api/templates', authMiddleware, (req, res) => {
   res.json({ id, name, positions });
 });
 
-app.delete('/api/templates/:id', authMiddleware, (req, res) => {
+app.delete('/api/templates/:id', operatorOrAdmin, (req, res) => {
   run('DELETE FROM templates WHERE id=?', [req.params.id]);
   res.json({ ok: true });
 });
 
+// ── Users API (admin only) ────────────────────────────────────────────────────
+app.get('/api/users', adminOnly, (req, res) => {
+  res.json(getUsers());
+});
+
+app.post('/api/users', adminOnly, (req, res) => {
+  const { username, password, role } = req.body;
+  if (!username || !password) return res.status(400).json({ error: 'Логин и пароль обязательны' });
+  const ROLES = ['viewer', 'operator', 'admin'];
+  if (!ROLES.includes(role)) return res.status(400).json({ error: `Роль должна быть: ${ROLES.join(', ')}` });
+  try {
+    const hash = hashPassword(password);
+    run('INSERT INTO users (username, password, role) VALUES (?,?,?)', [username, hash, role]);
+    saveDb();
+    res.json({ ok: true });
+  } catch(e) {
+    if (e.message.includes('UNIQUE')) return res.status(409).json({ error: 'Пользователь уже существует' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put('/api/users/:id', adminOnly, (req, res) => {
+  const { password, role } = req.body;
+  const ROLES = ['viewer', 'operator', 'admin'];
+  if (role && !ROLES.includes(role)) return res.status(400).json({ error: `Недопустимая роль` });
+  if (password) {
+    const hash = hashPassword(password);
+    run('UPDATE users SET password=? WHERE id=?', [hash, req.params.id]);
+  }
+  if (role) run('UPDATE users SET role=? WHERE id=?', [role, req.params.id]);
+  saveDb();
+  res.json({ ok: true });
+});
+
+app.delete('/api/users/:id', adminOnly, (req, res) => {
+  const users = getUsers();
+  const admins = users.filter(u => u.role === 'admin');
+  const target = users.find(u => u.id == req.params.id);
+  if (target?.role === 'admin' && admins.length <= 1) {
+    return res.status(400).json({ error: 'Нельзя удалить последнего администратора' });
+  }
+  run('DELETE FROM users WHERE id=?', [req.params.id]);
+  run('DELETE FROM sessions WHERE user_id=?', [req.params.id]);
+  saveDb();
+  res.json({ ok: true });
+});
+
 // ── STATS ─────────────────────────────────────────────────────────────────────
-app.get('/api/stats', authMiddleware, (req, res) => {
+app.get('/api/stats', (req, res) => {
   const total    = query('SELECT COUNT(*) as c, SUM(total) as s, SUM(total_purchase) as p FROM requests')[0] || {};
   const thisMonth = new Date().toISOString().slice(0,7);
   const month    = query("SELECT COUNT(*) as c FROM requests WHERE date LIKE ?", [thisMonth+'%'])[0] || {};
@@ -717,7 +836,7 @@ app.get('/api/stats', authMiddleware, (req, res) => {
 });
 
 // ── BACKUP / RESTORE ──────────────────────────────────────────────────────────
-app.get('/api/backup', authMiddleware, (req, res) => {
+app.get('/api/backup', adminOnly, (req, res) => {
   const orgs      = query('SELECT * FROM orgs');
   const requests  = query('SELECT * FROM requests').map(rowToRequest);
   const addresses = query('SELECT address FROM addresses').map(r => r.address);
@@ -733,7 +852,7 @@ app.get('/api/backup', authMiddleware, (req, res) => {
   res.json({ version: 2, exported: new Date().toISOString(), orgs, requests, addresses, templates, settings, audit: auditRows });
 });
 
-app.post('/api/restore', authMiddleware, strictLimiter, (req, res) => {
+app.post('/api/restore', adminOnly, strictLimiter, (req, res) => {
   const { orgs=[], requests=[], addresses=[], templates=[] } = req.body;
   try {
     if (orgs.length) {
@@ -780,7 +899,7 @@ app.post('/api/restore', authMiddleware, strictLimiter, (req, res) => {
 });
 
 // ── Audit log API ────────────────────────────────────────────────────────────
-app.get('/api/audit', authMiddleware, (req, res) => {
+app.get('/api/audit', (req, res) => {
   const { request_id, limit = 50 } = req.query;
   let sql = 'SELECT * FROM audit_log';
   const params = [];
@@ -806,7 +925,7 @@ const DEFAULT_SETTINGS = {
   networkPass:    '',   // Пароль для сетевой папки
 };
 
-app.get('/api/settings', authMiddleware, (req, res) => {
+app.get('/api/settings', adminOnly, (req, res) => {
   try {
     const rows = db.exec('SELECT key, value FROM settings');
     const result = { ...DEFAULT_SETTINGS };
@@ -820,7 +939,7 @@ app.get('/api/settings', authMiddleware, (req, res) => {
   } catch(e) { res.json({ ...DEFAULT_SETTINGS }); }
 });
 
-app.put('/api/settings', authMiddleware, (req, res) => {
+app.put('/api/settings', adminOnly, (req, res) => {
   try {
     const allowed = Object.keys(DEFAULT_SETTINGS);
     // Validate logo size (max 500KB base64)
@@ -895,7 +1014,7 @@ setInterval(() => {
 }, 60 * 60 * 1000);
 
 // Эндпоинт для ручного бэкапа БД (бинарный .db файл)
-app.get('/api/backup/db', authMiddleware, strictLimiter, (req, res) => {
+app.get('/api/backup/db', adminOnly, strictLimiter, (req, res) => {
   try {
     doBackup();
     const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.db')).sort().reverse();
@@ -908,7 +1027,7 @@ app.get('/api/backup/db', authMiddleware, strictLimiter, (req, res) => {
 });
 
 // ── SPEC DOCX ─────────────────────────────────────────────────────────────────
-app.post('/api/spec-docx', authMiddleware, (req, res) => {
+app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
   try {
     const { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun,
             WidthType, AlignmentType, BorderStyle, VerticalAlign,
@@ -1133,7 +1252,7 @@ app.post('/api/spec-docx', authMiddleware, (req, res) => {
 
 // ── Signed spec PDF ───────────────────────────────────────────────────────────
 // Upload: POST /api/requests/:id/signed-spec  { pdf: base64 }
-app.post('/api/requests/:id/signed-spec', authMiddleware, express.json({ limit: '20mb' }), (req, res) => {
+app.post('/api/requests/:id/signed-spec', operatorOrAdmin, express.json({ limit: '20mb' }), (req, res) => {
   try {
     const { pdf } = req.body;
     if (!pdf || !pdf.startsWith('data:application/pdf')) {
@@ -1157,7 +1276,7 @@ app.post('/api/requests/:id/signed-spec', authMiddleware, express.json({ limit: 
 });
 
 // Download: GET /api/requests/:id/signed-spec
-app.get('/api/requests/:id/signed-spec', authMiddleware, (req, res) => {
+app.get('/api/requests/:id/signed-spec', operatorOrAdmin, (req, res) => {
   try {
     const row = query('SELECT signed_spec_pdf, spec_num FROM requests WHERE id=?', [req.params.id])[0];
     if (!row?.signed_spec_pdf) return res.status(404).json({ error: 'Подписанная спецификация не прикреплена' });
@@ -1185,7 +1304,7 @@ app.get('/api/requests/:id/signed-spec', authMiddleware, (req, res) => {
 
 // ── Network folder layout ─────────────────────────────────────────────────────
 // ── Network folder / WebDAV file layout ──────────────────────────────────────
-app.post('/api/requests/:id/layout-files', authMiddleware, express.json({ limit: '50mb' }), async (req, res) => {
+app.post('/api/requests/:id/layout-files', operatorOrAdmin, express.json({ limit: '50mb' }), async (req, res) => {
   try {
     const reqId = req.params.id;
     const row = query('SELECT * FROM requests WHERE id=?', [reqId])[0];
@@ -1403,7 +1522,7 @@ app.post('/api/requests/:id/layout-files', authMiddleware, express.json({ limit:
 });
 
 // ── Bitrix24 webhook ──────────────────────────────────────────────────────────
-app.post('/api/send-bitrix', authMiddleware, async (req, res) => {
+app.post('/api/send-bitrix', operatorOrAdmin, async (req, res) => {
   try {
     // Get webhook URL from settings
     const rows = db.exec("SELECT value FROM settings WHERE key='bitrixWebhook'");
@@ -1486,7 +1605,7 @@ const PKG_VERSION = (() => {
 })();
 
 // Test folder connection
-app.post('/api/test-folder', authMiddleware, async (req, res) => {
+app.post('/api/test-folder', operatorOrAdmin, async (req, res) => {
   const { path: folderPath, user, pass } = req.body || {};
   if (!folderPath) return res.status(400).json({ ok: false, error: 'Путь не указан' });
   const isWebDav = /^https?:\/\//i.test(folderPath);

@@ -874,6 +874,7 @@ if (typeof XLSX === 'undefined') {
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <button class="theme-toggle" id="logout-btn" onclick="doLogout()" title="Выйти" style="display:none;font-size:15px">🔓</button>
+      <span id="role-badge" style="display:none;font-size:11px;color:var(--text-muted);padding:3px 8px;background:var(--surface-2);border-radius:12px;border:1px solid var(--border)"></span>
       <button class="theme-toggle" onclick="showShortcutsHelp()" title="Горячие клавиши [?]" style="font-size:15px">⌨️</button>
       <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" title="Сменить тему">🌙</button>
       <div class="btn-group" id="topbar-actions"></div>
@@ -1365,6 +1366,29 @@ if (typeof XLSX === 'undefined') {
         </div>
       </div>
 
+      <!-- Users Management (admin only) -->
+      <div class="card" style="max-width:680px;margin-top:16px" data-role-min="admin">
+        <div class="card-header">👥 Пользователи</div>
+        <div class="card-body">
+          <div id="users-list" style="margin-bottom:16px"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <input type="text" id="new-user-username" placeholder="Логин" style="width:120px">
+            <input type="password" id="new-user-password" placeholder="Пароль" style="width:120px">
+            <select id="new-user-role" style="width:120px">
+              <option value="viewer">👁 Просмотр</option>
+              <option value="operator" selected>✏️ Оператор</option>
+              <option value="admin">⚙️ Админ</option>
+            </select>
+            <button class="btn btn-primary" onclick="addUser()">+ Добавить</button>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:8px">
+            <strong>Просмотр</strong> — без пароля, только чтение ·
+            <strong>Оператор</strong> — создание и редактирование заявок ·
+            <strong>Админ</strong> — полный доступ включая конфиг и пользователей
+          </div>
+        </div>
+      </div>
+
       <!-- Save -->
       <div class="btn-group" style="max-width:680px">
         <button class="btn btn-primary" onclick="saveConfig()" style="background:var(--success);border-color:var(--success);color:#fff">💾 Сохранить настройки</button>
@@ -1460,8 +1484,10 @@ if (typeof XLSX === 'undefined') {
 // ─── State ───────────────────────────────────────────────────────────────────
 const API = '';
 
-// ── Auth token ────────────────────────────────────────────────────────────────
+// ── Auth token & role ────────────────────────────────────────────────────────
 let authToken = localStorage.getItem('procure_token') || '';
+let userRole  = 'viewer';
+let userName  = null;
 
 async function checkAuth() {
   try {
@@ -1469,16 +1495,37 @@ async function checkAuth() {
       headers: authToken ? { 'X-Auth-Token': authToken } : {}
     });
     const data = await r.json();
-    if (!data.authEnabled) return true; // auth выключен
-    if (data.authenticated) {
-      const btn = document.getElementById('logout-btn');
-      if (btn) btn.style.display = 'inline-flex';
-      return true;
-    }
-    // Показать форму входа
+    userRole = data.role || 'viewer';
+    userName = data.username || null;
+    updateRoleUI();
+    if (data.authenticated) return true;
+    if (!data.hasUsers) return true; // no users configured — viewer access
     showLoginModal();
     return false;
   } catch(e) { return true; }
+}
+
+function updateRoleUI() {
+  const isOperatorPlus = userRole === 'operator' || userRole === 'admin';
+  const isAdmin = userRole === 'admin';
+  document.querySelectorAll('[data-role-min="operator"]').forEach(el => {
+    el.style.display = isOperatorPlus ? '' : 'none';
+  });
+  document.querySelectorAll('[data-role-min="admin"]').forEach(el => {
+    el.style.display = isAdmin ? '' : 'none';
+  });
+  document.querySelectorAll('[data-role-action]').forEach(el => {
+    el.disabled = !isOperatorPlus;
+    if (!isOperatorPlus) el.title = 'Только для операторов и администраторов';
+  });
+  const badge = document.getElementById('role-badge');
+  if (badge) {
+    const labels = { viewer: '👁 Просмотр', operator: '✏️ Оператор', admin: '⚙️ Админ' };
+    badge.textContent = (userName ? userName + ' · ' : '') + (labels[userRole] || userRole);
+    badge.style.display = '';
+  }
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) logoutBtn.style.display = userRole !== 'viewer' ? 'inline-flex' : 'none';
 }
 
 function showLoginModal() {
@@ -1492,54 +1539,67 @@ function showLoginModal() {
         <div style="text-align:center;margin-bottom:24px">
           <div style="font-size:32px;margin-bottom:8px">🔒</div>
           <h2 style="font-size:18px;font-weight:600">procure-it</h2>
-          <p style="color:var(--text-secondary);font-size:13px;margin-top:4px">Введите пароль для входа</p>
+          <p style="color:var(--text-secondary);font-size:13px;margin-top:4px">Войдите для редактирования</p>
+        </div>
+        <div class="field" style="margin-bottom:12px">
+          <label>Логин</label>
+          <input type="text" id="login-username" placeholder="username" style="width:100%"
+            onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
         </div>
         <div class="field" style="margin-bottom:16px">
           <label>Пароль</label>
           <input type="password" id="login-password" placeholder="••••••••"
             style="width:100%" onkeydown="if(event.key==='Enter')doLogin()">
         </div>
-        <div id="login-error" style="color:var(--danger);font-size:12px;margin-bottom:12px;display:none">Неверный пароль</div>
+        <div id="login-error" style="color:var(--danger);font-size:12px;margin-bottom:12px;display:none"></div>
         <button class="btn btn-primary" onclick="doLogin()"
-          style="width:100%;background:var(--accent);border-color:var(--accent);color:#fff;justify-content:center">
-          Войти
+          style="width:100%;background:var(--accent);border-color:var(--accent);color:#fff;justify-content:center">Войти</button>
+        <button class="btn" onclick="document.getElementById('login-modal').style.display='none'"
+          style="width:100%;margin-top:8px;justify-content:center;color:var(--text-secondary)">
+          Продолжить как гость (только просмотр)
         </button>
       </div>`;
     document.body.appendChild(modal);
   }
   modal.style.display = 'flex';
-  setTimeout(() => document.getElementById('login-password')?.focus(), 100);
+  setTimeout(() => document.getElementById('login-username')?.focus(), 100);
 }
 
 async function doLogin() {
-  const pwd = document.getElementById('login-password')?.value;
-  const errEl = document.getElementById('login-error');
+  const username = document.getElementById('login-username')?.value.trim();
+  const pwd      = document.getElementById('login-password')?.value;
+  const errEl    = document.getElementById('login-error');
+  if (!username || !pwd) {
+    if (errEl) { errEl.textContent = 'Введите логин и пароль'; errEl.style.display = 'block'; }
+    return;
+  }
   try {
     const r = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pwd })
+      body: JSON.stringify({ username, password: pwd })
     });
     const data = await r.json();
     if (data.ok) {
       authToken = data.token || '';
+      userRole  = data.role || 'operator';
+      userName  = data.username || username;
       if (authToken) localStorage.setItem('procure_token', authToken);
       document.getElementById('login-modal').style.display = 'none';
-      const btn = document.getElementById('logout-btn');
-      if (btn && authToken) btn.style.display = 'inline-flex';
-      // Reinitialize
+      updateRoleUI();
       await load();
       await loadConfig();
       populateOrgSelect();
       populateTemplateSelect();
       await populateAddressList();
     } else {
-      if (errEl) { errEl.style.display = 'block'; errEl.textContent = data.error || 'Неверный пароль'; }
+      if (errEl) { errEl.style.display = 'block'; errEl.textContent = data.error || 'Ошибка'; }
     }
   } catch(e) {
     if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Ошибка соединения'; }
   }
 }
+
 
 let db = { orgs: [], requests: [], templates: [] };
 
@@ -2007,6 +2067,79 @@ function buildWorkbookBase64(req) {
     toast('⚠️ Не удалось сформировать Excel: ' + e.message);
     return null;
   }
+}
+
+// ── Users management ─────────────────────────────────────────────────────────
+async function loadUsers() {
+  if (userRole !== 'admin') return;
+  try {
+    const users = await api('GET', '/api/users');
+    const container = document.getElementById('users-list');
+    if (!container) return;
+    const ROLE_LABELS = { viewer: '👁 Просмотр', operator: '✏️ Оператор', admin: '⚙️ Админ' };
+    if (!users.length) {
+      container.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Пользователей нет — используется PROCURE_PASSWORD из .env</div>';
+      return;
+    }
+    container.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="border-bottom:1px solid var(--border)">
+        <th style="text-align:left;padding:6px 8px">Логин</th>
+        <th style="text-align:left;padding:6px 8px">Роль</th>
+        <th style="padding:6px 8px"></th>
+      </tr></thead>
+      <tbody>
+        ${users.map(u => `
+          <tr style="border-bottom:1px solid var(--border-light)">
+            <td style="padding:6px 8px">${esc(u.username)}</td>
+            <td style="padding:6px 8px">
+              <select onchange="changeUserRole(${u.id}, this.value)" style="font-size:12px">
+                ${['viewer','operator','admin'].map(r =>
+                  `<option value="${r}" ${u.role===r?'selected':''}>${ROLE_LABELS[r]}</option>`
+                ).join('')}
+              </select>
+            </td>
+            <td style="padding:6px 8px;text-align:right">
+              <button class="btn btn-sm" onclick="resetUserPassword(${u.id},'${esc(u.username)}')"
+                title="Сменить пароль">🔑</button>
+              <button class="btn btn-sm" onclick="deleteUser(${u.id},'${esc(u.username)}')"
+                style="color:var(--danger)" title="Удалить">×</button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+  } catch(e) { console.error('loadUsers', e); }
+}
+
+async function addUser() {
+  const username = document.getElementById('new-user-username')?.value.trim();
+  const password = document.getElementById('new-user-password')?.value;
+  const role     = document.getElementById('new-user-role')?.value;
+  if (!username || !password) { toast('Введите логин и пароль'); return; }
+  try {
+    await api('POST', '/api/users', { username, password, role });
+    document.getElementById('new-user-username').value = '';
+    document.getElementById('new-user-password').value = '';
+    toast(`Пользователь ${username} создан`);
+    await loadUsers();
+  } catch(e) { toast('Ошибка: ' + e.message); }
+}
+
+async function changeUserRole(id, role) {
+  try { await api('PUT', `/api/users/${id}`, { role }); toast('Роль обновлена'); }
+  catch(e) { toast('Ошибка: ' + e.message); await loadUsers(); }
+}
+
+async function resetUserPassword(id, username) {
+  const pw = prompt(`Новый пароль для ${username}:`);
+  if (!pw) return;
+  try { await api('PUT', `/api/users/${id}`, { password: pw }); toast('Пароль обновлён'); }
+  catch(e) { toast('Ошибка: ' + e.message); }
+}
+
+async function deleteUser(id, username) {
+  if (!confirm(`Удалить пользователя «${username}»?`)) return;
+  try { await api('DELETE', `/api/users/${id}`); toast(`${username} удалён`); await loadUsers(); }
+  catch(e) { toast('Ошибка: ' + e.message); }
 }
 
 // ── Mobile sidebar ────────────────────────────────────────────────────────────
@@ -2894,7 +3027,10 @@ function showPage(name) {
   if (name === 'registry') renderRegistry();
   if (name === 'orgs') renderOrgs();
   if (name === 'spec') populateOrgSelect();
-  if (name === 'config') populateConfigPage();
+  if (name === 'config') {
+    populateConfigPage();
+    if (userRole === 'admin') loadUsers();
+  }
   if (name === 'new') initDragDrop();
 }
 
@@ -3214,7 +3350,10 @@ document.addEventListener('click', function(e) {
 async function doLogout() {
   try { await api('POST', '/api/auth/logout'); } catch(e) {}
   authToken = '';
+  userRole  = 'viewer';
+  userName  = null;
   localStorage.removeItem('procure_token');
+  updateRoleUI();
   showLoginModal();
   toast('Вы вышли из системы');
 }

@@ -828,11 +828,11 @@ if (typeof XLSX === 'undefined') {
   </div>
   <nav class="sidebar-nav">
     <div class="nav-section-label">Заявки</div>
-    <button class="nav-item active" id="nav-new" onclick="showPage('new')">
+    <button class="nav-item active" id="nav-new" onclick="showPage('new')" data-role-min="operator">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
       Новая заявка
     </button>
-    <button class="nav-item" id="nav-new-real" onclick="startRealization()">
+    <button class="nav-item" id="nav-new-real" onclick="startRealization()" data-role-min="operator">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       На реализацию
     </button>
@@ -846,11 +846,11 @@ if (typeof XLSX === 'undefined') {
       Спецификация
     </button>
     <div class="nav-section-label" style="margin-top:8px">Настройки</div>
-    <button class="nav-item" id="nav-orgs" onclick="showPage('orgs')">
+    <button class="nav-item" id="nav-orgs" onclick="showPage('orgs')" data-role-min="operator">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
       Организации
     </button>
-    <button class="nav-item" id="nav-config" onclick="showPage('config')">
+    <button class="nav-item" id="nav-config" onclick="showPage('config')" data-role-min="admin">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       Конфиг
     </button>
@@ -874,6 +874,7 @@ if (typeof XLSX === 'undefined') {
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <button class="theme-toggle" id="logout-btn" onclick="doLogout()" title="Выйти" style="display:none;font-size:15px">🔓</button>
+      <button class="theme-toggle" id="change-pw-btn" onclick="showChangePasswordModal(false)" title="Сменить пароль" style="display:none;font-size:15px">🔑</button>
       <span id="role-badge" style="display:none;font-size:11px;color:var(--text-muted);padding:3px 8px;background:var(--surface-2);border-radius:12px;border:1px solid var(--border)"></span>
       <button class="theme-toggle" onclick="showShortcutsHelp()" title="Горячие клавиши [?]" style="font-size:15px">⌨️</button>
       <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" title="Сменить тему">🌙</button>
@@ -1079,12 +1080,12 @@ if (typeof XLSX === 'undefined') {
 
       <!-- Actions -->
       <div class="btn-group">
-        <button class="btn btn-primary" id="btn-save" onclick="saveRequest()" style="background:var(--success);border-color:var(--success);color:#fff">💾 Сохранить заявку</button>
+        <button class="btn btn-primary" id="btn-save" onclick="saveRequest()" data-role-action data-role-title="Сохранить заявку" style="background:var(--success);border-color:var(--success);color:#fff">💾 Сохранить заявку</button>
         <button class="btn" onclick="exportExcel()" style="background:var(--accent);border-color:var(--accent);color:#fff">📊 Excel</button>
         <button class="btn" onclick="previewSpec()" style="background:#7c3aed;border-color:#7c3aed;color:#fff">📄 Спецификация</button>
         <button class="btn" onclick="showFolderPath()" style="background:var(--warning);border-color:var(--warning);color:#fff">📁 Путь папки</button>
-        <button class="btn" id="btn-bitrix" onclick="sendToBitrix()" style="background:#1a9bf0;border-color:#1a9bf0;color:#fff" title="Отправить заявку в Bitrix24">🔗 Bitrix24</button>
-        <button class="btn" onclick="clearForm()" style="background:var(--surface);border-color:var(--border-strong);color:var(--text-secondary)">✕ Очистить</button>
+        <button class="btn" id="btn-bitrix" onclick="sendToBitrix()" data-role-action style="background:#1a9bf0;border-color:#1a9bf0;color:#fff" title="Отправить заявку в Bitrix24">🔗 Bitrix24</button>
+        <button class="btn" onclick="clearForm()" data-role-action style="background:var(--surface);border-color:var(--border-strong);color:var(--text-secondary)">✕ Очистить</button>
       </div>
     </div>
 
@@ -1498,7 +1499,13 @@ async function checkAuth() {
     userRole = data.role || 'viewer';
     userName = data.username || null;
     updateRoleUI();
-    if (data.authenticated) return true;
+    if (data.authenticated) {
+      if (data.mustChangePassword) {
+        showChangePasswordModal(true);
+        return false;
+      }
+      return true;
+    }
     if (!data.hasUsers) return true; // no users configured — viewer access
     showLoginModal();
     return false;
@@ -1526,6 +1533,8 @@ function updateRoleUI() {
   }
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) logoutBtn.style.display = userRole !== 'viewer' ? 'inline-flex' : 'none';
+  const changePwBtn = document.getElementById('change-pw-btn');
+  if (changePwBtn) changePwBtn.style.display = userRole !== 'viewer' ? 'inline-flex' : 'none';
 }
 
 function showLoginModal() {
@@ -1587,6 +1596,10 @@ async function doLogin() {
       if (authToken) localStorage.setItem('procure_token', authToken);
       document.getElementById('login-modal').style.display = 'none';
       updateRoleUI();
+      if (data.mustChangePassword) {
+        showChangePasswordModal(true); // forced
+        return;
+      }
       await load();
       await loadConfig();
       populateOrgSelect();
@@ -2066,6 +2079,78 @@ function buildWorkbookBase64(req) {
     console.warn('[buildWorkbookBase64]', e);
     toast('⚠️ Не удалось сформировать Excel: ' + e.message);
     return null;
+  }
+}
+
+// ── Change password modal ─────────────────────────────────────────────────────
+function showChangePasswordModal(forced = false) {
+  let modal = document.getElementById('change-pw-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'change-pw-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:600;display:flex;align-items:center;justify-content:center';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px;width:340px;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:32px;margin-bottom:8px">🔑</div>
+        <h2 style="font-size:17px;font-weight:600">${forced ? 'Смените пароль' : 'Изменение пароля'}</h2>
+        ${forced ? '<p style="color:var(--warning);font-size:12px;margin-top:6px">⚠️ Вы используете временный пароль.<br>Смените его перед началом работы.</p>' : ''}
+      </div>
+      <div class="field" style="margin-bottom:12px">
+        <label>Текущий пароль</label>
+        <input type="password" id="cpw-current" placeholder="••••••••" style="width:100%">
+      </div>
+      <div class="field" style="margin-bottom:12px">
+        <label>Новый пароль</label>
+        <input type="password" id="cpw-new" placeholder="минимум 6 символов" style="width:100%">
+      </div>
+      <div class="field" style="margin-bottom:16px">
+        <label>Повторите новый пароль</label>
+        <input type="password" id="cpw-confirm" placeholder="••••••••" style="width:100%"
+          onkeydown="if(event.key==='Enter')doChangePassword(${forced})">
+      </div>
+      <div id="cpw-error" style="color:var(--danger);font-size:12px;margin-bottom:12px;display:none"></div>
+      <button class="btn btn-primary" onclick="doChangePassword(${forced})"
+        style="width:100%;background:var(--accent);border-color:var(--accent);color:#fff;justify-content:center">
+        Сменить пароль
+      </button>
+      ${!forced ? `<button class="btn" onclick="document.getElementById('change-pw-modal').style.display='none'"
+        style="width:100%;margin-top:8px;justify-content:center">Отмена</button>` : ''}
+    </div>`;
+  modal.style.display = 'flex';
+  setTimeout(() => document.getElementById('cpw-current')?.focus(), 100);
+}
+
+async function doChangePassword(forced = false) {
+  const current = document.getElementById('cpw-current')?.value;
+  const nw      = document.getElementById('cpw-new')?.value;
+  const confirm = document.getElementById('cpw-confirm')?.value;
+  const errEl   = document.getElementById('cpw-error');
+  if (!current || !nw || !confirm) {
+    errEl.textContent = 'Заполните все поля'; errEl.style.display = 'block'; return;
+  }
+  if (nw.length < 6) {
+    errEl.textContent = 'Минимум 6 символов'; errEl.style.display = 'block'; return;
+  }
+  if (nw !== confirm) {
+    errEl.textContent = 'Пароли не совпадают'; errEl.style.display = 'block'; return;
+  }
+  try {
+    await api('POST', '/api/auth/change-password', { currentPassword: current, newPassword: nw });
+    document.getElementById('change-pw-modal').style.display = 'none';
+    toast('✓ Пароль успешно изменён');
+    if (forced) {
+      // Now proceed with full init
+      await load();
+      await loadConfig();
+      populateOrgSelect();
+      populateTemplateSelect();
+      await populateAddressList();
+    }
+  } catch(e) {
+    errEl.textContent = e.message || 'Ошибка'; errEl.style.display = 'block';
   }
 }
 
@@ -2788,7 +2873,7 @@ function renderRegistryRows(reqs) {
       <td style="font-weight:600;font-size:12px">${fmtRub(r.total)}</td>
       <td>
         <button class="btn btn-sm" onclick="event.stopPropagation();loadToForm('${r.id}')">Ред.</button>
-        <select class="btn btn-sm status-select" onchange="event.stopPropagation();changeStatus('${r.id}',this.value)" onclick="event.stopPropagation()" style="margin-left:4px;padding:2px 4px;font-size:11px;cursor:pointer">
+        <select class="btn btn-sm status-select" onchange="event.stopPropagation();changeStatus('${r.id}',this.value)" onclick="event.stopPropagation()" style="margin-left:4px;padding:2px 4px;font-size:11px;cursor:pointer" ${userRole==='viewer'?'disabled title="Только для операторов"':''}>
           ${Object.entries(STATUS_MAP).map(([k,v])=>`<option value="${k}" ${r.status===k?'selected':''}>${v.label}</option>`).join('')}
         </select>
       </td>`;
@@ -2813,6 +2898,7 @@ function renderRegistryRows(reqs) {
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
           <button class="btn btn-sm btn-success" onclick="exportExcelById('${r.id}')">📊 Excel</button>
           ${!r.isRealization?`<button class="btn btn-sm" onclick="loadSpec('${r.id}')">📄 Спецификация</button>`:''}
+          ${userRole !== 'viewer' ? `
           <button class="btn btn-sm" onclick="loadToForm('${r.id}',true)">📋 Копировать</button>
           <label class="btn btn-sm" style="cursor:pointer;background:${r.signedSpecPdf?'var(--success)':'var(--surface-2)'};border-color:${r.signedSpecPdf?'var(--success)':'var(--border)'};color:${r.signedSpecPdf?'#fff':'var(--text)'}" title="${r.signedSpecPdf?'Подписанная спецификация прикреплена. Нажмите чтобы заменить':'Прикрепить подписанную спецификацию PDF'}">
             ${(r.signedSpecPdf&&r.signedSpecPdf!=='')?'✅ Подписано':'📎 Прикрепить подпись'}
@@ -2821,6 +2907,7 @@ function renderRegistryRows(reqs) {
           ${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${r.id}','${esc(r.specNum)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}
           ${appConfig.networkFolder?`<button class="btn btn-sm" id="layout-btn-${r.id}" onclick="forceLayoutFiles('${r.id}',this)" title="Разложить файлы в сетевую папку" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">📁 Разложить файлы</button>`:''}
           <button class="btn btn-sm" style="margin-left:auto;color:var(--danger);border-color:var(--danger)" onclick="deleteRequest('${r.id}')">Удалить</button>
+          ` : `${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${r.id}','${esc(r.specNum)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}`}
         </div>
         <div id="audit-${r.id}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;font-size:12px"></div>
       </div>
@@ -3017,6 +3104,16 @@ const pageTitles = {
 };
 
 function showPage(name) {
+  // Role guard — enforce server-side roles client-side too
+  const pageRoles = { new: 'operator', orgs: 'operator', config: 'admin' };
+  const required  = pageRoles[name];
+  if (required) {
+    const isOp    = userRole === 'operator' || userRole === 'admin';
+    const isAdmin = userRole === 'admin';
+    if (required === 'admin'    && !isAdmin) { toast('⛔ Только для администраторов'); return; }
+    if (required === 'operator' && !isOp)    { toast('⛔ Требуется вход как оператор'); return; }
+  }
+
   document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
   document.getElementById('page-' + name).style.display = 'block';
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));

@@ -156,28 +156,48 @@ function generateToken() {
 
 // ── User helpers ──────────────────────────────────────────────────────────────
 function hashPassword(pw) {
+  // PBKDF2-SHA256, 100k iterations — much stronger than plain SHA-256
+  const { pbkdf2Sync } = require('crypto');
+  return pbkdf2Sync(pw, 'procure-it-pbkdf2-salt-v1', 100000, 32, 'sha256').toString('hex');
+}
+
+// Migration: rehash old SHA-256 passwords to PBKDF2 on next login
+function hashPasswordLegacy(pw) {
   return require('crypto').createHash('sha256').update(pw + 'procure-it-salt').digest('hex');
 }
 
 function getUsers() {
   try {
-    const rows = db.exec('SELECT id, username, role FROM users ORDER BY id');
-    return rows[0] ? rows[0].values.map(([id, username, role]) => ({ id, username, role })) : [];
+    const rows = db.exec('SELECT id, username, role, must_change_password FROM users ORDER BY id');
+    return rows[0] ? rows[0].values.map(([id, username, role, mcp]) => ({ id, username, role, mustChangePassword: !!mcp })) : [];
   } catch(e) { return []; }
 }
 
 function findUserByCredentials(username, password) {
   try {
-    const hash = hashPassword(password);
-    const rows = db.exec('SELECT id, username, role FROM users WHERE username=? AND password=?', [username, hash]);
+    const hash       = hashPassword(password);
+    const legacyHash = hashPasswordLegacy(password);
+    // Try PBKDF2 first
+    let rows = db.exec('SELECT id, username, role, must_change_password FROM users WHERE username=? AND password=?', [username, hash]);
+    if (!rows[0]?.values?.length) {
+      // Try legacy SHA-256 — migrate on the fly
+      rows = db.exec('SELECT id, username, role, must_change_password FROM users WHERE username=? AND password=?', [username, legacyHash]);
+      if (rows[0]?.values?.length) {
+        const [id] = rows[0].values[0];
+        // Upgrade to PBKDF2
+        db.run('UPDATE users SET password=? WHERE id=?', [hash, id]);
+        saveDb();
+        console.log(`[users] Upgraded password hash for user id=${id} to PBKDF2`);
+      }
+    }
     if (rows[0]?.values?.length) {
-      const [id, uname, role] = rows[0].values[0];
-      return { id, username: uname, role };
+      const [id, uname, role, mcp] = rows[0].values[0];
+      return { id, username: uname, role, mustChangePassword: !!mcp };
     }
     // Legacy fallback: if no users in DB, accept LEGACY_PASSWORD as admin
     const userCount = db.exec('SELECT COUNT(*) FROM users')[0]?.values[0][0] || 0;
     if (userCount === 0 && LEGACY_PASSWORD && password === LEGACY_PASSWORD) {
-      return { id: 0, username: 'admin', role: 'admin' };
+      return { id: 0, username: 'admin', role: 'admin', mustChangePassword: false };
     }
     return null;
   } catch(e) { return null; }
@@ -202,11 +222,16 @@ function sessionGetUser(token) {
     if (!rows.length || !rows[0].values.length) return null;
     const [expiresAt, userId] = rows[0].values[0];
     if (Date.now() > expiresAt) { sessionDelete(token); return null; }
-    if (!userId) return { id: 0, username: 'admin', role: 'admin' }; // legacy
-    const urows = db.exec('SELECT id, username, role FROM users WHERE id=?', [userId]);
+    if (!userId) {
+      // Legacy session (pre-multi-user) — only grant admin if no users table exists yet
+      const userCount = (() => { try { return db.exec('SELECT COUNT(*) FROM users')[0]?.values[0][0] || 0; } catch(e) { return 0; } })();
+      if (userCount === 0) return { id: 0, username: 'admin', role: 'admin', mustChangePassword: false };
+      return null; // legacy session invalid once users table is populated
+    }
+    const urows = db.exec('SELECT id, username, role, must_change_password FROM users WHERE id=?', [userId]);
     if (!urows[0]?.values?.length) return null;
-    const [id, username, role] = urows[0].values[0];
-    return { id, username, role };
+    const [id, username, role, mcp] = urows[0].values[0];
+    return { id, username, role, mustChangePassword: !!mcp };
   } catch(e) { return null; }
 }
 
@@ -230,8 +255,19 @@ function authMiddleware(req, res, next) {
 
 function requireRole(...roles) {
   return (req, res, next) => {
-    const role = getRequestRole(req);
+    const token = req.headers['x-auth-token'] || (req.cookies && req.cookies['auth-token']);
+    const user  = token ? sessionGetUser(token) : null;
+    const role  = user?.role || 'viewer';
     req.userRole = role;
+
+    // Block all write operations if password change is required
+    if (user?.mustChangePassword && req.method !== 'GET') {
+      // Allow only the change-password endpoint itself
+      if (!req.path.includes('/auth/change-password')) {
+        return res.status(403).json({ error: 'Смените временный пароль перед началом работы', mustChangePassword: true });
+      }
+    }
+
     if (roles.includes(role)) return next();
     res.status(403).json({ error: `Доступ запрещён. Требуется роль: ${roles.join(' или ')}` });
   };
@@ -325,12 +361,13 @@ app.get('/api/auth/status', (req, res) => {
   const user  = token ? sessionGetUser(token) : null;
   const users = getUsers();
   res.json({
-    authEnabled:   true,
-    authenticated: !!user,
-    role:          user?.role || 'viewer',
-    username:      user?.username || null,
-    hasUsers:      users.length > 0 || !!LEGACY_PASSWORD,
-    viewerAllowed: true,
+    authEnabled:        true,
+    authenticated:      !!user,
+    role:               user?.role || 'viewer',
+    username:           user?.username || null,
+    mustChangePassword: user?.mustChangePassword || false,
+    hasUsers:           users.length > 0 || !!LEGACY_PASSWORD,
+    viewerAllowed:      true,
   });
 });
 
@@ -341,7 +378,7 @@ app.post('/api/auth/login', strictLimiter, (req, res) => {
   if (!user) return res.status(401).json({ error: 'Неверный логин или пароль' });
   const token = generateToken();
   sessionCreate(token, user.id);
-  res.json({ ok: true, token, role: user.role, username: user.username });
+  res.json({ ok: true, token, role: user.role, username: user.username, mustChangePassword: user.mustChangePassword });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -449,14 +486,29 @@ async function initDb() {
   try { db.run(`ALTER TABLE sessions ADD COLUMN user_id INTEGER`); } catch(e) {}
 
   db.run(`CREATE TABLE IF NOT EXISTS users (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    username   TEXT NOT NULL UNIQUE,
-    password   TEXT NOT NULL,
-    role       TEXT NOT NULL DEFAULT 'operator',
-    created_at TEXT DEFAULT (datetime('now'))
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    username             TEXT NOT NULL UNIQUE,
+    password             TEXT NOT NULL,
+    role                 TEXT NOT NULL DEFAULT 'operator',
+    must_change_password INTEGER NOT NULL DEFAULT 0,
+    created_at           TEXT DEFAULT (datetime('now'))
   )`);
-  // Migration: add users table to existing DBs
-  try { db.run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT NOT NULL UNIQUE, password TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'operator', created_at TEXT DEFAULT (datetime('now')))`); } catch(e) {}
+  // Migrations for existing DBs
+  try { db.run(`ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0`); } catch(e) {}
+
+  // Seed default admin on first run (no users in DB, no LEGACY_PASSWORD in env)
+  const userCount = (() => {
+    try { return db.exec('SELECT COUNT(*) FROM users')[0]?.values[0][0] || 0; } catch(e) { return 0; }
+  })();
+  if (userCount === 0 && !LEGACY_PASSWORD) {
+    const defaultHash = hashPassword('admin0000');
+    try {
+      db.run('INSERT INTO users (username, password, role, must_change_password) VALUES (?,?,?,?)',
+        ['admin', defaultHash, 'admin', 1]);
+      console.log('[users] ✓ Default admin created — login: admin / password: admin0000');
+      console.log('[users] ⚠ Change the password on first login!');
+    } catch(e) { console.error('[users] seed error:', e.message); }
+  }
 
   // Purge expired sessions left over from previous runs
   db.run(`DELETE FROM sessions WHERE expires_at < ?`, [Date.now()]);
@@ -479,20 +531,13 @@ function run(sql, params = []) {
   catch(e) { console.error('Run error:', sql, e.message); return false; }
 }
 
-function rowToRequest(row, includePdf = false) {
+function rowToRequest(row) {
   if (!row) return null;
   return {
     id: row.id, specNum: row.spec_num, orgId: row.org_id,
     orgFull: row.org_full, orgShort: row.org_short, orgSignatory: row.org_signatory,
-<<<<<<< HEAD
-    // PDF blob only included when fetching single request — prevents huge list responses
-    signedSpecPdf: includePdf
-      ? (row.signed_spec_pdf || '')
-      : (row.signed_spec_pdf ? '__has_pdf__' : ''),
-=======
     // PDF stored as filename on disk — return sentinel or empty, never the raw blob
     signedSpecPdf: row.signed_spec_pdf ? '__has_pdf__' : '',
->>>>>>> 9688f37ffeea024a8c5438b101516f127bae5df1
     bitrix: row.bitrix, name: row.name, mol: row.mol, date: row.date,
     address: row.address, supplier: row.supplier, invoiceNum: row.invoice_num, contract: row.contract,
     status: row.status, comment: row.comment,
@@ -569,7 +614,9 @@ app.get('/api/requests', (req, res) => {
   const offset = Math.max(parseInt(req.query.offset || '0'),   0);
 
   // Count total matching rows for pagination metadata
-  const countSql = sql.replace(/^SELECT \*/, 'SELECT COUNT(*) as total');
+  const countSql = sql
+    .replace(/^SELECT \*/, 'SELECT COUNT(*) as total')
+    .replace(/ ORDER BY .+$/, '');
   const total = query(countSql, params)[0]?.total || 0;
 
   sql += ` LIMIT ? OFFSET ?`;
@@ -586,11 +633,7 @@ app.get('/api/requests', (req, res) => {
 app.get('/api/requests/:id', (req, res) => {
   const row = query('SELECT * FROM requests WHERE id=?', [req.params.id])[0];
   if (!row) return res.status(404).json({ error: 'Не найдено' });
-<<<<<<< HEAD
-  res.json(rowToRequest(row, true)); // include PDF blob for single fetch
-=======
   res.json(rowToRequest(row)); // PDF served via /api/requests/:id/signed-spec
->>>>>>> 9688f37ffeea024a8c5438b101516f127bae5df1
 });
 
 app.post('/api/requests', operatorOrAdmin, (req, res) => {
@@ -746,13 +789,13 @@ app.delete('/api/requests/:id', operatorOrAdmin, (req, res) => {
 });
 
 // ── ADDRESSES ─────────────────────────────────────────────────────────────────
-app.get('/api/mol', (req, res) => {
+app.get('/api/mol', operatorOrAdmin, (req, res) => {
   const rows = query(`SELECT DISTINCT mol FROM requests WHERE mol != '' ORDER BY mol LIMIT 50`);
   res.json(rows.map(r => r.mol));
 });
 
 
-app.get('/api/addresses', (req, res) => {
+app.get('/api/addresses', operatorOrAdmin, (req, res) => {
   res.json(query('SELECT address FROM addresses ORDER BY used_at DESC LIMIT 30').map(r => r.address));
 });
 
@@ -765,7 +808,7 @@ app.post('/api/addresses', operatorOrAdmin, (req, res) => {
 });
 
 // ── TEMPLATES ─────────────────────────────────────────────────────────────────
-app.get('/api/templates', (req, res) => {
+app.get('/api/templates', operatorOrAdmin, (req, res) => {
   res.json(query('SELECT * FROM templates ORDER BY created_at DESC')
     .map(r => ({ ...r, positions: JSON.parse(r.positions || '[]') })));
 });
@@ -809,11 +852,36 @@ app.put('/api/users/:id', adminOnly, (req, res) => {
   const { password, role } = req.body;
   const ROLES = ['viewer', 'operator', 'admin'];
   if (role && !ROLES.includes(role)) return res.status(400).json({ error: `Недопустимая роль` });
+
+  // Prevent self-demotion
+  const token    = req.headers['x-auth-token'];
+  const self     = token ? sessionGetUser(token) : null;
+  if (self && String(self.id) === String(req.params.id) && role && role !== 'admin') {
+    return res.status(400).json({ error: 'Нельзя понизить собственную роль' });
+  }
+
   if (password) {
     const hash = hashPassword(password);
-    run('UPDATE users SET password=? WHERE id=?', [hash, req.params.id]);
+    run('UPDATE users SET password=?, must_change_password=0 WHERE id=?', [hash, req.params.id]);
   }
   if (role) run('UPDATE users SET role=? WHERE id=?', [role, req.params.id]);
+  saveDb();
+  res.json({ ok: true });
+});
+
+// Self-service password change (any authenticated user, for their own account)
+app.post('/api/auth/change-password', strictLimiter, (req, res) => {
+  const token = req.headers['x-auth-token'];
+  const user  = token ? sessionGetUser(token) : null;
+  if (!user || !user.id) return res.status(401).json({ error: 'Не авторизован' });
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Укажите текущий и новый пароль' });
+  if (newPassword.length < 6) return res.status(400).json({ error: 'Новый пароль должен быть минимум 6 символов' });
+  // Verify current password
+  const currentHash = hashPassword(currentPassword);
+  const check = db.exec('SELECT id FROM users WHERE id=? AND password=?', [user.id, currentHash]);
+  if (!check[0]?.values?.length) return res.status(401).json({ error: 'Текущий пароль неверен' });
+  run('UPDATE users SET password=?, must_change_password=0 WHERE id=?', [hashPassword(newPassword), user.id]);
   saveDb();
   res.json({ ok: true });
 });
@@ -910,7 +978,7 @@ app.post('/api/restore', adminOnly, strictLimiter, (req, res) => {
 });
 
 // ── Audit log API ────────────────────────────────────────────────────────────
-app.get('/api/audit', (req, res) => {
+app.get('/api/audit', operatorOrAdmin, (req, res) => {
   const { request_id, limit = 50 } = req.query;
   let sql = 'SELECT * FROM audit_log';
   const params = [];

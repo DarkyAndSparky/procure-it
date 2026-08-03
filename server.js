@@ -422,6 +422,12 @@ async function initDb() {
     try { db.run(m); } catch(e) { /* column already exists */ }
   }
 
+  // Migrate legacy status values: inwork→ordered, paid→delivered
+  try {
+    db.run(`UPDATE requests SET status='ordered'   WHERE status='inwork'`);
+    db.run(`UPDATE requests SET status='delivered' WHERE status='paid'`);
+  } catch(e) {}
+
   // Audit log table
   db.run(`CREATE TABLE IF NOT EXISTS audit_log (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -651,6 +657,8 @@ app.post('/api/requests', operatorOrAdmin, (req, res) => {
     }
   }
   const id = r.id || Date.now().toString();
+  const ALLOWED_STATUSES = ['new','ordered','partial','delivered','cancelled'];
+  if (r.status && !ALLOWED_STATUSES.includes(r.status)) r.status = 'new';
   run(`INSERT INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'',
      r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
@@ -665,6 +673,8 @@ app.put('/api/requests/:id', operatorOrAdmin, (req, res) => {
   const r = req.body;
   if (!r.name) return res.status(400).json({ error: 'Название обязательно' });
   if (r.positions && !Array.isArray(r.positions)) return res.status(400).json({ error: 'positions должен быть массивом' });
+  const ALLOWED_STATUSES = ['new','ordered','partial','delivered','cancelled'];
+  if (r.status && !ALLOWED_STATUSES.includes(r.status)) r.status = 'new';
   // Compute field-level diff against current state
   const prev = query('SELECT * FROM requests WHERE id=?', [req.params.id])[0];
   if (!prev) return res.status(404).json({ error: 'Заявка не найдена' });
@@ -927,8 +937,10 @@ app.get('/api/backup', adminOnly, (req, res) => {
   const settings = Object.fromEntries(
     settingsRows.filter(r => r.key !== 'networkPass').map(r => [r.key, r.value])
   );
+  // Include users (with hashed passwords) so restore preserves auth
+  const users = query('SELECT id, username, password, role, must_change_password, created_at FROM users');
   res.setHeader('Content-Disposition', `attachment; filename="zakupki_backup_${date}.json"`);
-  res.json({ version: 2, exported: new Date().toISOString(), orgs, requests, addresses, templates, settings, audit: auditRows });
+  res.json({ version: 3, exported: new Date().toISOString(), orgs, requests, addresses, templates, settings, audit: auditRows, users });
 });
 
 app.post('/api/restore', adminOnly, strictLimiter, (req, res) => {
@@ -966,6 +978,15 @@ app.post('/api/restore', adminOnly, strictLimiter, (req, res) => {
       const allowed = Object.keys(DEFAULT_SETTINGS);
       for (const [k, v] of Object.entries(req.body.settings)) {
         if (allowed.includes(k)) run('INSERT OR REPLACE INTO settings (key, value) VALUES (?,?)', [k, String(v)]);
+      }
+    }
+    // Restore users (preserve passwords as-is — already hashed)
+    if (req.body.users && Array.isArray(req.body.users) && req.body.users.length) {
+      run('DELETE FROM users');
+      for (const u of req.body.users) {
+        if (!u.username || !u.password || !u.role) continue;
+        run('INSERT OR REPLACE INTO users (id,username,password,role,must_change_password,created_at) VALUES (?,?,?,?,?,?)',
+          [u.id||null, u.username, u.password, u.role, u.must_change_password||0, u.created_at||new Date().toISOString()]);
       }
     }
     saveDb();
@@ -1721,7 +1742,7 @@ app.post('/api/test-folder', operatorOrAdmin, async (req, res) => {
   }
 });
 
-app.get('/api/version', (req, res) => {
+app.get('/api/version', operatorOrAdmin, (req, res) => {
   res.json({ version: PKG_VERSION });
 });
 

@@ -1543,12 +1543,26 @@ function updateRoleUI() {
   if (changePwBtn) changePwBtn.style.display = userRole !== 'viewer' ? 'inline-flex' : 'none';
 }
 
+function continueAsGuest() {
+  // Force-close both auth modals, even if one is stuck on top of the other.
+  const loginModal = document.getElementById('login-modal');
+  if (loginModal) loginModal.style.display = 'none';
+  const cpwModal = document.getElementById('change-pw-modal');
+  if (cpwModal) cpwModal.remove(); // fully removed so its z-index can never block clicks again
+  userRole = 'viewer';
+  userName = null;
+  updateRoleUI();
+}
+
 function showLoginModal() {
+  // Belt-and-braces: remove any stray change-password modal first so it can never
+  // sit on top of (and block clicks/input on) the login modal.
+  document.getElementById('change-pw-modal')?.remove();
   let modal = document.getElementById('login-modal');
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'login-modal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:500;display:flex;align-items:center;justify-content:center';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9000;display:flex;align-items:center;justify-content:center;pointer-events:auto';
     modal.innerHTML = `
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px;width:340px;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
         <div style="text-align:center;margin-bottom:24px">
@@ -1569,14 +1583,16 @@ function showLoginModal() {
         <div id="login-error" style="color:var(--danger);font-size:12px;margin-bottom:12px;display:none"></div>
         <button class="btn btn-primary" onclick="doLogin()"
           style="width:100%;background:var(--accent);border-color:var(--accent);color:#fff;justify-content:center">Войти</button>
-        <button class="btn" onclick="document.getElementById('login-modal').style.display='none'"
-          style="width:100%;margin-top:8px;justify-content:center;color:var(--text-secondary)">
+        <button class="btn" onclick="continueAsGuest()"
+          style="width:100%;margin-top:8px;justify-content:center;color:var(--text-secondary);position:relative;z-index:1"
+          type="button">
           Продолжить как гость (только просмотр)
         </button>
       </div>`;
     document.body.appendChild(modal);
   }
   modal.style.display = 'flex';
+  document.body.appendChild(modal); // move to end of <body> so it always paints on top of everything else
   setTimeout(() => document.getElementById('login-username')?.focus(), 100);
 }
 

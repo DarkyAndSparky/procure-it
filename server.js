@@ -300,7 +300,9 @@ if (helmet) {
       directives: {
         defaultSrc:  ["'self'"],
         scriptSrc:   ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net", "cdnjs.cloudflare.com"],
+        scriptSrcAttr: ["'unsafe-inline'"], // allow onclick="..." / onkeydown="..." used throughout the UI
         styleSrc:    ["'self'", "'unsafe-inline'"],
+        styleSrcAttr: ["'unsafe-inline'"], // allow style="..." attributes used throughout the UI
         imgSrc:      ["'self'", "data:", "blob:"],
         connectSrc:  ["'self'"],
         fontSrc:     ["'self'", "data:"],

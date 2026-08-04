@@ -132,29 +132,50 @@ Set a webhook URL in **Конфиг → Интеграция Bitrix24**. The **�
 git clone https://github.com/DarkyAndSparky/procure-it.git
 cd procure-it
 
-# Без пароля
+# Запуск (без пароля — используется встроенная система ролей)
 docker compose up -d
 
-# С паролем
-PROCURE_PASSWORD=yourpassword docker compose up -d
+# Первый вход: admin / admin0000  — система сразу попросит сменить пароль
 ```
 
-Откройте **https://localhost:9111** (примите предупреждение о сертификате).
+Откройте **https://localhost:9111** (примите предупреждение о самоподписанном сертификате).
+
+> **Права на файлы:** контейнер запускается через `docker-entrypoint.sh` — он автоматически устанавливает нужные права на `./data` и `./logs` при старте, поэтому `sudo` не требуется.
+
+### Переменные окружения
+
+```bash
+# Создайте .env файл (docker compose подхватит автоматически):
+PORT=9111                        # HTTPS порт (HTTP redirect = PORT+1)
+PROCURE_PASSWORD=                # legacy single-password режим (оставьте пустым — используйте UI)
+BACKUP_INTERVAL_MS=21600000      # интервал автобэкапа (6 часов)
+```
 
 ### Данные на хосте
 
 ```
-data/zakupki.db      # База данных
-data/certs/          # TLS сертификат
-data/backups/        # Автобэкапы каждые 6ч
-logs/access.log      # Логи запросов
+data/zakupki.db          # База данных (SQLite)
+data/certs/              # TLS сертификат (генерируется автоматически)
+data/backups/            # Автобэкапы каждые 6 часов, хранятся 30 дней
+data/signed_specs/       # Подписанные спецификации (PDF)
+logs/access.log          # Логи запросов (morgan combined)
 ```
 
 ### Команды
 
 ```bash
-docker compose ps             # статус
-docker compose logs -f        # логи
-docker compose down           # остановить
-docker compose up -d --build  # пересобрать после обновления
+docker compose ps              # статус контейнера
+docker compose logs -f         # логи в реальном времени
+docker compose down            # остановить
+docker compose up -d --build   # пересобрать после обновления кода
+docker compose restart         # перезапустить без пересборки
 ```
+
+### Обновление
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+Данные в `./data` сохраняются между обновлениями.

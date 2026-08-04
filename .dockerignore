@@ -14,8 +14,15 @@ docs/
 .env.*
 !.env.example
 
+# Start scripts — not needed inside container
+start.bat
+start.sh
+
 # OS noise
 .DS_Store
 Thumbs.db
 *.swp
 *.swo
+
+# entrypoint is explicitly needed — do NOT ignore it
+# docker-entrypoint.sh is included via COPY in Dockerfile

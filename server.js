@@ -288,7 +288,10 @@ const logsDir = path.join(__dirname, 'logs');
 if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir);
 const accessLog = fs.createWriteStream(path.join(logsDir, 'access.log'), { flags: 'a' });
 app.use(morgan('combined', { stream: accessLog }));
-app.use(morgan('dev')); // also to console
+// Console logging only in development — in production Docker logs go to file only
+if (process.env.NODE_ENV !== 'production') {
+  app.use(morgan('dev'));
+}
 
 // Security headers
 if (helmet) {

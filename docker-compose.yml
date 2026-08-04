@@ -8,9 +8,10 @@ services:
       - "9111:9111"   # HTTPS
       - "9112:9112"   # HTTP → HTTPS redirect
     volumes:
-      - ./data:/app/data     # БД, сертификаты, бэкапы (персистентные)
+      - ./data:/app/data     # БД, сертификаты, бэкапы, подписанные спецификации
       - ./logs:/app/logs     # Access logs
     environment:
+      - NODE_ENV=production
       - PORT=9111
       - PROCURE_PASSWORD=${PROCURE_PASSWORD:-}
       - BACKUP_INTERVAL_MS=${BACKUP_INTERVAL_MS:-21600000}
@@ -20,6 +21,8 @@ services:
       timeout: 5s
       retries: 3
       start_period: 60s   # time for first TLS cert generation
+    # Give server time to flush WAL and close SQLite on stop
+    stop_grace_period: 15s
     # Resource limits (optional — uncomment if needed)
     # deploy:
     #   resources:

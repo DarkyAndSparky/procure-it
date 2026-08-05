@@ -902,6 +902,16 @@ if (typeof XLSX === 'undefined') {
             <div class="spec-sub" id="spec-num-sub">Выберите организацию</div>
           </div>
         </div>
+        <div class="form-grid cols-3" style="margin-top:10px">
+          <div class="field">
+            <label>Тип документа</label>
+            <select id="f-doc-type" onchange="onDocTypeChange()">
+              <option value="goods">📦 Товары (спецификация)</option>
+              <option value="install">🔧 Услуги монтажа</option>
+              <option value="support">🛠️ Сопровождение (заглушка)</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       <!-- Realization banner — вверху формы -->
@@ -990,7 +1000,7 @@ if (typeof XLSX === 'undefined') {
               <tr>
                 <th style="width:18px"></th>
                 <th style="width:28px">№</th>
-                <th>Наименование товара</th>
+                <th id="th-item-name">Наименование товара</th>
                 <th style="width:130px">Комментарий / ФИО</th>
                 <th style="width:90px">Ссылка</th>
                 <th style="width:64px">Кол-во</th>
@@ -1866,6 +1876,15 @@ function updateDelivery() {
   calcTotal();
 }
 
+function onDocTypeChange() {
+  const dt = document.getElementById('f-doc-type').value;
+  const th = document.getElementById('th-item-name');
+  if (th) th.textContent = dt === 'install' ? 'Наименование работ / услуг' : 'Наименование товара';
+  if (dt === 'support') {
+    toast('🛠️ Документ «Сопровождение» — заглушка, формат будет уточнён позже');
+  }
+}
+
 function toggleNoMarkup() {
   const cb = document.getElementById('f-no-markup');
   const markupInput = document.getElementById('f-markup');
@@ -2039,6 +2058,7 @@ function collectForm() {
     status: document.getElementById('f-status').value,
     comment: document.getElementById('f-comment').value,
     isRealization: document.getElementById('realization-badge').style.display !== 'none',
+    docType: document.getElementById('f-doc-type')?.value || 'goods',
     deliveryCost,
     markup: markup * 100,
     totalPurchase,
@@ -2666,6 +2686,8 @@ async function loadToForm(id, copy=false) {
   document.getElementById('f-delivery-cost').style.pointerEvents = delOn ? 'auto' : 'none';
   document.getElementById('f-markup').value = req.markup ?? 5;
   { const noMarkup = (req.markup ?? 5) === 0; document.getElementById('f-no-markup').checked = noMarkup; document.getElementById('f-markup').disabled = noMarkup; }
+  document.getElementById('f-doc-type').value = req.docType || 'goods';
+  onDocTypeChange();
 
   // Restore realization mode if needed
   if (req.isRealization) {
@@ -2806,6 +2828,41 @@ function buildSpecHtml(req) {
   const dateObj = new Date(req.date);
   const dateStr = `«${String(dateObj.getDate()).padStart(2,'0')}» ${months[dateObj.getMonth()]} ${dateObj.getFullYear()} г.`;
 
+  const docType = req.docType || 'goods';
+  const DOC_LABELS = {
+    install: {
+      title: 'СПЕЦИФИКАЦИЯ НА ВЫПОЛНЕНИЕ РАБОТ',
+      colHeader: 'Наименование работ / услуг',
+      contractWord: 'к договору подряда',
+      termLine: 'Срок выполнения работ: 14 дней.',
+      paymentLine: '— Аванс (предварительная оплата) в размере 100 % от стоимости работ, подлежащих выполнению по настоящей Спецификации.',
+      qualityLine: 'Работы должны быть выполнены в соответствии с действующими нормами и правилами, а также требованиями технической документации, и приняты Покупателем по акту выполненных работ.',
+      finalLine: 'Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон и является неотъемлемой частью Договора подряда.',
+      addressLabel: 'Адрес выполнения работ',
+    },
+    support: {
+      title: 'ДОКУМЕНТ ПО СОПРОВОЖДЕНИЮ (ЗАГЛУШКА)',
+      colHeader: 'Наименование услуги',
+      contractWord: 'к договору',
+      termLine: '⚠ Формат документа «Сопровождение» ещё не согласован и будет уточнён отдельно.',
+      paymentLine: '— Порядок оплаты будет определён после согласования формата документа.',
+      qualityLine: 'Данный раздел является заглушкой и будет заменён после уточнения формата документа «Сопровождение».',
+      finalLine: 'Настоящий документ — временная заглушка и не является итоговой формой.',
+      addressLabel: 'Адрес',
+    },
+    goods: {
+      title: 'СПЕЦИФИКАЦИЯ',
+      colHeader: 'Наименование Товара',
+      contractWord: 'к договору поставки',
+      termLine: 'Срок поставки Товара: 14 дней.',
+      paymentLine: '— Аванс (предварительная оплата) в размере 100 % от стоимости Товара, подлежащего поставке по настоящей Спецификации. Цена указана с доставкой до Покупателя.',
+      qualityLine: 'Качество Товара должно соответствовать установленным требованиям государственных стандартов качества в соответствии с действующим законодательством Российской Федерации. При поставке необходимо наличие всех необходимых сертификатов, удостоверений качества, протоколов лабораторных испытаний и т.д. на поставляемый Товар.',
+      finalLine: 'Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон и является неотъемлемой частью Договора.',
+      addressLabel: 'Адрес доставки/выборки',
+    },
+  };
+  const L = DOC_LABELS[docType] || DOC_LABELS.goods;
+
   let rows = '';
   req.positions.forEach((p,i) => {
     const sellUnit = p.sellPerUnit || (p.purchasePrice || p.price || 0) * (1 + (req.markup ?? 5)/100);
@@ -2825,11 +2882,11 @@ function buildSpecHtml(req) {
       const fromIdx = contract.indexOf(' от ');
       const contractNum  = fromIdx > -1 ? contract.slice(0, fromIdx) : contract;
       const contractDate = fromIdx > -1 ? 'от ' + contract.slice(fromIdx + 4) : '';
-      const lines = [`Приложение №1`, `к договору поставки № ${esc(contractNum)}`];
+      const lines = [`Приложение №1`, `${L.contractWord} № ${esc(contractNum)}`];
       if (contractDate) lines.push(esc(contractDate));
       return lines.join('<br>');
     })()}</div>
-    <div class="spec-title">СПЕЦИФИКАЦИЯ № ${esc(req.specNum)}</div>
+    <div class="spec-title">${L.title} № ${esc(req.specNum)}</div>
     <div class="spec-city-date">
       <span>г. Екатеринбург</span>
       <span>${dateStr}</span>
@@ -2838,7 +2895,7 @@ function buildSpecHtml(req) {
       <thead>
         <tr>
           <th style="width:36px;text-align:center">№ п/п</th>
-          <th>Наименование Товара</th>
+          <th>${L.colHeader}</th>
           <th style="width:60px;text-align:center">Кол-во (шт.)</th>
           <th style="width:130px;text-align:right">Цена за ед., руб. (без НДС)</th>
           <th style="width:130px;text-align:right">Стоимость, руб. (без НДС)</th>
@@ -2855,12 +2912,12 @@ function buildSpecHtml(req) {
     </table>
     <p style="margin-top:16px">Всего наименований ${req.positions.length}, на сумму ${totalStr} рублей, без НДС</p>
     <p style="margin-top:4px;font-style:italic">${totalWords}, НДС не облагается.</p>
-    <p style="margin-top:12px">Срок поставки Товара: 14 дней.</p>
+    <p style="margin-top:12px">${L.termLine}</p>
     <p style="margin-top:8px"><strong>Порядок оплаты:</strong><br>
-    — Аванс (предварительная оплата) в размере 100 % от стоимости Товара, подлежащего поставке по настоящей Спецификации. Цена указана с доставкой до Покупателя.</p>
-    ${req.address ? `<p style="margin-top:8px">Адрес доставки/выборки: ${esc(req.address)}</p>` : ''}
-    <p style="margin-top:8px">Качество Товара должно соответствовать установленным требованиям государственных стандартов качества в соответствии с действующим законодательством Российской Федерации. При поставке необходимо наличие всех необходимых сертификатов, удостоверений качества, протоколов лабораторных испытаний и т.д. на поставляемый Товар.</p>
-    <p style="margin-top:8px">Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон и является неотъемлемой частью Договора.</p>
+    ${L.paymentLine}</p>
+    ${req.address ? `<p style="margin-top:8px">${L.addressLabel}: ${esc(req.address)}</p>` : ''}
+    <p style="margin-top:8px">${L.qualityLine}</p>
+    <p style="margin-top:8px">${L.finalLine}</p>
     <div class="sign-block">
       <div>
         <div class="sign-title">Поставщик:</div>
@@ -2955,9 +3012,11 @@ function renderRegistryRows(reqs) {
     tr.className = 'row-toggle';
     tr.onclick = () => toggleDetail(r.id);
     const realizBadge = r.isRealization ? ' <span style="font-size:10px;background:var(--accent-bg);color:var(--accent);padding:1px 5px;border-radius:4px;margin-left:4px">реализация</span>' : '';
+    const docTypeBadge = r.docType === 'install' ? ' <span style="font-size:10px;background:var(--warning-bg);color:var(--warning);padding:1px 5px;border-radius:4px;margin-left:4px">монтаж</span>'
+      : r.docType === 'support' ? ' <span style="font-size:10px;background:var(--surface-2);color:var(--text-secondary);padding:1px 5px;border-radius:4px;margin-left:4px">сопровождение</span>' : '';
     tr.innerHTML = `
       <td><span class="chevron" id="ch-${r.id}">▶</span></td>
-      <td><span style="font-family:monospace;font-size:12px;color:var(--accent)">${esc(r.specNum)}</span>${realizBadge}</td>
+      <td><span style="font-family:monospace;font-size:12px;color:var(--accent)">${esc(r.specNum)}</span>${realizBadge}${docTypeBadge}</td>
       <td style="font-size:12px;color:var(--text-secondary)">${fmtDate(r.date)}</td>
       <td>${esc(r.orgShort||'')}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.name)}">${esc(r.name)}</td>
@@ -2991,7 +3050,7 @@ function renderRegistryRows(reqs) {
         </table>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
           <button class="btn btn-sm btn-success" onclick="exportExcelById('${r.id}')">📊 Excel</button>
-          ${!r.isRealization?`<button class="btn btn-sm" onclick="loadSpec('${r.id}')">📄 Спецификация</button>`:''}
+          ${!r.isRealization?`<button class="btn btn-sm" onclick="loadSpec('${r.id}')">${r.docType==='install'?'🔧 Смета на работы':r.docType==='support'?'🛠️ Сопровождение':'📄 Спецификация'}</button>`:''}
           ${userRole !== 'viewer' ? `
           <button class="btn btn-sm" onclick="loadToForm('${r.id}',true)">📋 Копировать</button>
           <label class="btn btn-sm" style="cursor:pointer;background:${r.signedSpecPdf?'var(--success)':'var(--surface-2)'};border-color:${r.signedSpecPdf?'var(--success)':'var(--border)'};color:${r.signedSpecPdf?'#fff':'var(--text)'}" title="${r.signedSpecPdf?'Подписанная спецификация прикреплена. Нажмите чтобы заменить':'Прикрепить подписанную спецификацию PDF'}">
@@ -3251,6 +3310,8 @@ function clearForm() {
   document.getElementById('f-markup').value = '5';
   document.getElementById('f-markup').disabled = false;
   document.getElementById('f-no-markup').checked = false;
+  document.getElementById('f-doc-type').value = 'goods';
+  onDocTypeChange();
   document.getElementById('folder-card').style.display = 'none';
   document.getElementById('positions-body').innerHTML = '';
   rowCounter = 0;
@@ -3920,8 +3981,14 @@ function startRealization() {
   clearForm();
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('nav-new-real')?.classList.add('active');
-  // Set realization org — prefer org with prefix 'ИП', otherwise first org
-  const ipOrg = db.orgs.find(o => o.prefix === 'ИП') || db.orgs[0];
+  // Set realization org — prefer an org matching the configured supplier
+  // (по умолчанию подставляем поставщика, но выбор остаётся свободным),
+  // иначе — организация с префиксом 'ИП', иначе — первая в списке
+  const supplierName = (appConfig.supplierName || '').toLowerCase().trim();
+  const supplierOrg = supplierName
+    ? db.orgs.find(o => (o.full||'').toLowerCase().includes(supplierName) || (o.short||'').toLowerCase().includes(supplierName) || supplierName.includes((o.short||'').toLowerCase()))
+    : null;
+  const ipOrg = supplierOrg || db.orgs.find(o => o.prefix === 'ИП') || db.orgs[0];
   if (ipOrg) document.getElementById('f-org').value = ipOrg.id;
   updateSpecNum();
 

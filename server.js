@@ -419,6 +419,7 @@ async function initDb() {
     `ALTER TABLE requests ADD COLUMN signed_spec_pdf TEXT DEFAULT ''`,  // base64 подписанной спецификации
     `ALTER TABLE requests ADD COLUMN invoice_file TEXT DEFAULT ''`,     // имя файла приложенного счёта
     `ALTER TABLE requests ADD COLUMN org_stamp TEXT DEFAULT '1'`,       // печать покупателя: '1' с печатью (М.П.), '0' без (Б.П.)
+    `ALTER TABLE requests ADD COLUMN doc_type TEXT DEFAULT 'goods'`,    // тип документа: goods | install | support
     `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')`,
     `CREATE TABLE IF NOT EXISTS audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -559,6 +560,7 @@ function rowToRequest(row) {
     // PDF stored as filename on disk — return sentinel or empty, never the raw blob
     signedSpecPdf: row.signed_spec_pdf ? '__has_pdf__' : '',
     invoiceFile: row.invoice_file ? '__has_file__' : '',
+    docType: row.doc_type || 'goods',
     bitrix: row.bitrix, name: row.name, mol: row.mol, date: row.date,
     address: row.address, supplier: row.supplier, invoiceNum: row.invoice_num, contract: row.contract,
     status: row.status, comment: row.comment,
@@ -674,12 +676,12 @@ app.post('/api/requests', operatorOrAdmin, (req, res) => {
   const id = r.id || Date.now().toString();
   const ALLOWED_STATUSES = ['new','ordered','partial','delivered','cancelled'];
   if (r.status && !ALLOWED_STATUSES.includes(r.status)) r.status = 'new';
-  run(`INSERT INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  run(`INSERT INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
      r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
      r.status||'new', r.comment||'', r.isRealization?1:0,
      r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,
-     JSON.stringify(r.positions||[])]);
+     JSON.stringify(r.positions||[]), r.docType || 'goods']);
   auditLog('CREATE', id, null, null, r.specNum, { name: r.name, org: r.orgShort });
   res.json(rowToRequest(query('SELECT * FROM requests WHERE id=?', [id])[0]));
 });
@@ -745,12 +747,12 @@ app.put('/api/requests/:id', operatorOrAdmin, (req, res) => {
     }
   }
 
-  run(`UPDATE requests SET spec_num=?,org_id=?,org_full=?,org_short=?,org_signatory=?,org_stamp=?,bitrix=?,name=?,mol=?,date=?,address=?,supplier=?,invoice_num=?,contract=?,status=?,comment=?,is_realization=?,delivery_cost=?,markup=?,total_purchase=?,total=?,positions=?,updated_at=datetime('now') WHERE id=?`,
+  run(`UPDATE requests SET spec_num=?,org_id=?,org_full=?,org_short=?,org_signatory=?,org_stamp=?,bitrix=?,name=?,mol=?,date=?,address=?,supplier=?,invoice_num=?,contract=?,status=?,comment=?,is_realization=?,delivery_cost=?,markup=?,total_purchase=?,total=?,positions=?,doc_type=?,updated_at=datetime('now') WHERE id=?`,
     [r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
      r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
      r.status||'new', r.comment||'', r.isRealization?1:0,
      r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,
-     JSON.stringify(r.positions||[]), req.params.id]);
+     JSON.stringify(r.positions||[]), r.docType || 'goods', req.params.id]);
   auditLog('UPDATE', req.params.id, 'request', null, r.specNum, { name: r.name, diff: diffFields });
   res.json(rowToRequest(query('SELECT * FROM requests WHERE id=?', [req.params.id])[0]));
 });
@@ -971,12 +973,12 @@ app.post('/api/restore', adminOnly, strictLimiter, (req, res) => {
     if (requests.length) {
       run('DELETE FROM requests');
       for (const r of requests) {
-        run(`INSERT OR REPLACE INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        run(`INSERT OR REPLACE INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [r.id, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
            r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
            r.status||'new', r.comment||'', r.isRealization?1:0,
            r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,
-           JSON.stringify(r.positions||[]), r.createdAt||new Date().toISOString()]);
+           JSON.stringify(r.positions||[]), r.docType || 'goods', r.createdAt||new Date().toISOString()]);
       }
     }
     for (const a of addresses) {
@@ -1203,6 +1205,39 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
     const dateObj = new Date(r.date || Date.now());
     const dateStr = `«${String(dateObj.getDate()).padStart(2,'0')}» ${months[dateObj.getMonth()]} ${dateObj.getFullYear()} г.`;
 
+    // ── Тип документа: goods (товары) | install (услуги монтажа) | support (заглушка) ──
+    const docType = r.docType || 'goods';
+    const DOC_LABELS = {
+      install: {
+        title: 'СПЕЦИФИКАЦИЯ НА ВЫПОЛНЕНИЕ РАБОТ',
+        colHeader: 'Наименование работ / услуг',
+        contractWord: 'к договору подряда',
+        termLine: 'Срок выполнения работ: 14 дней.',
+        paymentLine: '— Аванс (предварительная оплата) в размере 100 % от стоимости работ, подлежащих выполнению по настоящей Спецификации.',
+        qualityLine: 'Работы должны быть выполнены в соответствии с действующими нормами и правилами, а также требованиями технической документации, и приняты Покупателем по акту выполненных работ.',
+        finalLine: 'Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон и является неотъемлемой частью Договора подряда.',
+      },
+      support: {
+        title: 'ДОКУМЕНТ ПО СОПРОВОЖДЕНИЮ (ЗАГЛУШКА)',
+        colHeader: 'Наименование услуги',
+        contractWord: 'к договору',
+        termLine: '⚠ Формат документа «Сопровождение» ещё не согласован и будет уточнён отдельно.',
+        paymentLine: '— Порядок оплаты будет определён после согласования формата документа.',
+        qualityLine: 'Данный раздел является заглушкой и будет заменён после уточнения формата документа «Сопровождение».',
+        finalLine: 'Настоящий документ — временная заглушка и не является итоговой формой.',
+      },
+      goods: {
+        title: 'СПЕЦИФИКАЦИЯ',
+        colHeader: 'Наименование Товара',
+        contractWord: 'к договору поставки',
+        termLine: 'Срок поставки Товара: 14 дней.',
+        paymentLine: '— Аванс (предварительная оплата) в размере 100 % от стоимости Товара, подлежащего поставке по настоящей Спецификации. Цена указана с доставкой до Покупателя.',
+        qualityLine: 'Качество Товара должно соответствовать установленным требованиям государственных стандартов качества в соответствии с действующим законодательством Российской Федерации. При поставке необходимо наличие всех необходимых сертификатов, удостоверений качества, протоколов лабораторных испытаний и т.д. на поставляемый Товар.',
+        finalLine: 'Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон и является неотъемлемой частью Договора.',
+      },
+    };
+    const L = DOC_LABELS[docType] || DOC_LABELS.goods;
+
     const border = { style: BorderStyle.SINGLE, size: 6, color: '000000' };
     const allBorders = { top: border, bottom: border, left: border, right: border };
 
@@ -1226,7 +1261,7 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
     // Header row
     const headerRow = new TableRow({ tableHeader: true, children: [
       cell('№ п/п',   { width: colWidths[0], align: AlignmentType.CENTER, bold: true }),
-      cell('Наименование Товара', { width: colWidths[1], bold: true }),
+      cell(L.colHeader, { width: colWidths[1], bold: true }),
       cell('Кол-во (шт.)',        { width: colWidths[2], align: AlignmentType.CENTER, bold: true }),
       cell('Цена за ед., руб. (без НДС)', { width: colWidths[3], align: AlignmentType.CENTER, bold: true }),
       cell('Стоимость, руб. (без НДС)',   { width: colWidths[4], align: AlignmentType.CENTER, bold: true }),
@@ -1290,7 +1325,7 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
             const contractNum  = fromIdx > -1 ? contract.slice(0, fromIdx) : contract;
             const contractDate = fromIdx > -1 ? 'от ' + contract.slice(fromIdx + 4) : '';
             // Разбиваем на строки столбиком
-            const lines = [`Приложение №1`, `к договору поставки № ${contractNum}`];
+            const lines = [`Приложение №1`, `${L.contractWord} № ${contractNum}`];
             if (contractDate) lines.push(contractDate);
             const nb = { style: BorderStyle.NONE, size: 0, color: 'auto' };
             const noBorders = { top: nb, bottom: nb, left: nb, right: nb };
@@ -1314,7 +1349,7 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
           new Paragraph({
             alignment: AlignmentType.CENTER,
             spacing: { before: 120, after: 120 },
-            children: [new TextRun({ text: `СПЕЦИФИКАЦИЯ № ${r.specNum||''}`, size: 26, bold: true, font: 'Times New Roman' })]
+            children: [new TextRun({ text: `${L.title} № ${r.specNum||''}`, size: 26, bold: true, font: 'Times New Roman' })]
           }),
           // Город / дата
           new Table({
@@ -1335,12 +1370,12 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
             spacing: { before: 80, after: 0 },
             children: [new TextRun({ text: `${numToWords(total)}, НДС не облагается.`, size: 22, font: 'Times New Roman', italics: true })]
           }),
-          para('Срок поставки Товара: 14 дней.', { before: 160 }),
+          para(L.termLine, { before: 160 }),
           new Paragraph({ spacing: { before: 120, after: 0 }, children: [new TextRun({ text: 'Порядок оплаты:', size: 22, font: 'Times New Roman', bold: true })] }),
-          para('— Аванс (предварительная оплата) в размере 100 % от стоимости Товара, подлежащего поставке по настоящей Спецификации. Цена указана с доставкой до Покупателя.', { before: 80 }),
-          ...(r.address ? [para(`Адрес доставки/выборки: ${r.address}`, { before: 80 })] : []),
-          para('Качество Товара должно соответствовать установленным требованиям государственных стандартов качества в соответствии с действующим законодательством Российской Федерации. При поставке необходимо наличие всех необходимых сертификатов, удостоверений качества, протоколов лабораторных испытаний и т.д. на поставляемый Товар.', { before: 80 }),
-          para('Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон и является неотъемлемой частью Договора.', { before: 80 }),
+          para(L.paymentLine, { before: 80 }),
+          ...(r.address ? [para(`${docType==='install' ? 'Адрес выполнения работ' : 'Адрес доставки/выборки'}: ${r.address}`, { before: 80 })] : []),
+          para(L.qualityLine, { before: 80 }),
+          para(L.finalLine, { before: 80 }),
           // Подписи — без таблицы: два столбца через табуляцию, чтобы в Word
           // не было вообще никакого табличного объекта (и, соответственно, рамки/сетки)
           new Paragraph({ spacing: { before: 300, after: 0 }, children: [] }),

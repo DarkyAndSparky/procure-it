@@ -418,6 +418,7 @@ async function initDb() {
     `ALTER TABLE requests ADD COLUMN invoice_num TEXT DEFAULT ''`,
     `ALTER TABLE requests ADD COLUMN signed_spec_pdf TEXT DEFAULT ''`,  // base64 подписанной спецификации
     `ALTER TABLE requests ADD COLUMN invoice_file TEXT DEFAULT ''`,     // имя файла приложенного счёта
+    `ALTER TABLE requests ADD COLUMN org_stamp TEXT DEFAULT '1'`,       // печать покупателя: '1' с печатью (М.П.), '0' без (Б.П.)
     `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')`,
     `CREATE TABLE IF NOT EXISTS audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -461,6 +462,8 @@ async function initDb() {
   )`);
   // Migration: add supplier column if it doesn't exist yet
   try { db.run(`ALTER TABLE orgs ADD COLUMN supplier TEXT DEFAULT ''`); } catch(e) {}
+  // Migration: печать покупателя (М.П./Б.П.) — по умолчанию '1' (с печатью), как было раньше
+  try { db.run(`ALTER TABLE orgs ADD COLUMN stamp TEXT DEFAULT '1'`); } catch(e) {}
 
   db.run(`CREATE TABLE IF NOT EXISTS requests (
     id TEXT PRIMARY KEY, spec_num TEXT NOT NULL UNIQUE,
@@ -552,6 +555,7 @@ function rowToRequest(row) {
   return {
     id: row.id, specNum: row.spec_num, orgId: row.org_id,
     orgFull: row.org_full, orgShort: row.org_short, orgSignatory: row.org_signatory,
+    orgStamp: row.org_stamp === undefined || row.org_stamp === null ? true : row.org_stamp === '1',
     // PDF stored as filename on disk — return sentinel or empty, never the raw blob
     signedSpecPdf: row.signed_spec_pdf ? '__has_pdf__' : '',
     invoiceFile: row.invoice_file ? '__has_file__' : '',
@@ -586,21 +590,21 @@ app.get('/api/orgs', (req, res) => {
 });
 
 app.post('/api/orgs', operatorOrAdmin, (req, res) => {
-  const { full, short, prefix, signatory='', contract='', address='', supplier='' } = req.body;
+  const { full, short, prefix, signatory='', contract='', address='', supplier='', stamp='1' } = req.body;
   if (!full || !short || !prefix) return res.status(400).json({ error: 'Обязательные поля: full, short, prefix' });
   const id = Date.now().toString();
-  run('INSERT INTO orgs (id,full,short,prefix,signatory,contract,address,supplier) VALUES (?,?,?,?,?,?,?,?)',
-    [id, full, short, prefix, signatory, contract, address, supplier]);
+  run('INSERT INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp) VALUES (?,?,?,?,?,?,?,?,?)',
+    [id, full, short, prefix, signatory, contract, address, supplier, stamp]);
   res.json(query('SELECT * FROM orgs WHERE id=?', [id])[0]);
 });
 
 app.put('/api/orgs/:id', operatorOrAdmin, (req, res) => {
-  const { full, short, prefix, signatory='', contract='', address='', supplier='' } = req.body;
+  const { full, short, prefix, signatory='', contract='', address='', supplier='', stamp='1' } = req.body;
   if (!full || !short || !prefix) return res.status(400).json({ error: 'Обязательные поля: full, short, prefix' });
   const exists = query('SELECT id FROM orgs WHERE id=?', [req.params.id])[0];
   if (!exists) return res.status(404).json({ error: 'Организация не найдена' });
-  run('UPDATE orgs SET full=?,short=?,prefix=?,signatory=?,contract=?,address=?,supplier=? WHERE id=?',
-    [full, short, prefix, signatory, contract, address, supplier, req.params.id]);
+  run('UPDATE orgs SET full=?,short=?,prefix=?,signatory=?,contract=?,address=?,supplier=?,stamp=? WHERE id=?',
+    [full, short, prefix, signatory, contract, address, supplier, stamp, req.params.id]);
   res.json(query('SELECT * FROM orgs WHERE id=?', [req.params.id])[0]);
 });
 
@@ -670,11 +674,11 @@ app.post('/api/requests', operatorOrAdmin, (req, res) => {
   const id = r.id || Date.now().toString();
   const ALLOWED_STATUSES = ['new','ordered','partial','delivered','cancelled'];
   if (r.status && !ALLOWED_STATUSES.includes(r.status)) r.status = 'new';
-  run(`INSERT INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [id, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'',
+  run(`INSERT INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
      r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
      r.status||'new', r.comment||'', r.isRealization?1:0,
-     r.deliveryCost||0, r.markup||5, r.totalPurchase||0, r.total||0,
+     r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,
      JSON.stringify(r.positions||[])]);
   auditLog('CREATE', id, null, null, r.specNum, { name: r.name, org: r.orgShort });
   res.json(rowToRequest(query('SELECT * FROM requests WHERE id=?', [id])[0]));
@@ -741,11 +745,11 @@ app.put('/api/requests/:id', operatorOrAdmin, (req, res) => {
     }
   }
 
-  run(`UPDATE requests SET spec_num=?,org_id=?,org_full=?,org_short=?,org_signatory=?,bitrix=?,name=?,mol=?,date=?,address=?,supplier=?,invoice_num=?,contract=?,status=?,comment=?,is_realization=?,delivery_cost=?,markup=?,total_purchase=?,total=?,positions=?,updated_at=datetime('now') WHERE id=?`,
-    [r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'',
+  run(`UPDATE requests SET spec_num=?,org_id=?,org_full=?,org_short=?,org_signatory=?,org_stamp=?,bitrix=?,name=?,mol=?,date=?,address=?,supplier=?,invoice_num=?,contract=?,status=?,comment=?,is_realization=?,delivery_cost=?,markup=?,total_purchase=?,total=?,positions=?,updated_at=datetime('now') WHERE id=?`,
+    [r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
      r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
      r.status||'new', r.comment||'', r.isRealization?1:0,
-     r.deliveryCost||0, r.markup||5, r.totalPurchase||0, r.total||0,
+     r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,
      JSON.stringify(r.positions||[]), req.params.id]);
   auditLog('UPDATE', req.params.id, 'request', null, r.specNum, { name: r.name, diff: diffFields });
   res.json(rowToRequest(query('SELECT * FROM requests WHERE id=?', [req.params.id])[0]));
@@ -960,18 +964,18 @@ app.post('/api/restore', adminOnly, strictLimiter, (req, res) => {
     if (orgs.length) {
       run('DELETE FROM orgs');
       for (const o of orgs) {
-        run('INSERT OR REPLACE INTO orgs (id,full,short,prefix,signatory,contract,address) VALUES (?,?,?,?,?,?,?)',
-          [o.id, o.full, o.short, o.prefix, o.signatory||'', o.contract||'', o.address||'']);
+        run('INSERT OR REPLACE INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp) VALUES (?,?,?,?,?,?,?,?,?)',
+          [o.id, o.full, o.short, o.prefix, o.signatory||'', o.contract||'', o.address||'', o.supplier||'', o.stamp !== undefined ? String(o.stamp) : '1']);
       }
     }
     if (requests.length) {
       run('DELETE FROM requests');
       for (const r of requests) {
-        run(`INSERT OR REPLACE INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          [r.id, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'',
+        run(`INSERT OR REPLACE INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [r.id, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
            r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
            r.status||'new', r.comment||'', r.isRealization?1:0,
-           r.deliveryCost||0, r.markup||5, r.totalPurchase||0, r.total||0,
+           r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,
            JSON.stringify(r.positions||[]), r.createdAt||new Date().toISOString()]);
       }
     }
@@ -1229,7 +1233,8 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
     ]});
 
     const dataRows = (r.positions || []).map((p, i) => {
-      const sellUnit = p.sellPerUnit || (p.purchasePrice||0)*(1+(r.markup||5)/100);
+      const rMarkup = (r.markup!==undefined&&r.markup!==null?r.markup:5);
+      const sellUnit = p.sellPerUnit || (p.purchasePrice||0)*(1+rMarkup/100);
       const sellSum  = p.sellSum    || sellUnit * p.qty;
       return new TableRow({ children: [
         cell(i+1,               { width: colWidths[0], align: AlignmentType.CENTER }),
@@ -1367,7 +1372,7 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
             tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
             children: [
               new TextRun({ text: r.supplierStamp ? 'М.П.' : 'Б.П.', size: 22, font: 'Times New Roman' }),
-              new TextRun({ text: '\tМ.П.', size: 22, font: 'Times New Roman' }),
+              new TextRun({ text: `\t${r.orgStamp === false ? 'Б.П.' : 'М.П.'}`, size: 22, font: 'Times New Roman' }),
             ]
           }),
         ]

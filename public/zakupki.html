@@ -1030,6 +1030,10 @@ if (typeof XLSX === 'undefined') {
             <input type="number" id="f-markup" value="5" min="0" step="0.1"
               style="border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;font-size:13px;font-family:inherit;outline:none"
               oninput="calcTotal()">
+            <label style="display:flex;align-items:center;gap:6px;text-transform:none;font-size:12px;font-weight:400;color:var(--text-secondary);margin-top:6px">
+              <input type="checkbox" id="f-no-markup" onchange="toggleNoMarkup()" style="width:14px;height:14px;cursor:pointer">
+              Без наценки (0%)
+            </label>
             <div style="font-size:11px;color:var(--text-muted);margin-top:4px">По умолчанию 5% (как в шаблоне)</div>
           </div>
           <div style="background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-size:12px">
@@ -1495,6 +1499,10 @@ if (typeof XLSX === 'undefined') {
     </div>
     <div class="field" style="margin-bottom:10px"><label>Договор поставки (по умолчанию)</label><input type="text" id="modal-org-contract"></div>
     <div class="field" style="margin-bottom:20px"><label>Адрес доставки (по умолчанию)</label><input type="text" id="modal-org-address"></div>
+    <div class="field" style="margin-bottom:20px;display:flex;align-items:center;gap:8px">
+      <input type="checkbox" id="modal-org-stamp" checked style="width:16px;height:16px">
+      <label for="modal-org-stamp" style="margin:0;cursor:pointer">С печатью (М.П.) — иначе в подписи покупателя будет «Б.П.»</label>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn" onclick="closeOrgModal()">Отмена</button>
       <button class="btn" onclick="saveOrgModal()" style="background:var(--success);border-color:var(--success);color:#fff">Сохранить</button>
@@ -1858,9 +1866,23 @@ function updateDelivery() {
   calcTotal();
 }
 
+function toggleNoMarkup() {
+  const cb = document.getElementById('f-no-markup');
+  const markupInput = document.getElementById('f-markup');
+  if (cb.checked) {
+    markupInput.value = '0';
+    markupInput.disabled = true;
+  } else {
+    markupInput.disabled = false;
+    if (parseNum(markupInput.value) === 0) markupInput.value = '5';
+  }
+  calcTotal();
+}
+
 function calcTotal() {
   const rows = document.getElementById('positions-body').children;
-  const markup = (parseNum(document.getElementById('f-markup')?.value) || 5) / 100;
+  const markupEl = document.getElementById('f-markup');
+  const markup = (markupEl && markupEl.value !== '' ? parseNum(markupEl.value) : 5) / 100;
   const deliveryOn = document.getElementById('f-delivery-on')?.checked;
   const deliveryCost = deliveryOn ? (parseNum(document.getElementById('f-delivery-cost')?.value) || 0) : 0;
 
@@ -1960,7 +1982,8 @@ function collectForm() {
   }
 
   const rows = document.getElementById('positions-body').children;
-  const markup = (parseNum(document.getElementById('f-markup')?.value) || 5) / 100;
+  const markupEl = document.getElementById('f-markup');
+  const markup = (markupEl && markupEl.value !== '' ? parseNum(markupEl.value) : 5) / 100;
   const deliveryOn = document.getElementById('f-delivery-on')?.checked;
   const deliveryCost = deliveryOn ? (parseNum(document.getElementById('f-delivery-cost')?.value) || 0) : 0;
 
@@ -2002,6 +2025,7 @@ function collectForm() {
     orgFull: org?.full || '',
     orgShort: org?.short || '',
     orgSignatory: db.orgs.find(o => o.id === orgId)?.signatory || org?.signatory || '',
+    orgStamp: (() => { const oc = db.orgs.find(o => o.id === orgId) || org; return oc?.stamp === undefined ? true : oc.stamp === '1' || oc.stamp === true; })(),
     bitrix: document.getElementById('f-bitrix').value,
     name: document.getElementById('f-name').value,
     mol: document.getElementById('f-mol').value,
@@ -2616,7 +2640,10 @@ async function loadToForm(id, copy=false) {
   document.getElementById('f-org').value = req.orgId;
   // Always use current org signatory from card (not stale saved value)
   const orgCard = db.orgs.find(o => o.id === req.orgId);
-  if (orgCard) req.orgSignatory = orgCard.signatory || req.orgSignatory || '';
+  if (orgCard) {
+    req.orgSignatory = orgCard.signatory || req.orgSignatory || '';
+    req.orgStamp = orgCard.stamp === undefined ? true : (orgCard.stamp === '1' || orgCard.stamp === true);
+  }
   document.getElementById('f-bitrix').value = req.bitrix;
   document.getElementById('f-name').value = copy ? req.name + ' (копия)' : req.name;
   document.getElementById('f-mol').value = req.mol;
@@ -2638,6 +2665,7 @@ async function loadToForm(id, copy=false) {
   document.getElementById('f-delivery-cost').style.opacity = delOn ? '1' : '0.4';
   document.getElementById('f-delivery-cost').style.pointerEvents = delOn ? 'auto' : 'none';
   document.getElementById('f-markup').value = req.markup ?? 5;
+  { const noMarkup = (req.markup ?? 5) === 0; document.getElementById('f-no-markup').checked = noMarkup; document.getElementById('f-markup').disabled = noMarkup; }
 
   // Restore realization mode if needed
   if (req.isRealization) {
@@ -2780,7 +2808,7 @@ function buildSpecHtml(req) {
 
   let rows = '';
   req.positions.forEach((p,i) => {
-    const sellUnit = p.sellPerUnit || (p.purchasePrice || p.price || 0) * (1 + (req.markup||5)/100);
+    const sellUnit = p.sellPerUnit || (p.purchasePrice || p.price || 0) * (1 + (req.markup ?? 5)/100);
     const sellSum  = p.sellSum    || sellUnit * p.qty;
     rows += `<tr>
       <td style="text-align:center">${i+1}</td>
@@ -2844,7 +2872,7 @@ function buildSpecHtml(req) {
         <div class="sign-title">Покупатель:</div>
         <div class="sign-title" style="margin-top:6px">${esc(req.orgFull || '___________')}</div>
         <div style="margin-top:32px">______________________/${esc(req.orgSignatory || '___________')}/</div>
-        <div style="margin-top:8px">М.П.</div>
+        <div style="margin-top:8px">${req.orgStamp === false ? 'Б.П.' : 'М.П.'}</div>
       </div>
     </div>`;
 }
@@ -3220,6 +3248,9 @@ function clearForm() {
   document.getElementById('f-invoice-num').value = '';
   document.getElementById('f-status').value = 'new';
   document.getElementById('f-comment').value = '';
+  document.getElementById('f-markup').value = '5';
+  document.getElementById('f-markup').disabled = false;
+  document.getElementById('f-no-markup').checked = false;
   document.getElementById('folder-card').style.display = 'none';
   document.getElementById('positions-body').innerHTML = '';
   rowCounter = 0;
@@ -3547,6 +3578,7 @@ function openOrgModal(id) {
   document.getElementById('modal-org-signatory').value = org.signatory || '';
   document.getElementById('modal-org-contract').value = org.contract || '';
   document.getElementById('modal-org-address').value = org.address || '';
+  document.getElementById('modal-org-stamp').checked = org.stamp === undefined ? true : (org.stamp === '1' || org.stamp === true);
   document.getElementById('org-modal').style.display = 'flex';
 }
 
@@ -3563,6 +3595,7 @@ async function saveOrgModal() {
     signatory: document.getElementById('modal-org-signatory').value.trim(),
     contract:  document.getElementById('modal-org-contract').value.trim(),
     address:   document.getElementById('modal-org-address').value.trim(),
+    stamp:     document.getElementById('modal-org-stamp').checked ? '1' : '0',
   };
   if (!data.full || !data.short || !data.prefix) { toast('Заполните обязательные поля'); return; }
   const updated = await api('PUT', '/api/orgs/' + id, data);

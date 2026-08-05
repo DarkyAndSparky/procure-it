@@ -24,11 +24,13 @@ const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE  = path.join(DATA_DIR, 'zakupki.db');
 const CERT_DIR = path.join(DATA_DIR, 'certs');
 const SIGNED_DIR = path.join(DATA_DIR, 'signed_specs');
+const INVOICE_DIR = path.join(DATA_DIR, 'invoices');
 
 // ── Ensure dirs ───────────────────────────────────────────────────────────────
 if (!fs.existsSync(DATA_DIR))   fs.mkdirSync(DATA_DIR);
 if (!fs.existsSync(CERT_DIR))   fs.mkdirSync(CERT_DIR, { recursive: true });
 if (!fs.existsSync(SIGNED_DIR)) fs.mkdirSync(SIGNED_DIR, { recursive: true });
+if (!fs.existsSync(INVOICE_DIR)) fs.mkdirSync(INVOICE_DIR, { recursive: true });
 
 // ── Self-signed cert ──────────────────────────────────────────────────────────
 const CERT_FILE = path.join(CERT_DIR, 'cert.pem');
@@ -415,6 +417,7 @@ async function initDb() {
   const migrations = [
     `ALTER TABLE requests ADD COLUMN invoice_num TEXT DEFAULT ''`,
     `ALTER TABLE requests ADD COLUMN signed_spec_pdf TEXT DEFAULT ''`,  // base64 подписанной спецификации
+    `ALTER TABLE requests ADD COLUMN invoice_file TEXT DEFAULT ''`,     // имя файла приложенного счёта
     `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')`,
     `CREATE TABLE IF NOT EXISTS audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -454,8 +457,10 @@ async function initDb() {
   db.run(`CREATE TABLE IF NOT EXISTS orgs (
     id TEXT PRIMARY KEY, full TEXT NOT NULL, short TEXT NOT NULL,
     prefix TEXT NOT NULL, signatory TEXT DEFAULT '', contract TEXT DEFAULT '',
-    address TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now'))
+    address TEXT DEFAULT '', supplier TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now'))
   )`);
+  // Migration: add supplier column if it doesn't exist yet
+  try { db.run(`ALTER TABLE orgs ADD COLUMN supplier TEXT DEFAULT ''`); } catch(e) {}
 
   db.run(`CREATE TABLE IF NOT EXISTS requests (
     id TEXT PRIMARY KEY, spec_num TEXT NOT NULL UNIQUE,
@@ -549,6 +554,7 @@ function rowToRequest(row) {
     orgFull: row.org_full, orgShort: row.org_short, orgSignatory: row.org_signatory,
     // PDF stored as filename on disk — return sentinel or empty, never the raw blob
     signedSpecPdf: row.signed_spec_pdf ? '__has_pdf__' : '',
+    invoiceFile: row.invoice_file ? '__has_file__' : '',
     bitrix: row.bitrix, name: row.name, mol: row.mol, date: row.date,
     address: row.address, supplier: row.supplier, invoiceNum: row.invoice_num, contract: row.contract,
     status: row.status, comment: row.comment,
@@ -580,21 +586,21 @@ app.get('/api/orgs', (req, res) => {
 });
 
 app.post('/api/orgs', operatorOrAdmin, (req, res) => {
-  const { full, short, prefix, signatory='', contract='', address='' } = req.body;
+  const { full, short, prefix, signatory='', contract='', address='', supplier='' } = req.body;
   if (!full || !short || !prefix) return res.status(400).json({ error: 'Обязательные поля: full, short, prefix' });
   const id = Date.now().toString();
-  run('INSERT INTO orgs (id,full,short,prefix,signatory,contract,address) VALUES (?,?,?,?,?,?,?)',
-    [id, full, short, prefix, signatory, contract, address]);
+  run('INSERT INTO orgs (id,full,short,prefix,signatory,contract,address,supplier) VALUES (?,?,?,?,?,?,?,?)',
+    [id, full, short, prefix, signatory, contract, address, supplier]);
   res.json(query('SELECT * FROM orgs WHERE id=?', [id])[0]);
 });
 
 app.put('/api/orgs/:id', operatorOrAdmin, (req, res) => {
-  const { full, short, prefix, signatory='', contract='', address='' } = req.body;
+  const { full, short, prefix, signatory='', contract='', address='', supplier='' } = req.body;
   if (!full || !short || !prefix) return res.status(400).json({ error: 'Обязательные поля: full, short, prefix' });
   const exists = query('SELECT id FROM orgs WHERE id=?', [req.params.id])[0];
   if (!exists) return res.status(404).json({ error: 'Организация не найдена' });
-  run('UPDATE orgs SET full=?,short=?,prefix=?,signatory=?,contract=?,address=? WHERE id=?',
-    [full, short, prefix, signatory, contract, address, req.params.id]);
+  run('UPDATE orgs SET full=?,short=?,prefix=?,signatory=?,contract=?,address=?,supplier=? WHERE id=?',
+    [full, short, prefix, signatory, contract, address, supplier, req.params.id]);
   res.json(query('SELECT * FROM orgs WHERE id=?', [req.params.id])[0]);
 });
 
@@ -1028,9 +1034,12 @@ const DEFAULT_SETTINGS = {
   networkFolder:  '',   // Путь к сетевой папке, напр. \\\\server\\share или /mnt/share
   networkUser:    '',   // Логин для сетевой папки (Windows: домен\\пользователь)
   networkPass:    '',   // Пароль для сетевой папки
+  supplierName:      '', // Наименование поставщика по умолчанию
+  supplierSignatory: '', // ФИО подписанта поставщика
+  supplierStamp:     '0', // '1' — с печатью (М.П.), '0' — без
 };
 
-app.get('/api/settings', adminOnly, (req, res) => {
+app.get('/api/settings', operatorOrAdmin, (req, res) => {
   try {
     const rows = db.exec('SELECT key, value FROM settings');
     const result = { ...DEFAULT_SETTINGS };
@@ -1040,6 +1049,12 @@ app.get('/api/settings', adminOnly, (req, res) => {
     // Never expose the actual password over the wire — return a sentinel so
     // the UI knows a password is set without leaking it
     if (result.networkPass) result.networkPass = '••••••••';
+    // Operators need branding + supplier defaults to create requests/specs,
+    // but shouldn't see infra credentials/webhooks — only admins get those.
+    if (req.userRole !== 'admin') {
+      const { networkFolder, networkUser, networkPass, bitrixWebhook, statusWebhook, ...safe } = result;
+      return res.json(safe);
+    }
     res.json(result);
   } catch(e) { res.json({ ...DEFAULT_SETTINGS }); }
 });
@@ -1136,7 +1151,7 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
   try {
     const { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun,
             WidthType, AlignmentType, BorderStyle, VerticalAlign,
-            ShadingType, HeadingLevel } = require('docx');
+            ShadingType, HeadingLevel, TabStopType } = require('docx');
 
     const r = req.body;
     const total = r.total || 0;
@@ -1263,12 +1278,33 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
           }
         },
         children: [
-          // Приложение ref (right-aligned)
-          new Paragraph({
-            alignment: AlignmentType.RIGHT,
-            spacing: { before: 0, after: 80 },
-            children: [new TextRun({ text: `Приложение №1 к договору поставки № ${r.contract||'—'}`, size: 20, font: 'Times New Roman', color: '555555' })]
-          }),
+          // Приложение ref — таблица: пустая левая колонка + текст справа (как "колонка Справа" в Word)
+          ...((() => {
+            const contract = r.contract || '—';
+            const fromIdx = contract.indexOf(' от ');
+            const contractNum  = fromIdx > -1 ? contract.slice(0, fromIdx) : contract;
+            const contractDate = fromIdx > -1 ? 'от ' + contract.slice(fromIdx + 4) : '';
+            // Разбиваем на строки столбиком
+            const lines = [`Приложение №1`, `к договору поставки № ${contractNum}`];
+            if (contractDate) lines.push(contractDate);
+            const nb = { style: BorderStyle.NONE, size: 0, color: 'auto' };
+            const noBorders = { top: nb, bottom: nb, left: nb, right: nb };
+            const rightW = Math.round(TW * 0.52); // ~52% — достаточно для текста
+            const leftW  = TW - rightW;
+            return [new Table({
+              width: { size: TW, type: WidthType.DXA },
+              columnWidths: [leftW, rightW],
+              borders: { top: nb, bottom: nb, left: nb, right: nb, insideH: nb, insideV: nb },
+              rows: [new TableRow({ children: [
+                new TableCell({ borders: noBorders, children: [new Paragraph({ children: [] })] }),
+                new TableCell({ borders: noBorders, children: lines.map((line, i) => new Paragraph({
+                  alignment: AlignmentType.RIGHT,
+                  spacing: { before: 0, after: i === lines.length - 1 ? 80 : 0 },
+                  children: [new TextRun({ text: line, size: 20, font: 'Times New Roman', color: '555555' })]
+                })) }),
+              ]})],
+            })];
+          })()),
           // Заголовок
           new Paragraph({
             alignment: AlignmentType.CENTER,
@@ -1298,46 +1334,40 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
           new Paragraph({ spacing: { before: 120, after: 0 }, children: [new TextRun({ text: 'Порядок оплаты:', size: 22, font: 'Times New Roman', bold: true })] }),
           para('— Аванс (предварительная оплата) в размере 100 % от стоимости Товара, подлежащего поставке по настоящей Спецификации. Цена указана с доставкой до Покупателя.', { before: 80 }),
           ...(r.address ? [para(`Адрес доставки/выборки: ${r.address}`, { before: 80 })] : []),
-          para('Качество Товара должно соответствовать установленным требованиям государственных стандартов качества.', { before: 80 }),
-          para('Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу.', { before: 80 }),
-          // Подписи — без рамок, ФИО из карточки организации
-          new Paragraph({ spacing: { before: 400, after: 0 }, children: [] }),
-          new Table({
-            width: { size: TW, type: WidthType.DXA },
-            columnWidths: [TW/2-200, 400, TW/2-200],
-            borders: { top:{style:BorderStyle.NONE}, bottom:{style:BorderStyle.NONE}, left:{style:BorderStyle.NONE}, right:{style:BorderStyle.NONE}, insideH:{style:BorderStyle.NONE}, insideV:{style:BorderStyle.NONE} },
-            rows: [
-              // Строка 1: названия сторон
-              new TableRow({ children: [
-                new TableCell({ borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE}}, children: [
-                  new Paragraph({ children: [new TextRun({ text: `Поставщик: ${r.supplier||'___________'}`, size: 22, font: 'Times New Roman', bold: true })] }),
-                ] }),
-                new TableCell({ borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE}}, children: [new Paragraph({children:[]})] }),
-                new TableCell({ borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE}}, children: [
-                  new Paragraph({ children: [new TextRun({ text: `Покупатель: ${r.orgFull||'___________'}`, size: 22, font: 'Times New Roman', bold: true })] }),
-                ] }),
-              ]}),
-              // Строка 2: отступ для подписи
-              new TableRow({ children: [
-                new TableCell({ borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE}}, children: [new Paragraph({spacing:{before:480},children:[]})] }),
-                new TableCell({ borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE}}, children: [new Paragraph({children:[]})] }),
-                new TableCell({ borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE}}, children: [new Paragraph({spacing:{before:480},children:[]})] }),
-              ]}),
-              // Строка 3: подписи — только нижняя линия, без рамки вокруг
-              new TableRow({ children: [
-                new TableCell({
-                  borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.SINGLE,size:6,color:'000000'},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE}},
-                  children: [new Paragraph({ children: [new TextRun({ text: 'подпись / Б.П.', size: 18, font: 'Times New Roman', color: '555555' })] })]
-                }),
-                new TableCell({ borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE}}, children: [new Paragraph({children:[]})] }),
-                new TableCell({
-                  borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.SINGLE,size:6,color:'000000'},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE}},
-                  children: [new Paragraph({ children: [new TextRun({
-                    text: `/Директор/ ${r.orgSignatory || 'М.П.'}`,
-                    size: 18, font: 'Times New Roman', color: '555555'
-                  })] })]
-                }),
-              ]}),
+          para('Качество Товара должно соответствовать установленным требованиям государственных стандартов качества в соответствии с действующим законодательством Российской Федерации. При поставке необходимо наличие всех необходимых сертификатов, удостоверений качества, протоколов лабораторных испытаний и т.д. на поставляемый Товар.', { before: 80 }),
+          para('Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон и является неотъемлемой частью Договора.', { before: 80 }),
+          // Подписи — без таблицы: два столбца через табуляцию, чтобы в Word
+          // не было вообще никакого табличного объекта (и, соответственно, рамки/сетки)
+          new Paragraph({ spacing: { before: 300, after: 0 }, children: [] }),
+          new Paragraph({
+            tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
+            children: [
+              new TextRun({ text: 'Поставщик:', size: 22, font: 'Times New Roman', bold: true }),
+              new TextRun({ text: '\tПокупатель:', size: 22, font: 'Times New Roman', bold: true }),
+            ]
+          }),
+          new Paragraph({
+            spacing: { before: 120 },
+            tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
+            children: [
+              new TextRun({ text: r.supplier || '___________', size: 22, font: 'Times New Roman', bold: true }),
+              new TextRun({ text: `\t${r.orgFull || '___________'}`, size: 22, font: 'Times New Roman', bold: true }),
+            ]
+          }),
+          new Paragraph({
+            spacing: { before: 480 },
+            tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
+            children: [
+              new TextRun({ text: `______________________/${r.supplierSignatory || '___________'}/`, size: 22, font: 'Times New Roman' }),
+              new TextRun({ text: `\t______________________/${r.orgSignatory || '___________'}/`, size: 22, font: 'Times New Roman' }),
+            ]
+          }),
+          new Paragraph({
+            spacing: { before: 80 },
+            tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
+            children: [
+              new TextRun({ text: r.supplierStamp ? 'М.П.' : 'Б.П.', size: 22, font: 'Times New Roman' }),
+              new TextRun({ text: '\tМ.П.', size: 22, font: 'Times New Roman' }),
             ]
           }),
         ]
@@ -1403,6 +1433,54 @@ app.get('/api/requests/:id/signed-spec', operatorOrAdmin, (req, res) => {
     if (!fs.existsSync(fpath)) return res.status(404).json({ error: 'Файл не найден на диске' });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${row.spec_num}_подписано.pdf"`);
+    res.send(fs.readFileSync(fpath));
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Invoice (счёт) file ───────────────────────────────────────────────────────
+// Upload: POST /api/requests/:id/invoice-file  { file: base64, name }
+app.post('/api/requests/:id/invoice-file', operatorOrAdmin, express.json({ limit: '20mb' }), (req, res) => {
+  try {
+    const { file, name } = req.body;
+    const m = /^data:([\w/.+-]+);base64,/.exec(file || '');
+    if (!m) return res.status(400).json({ error: 'Ожидается файл в формате base64' });
+    const mime = m[1];
+    const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+    if (!allowed.includes(mime)) return res.status(400).json({ error: 'Допустимые форматы: PDF, PNG, JPG, WebP' });
+
+    const row = query('SELECT spec_num FROM requests WHERE id=?', [req.params.id])[0];
+    if (!row) return res.status(404).json({ error: 'Заявка не найдена' });
+
+    const ext = mime === 'application/pdf' ? 'pdf' : mime.split('/')[1].replace('jpeg', 'jpg');
+    const fname = `${req.params.id}.${ext}`;
+    // Remove any previous invoice file with a different extension
+    try {
+      for (const f of fs.readdirSync(INVOICE_DIR)) {
+        if (f.startsWith(`${req.params.id}.`)) fs.unlinkSync(path.join(INVOICE_DIR, f));
+      }
+    } catch(e) {}
+    const buf = Buffer.from(file.replace(/^data:[\w/.+-]+;base64,/, ''), 'base64');
+    fs.writeFileSync(path.join(INVOICE_DIR, fname), buf);
+
+    run('UPDATE requests SET invoice_file=? WHERE id=?', [fname, req.params.id]);
+    saveDb();
+    auditLog('UPDATE', req.params.id, 'invoice_file', '', 'uploaded', { name: name || fname });
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Download: GET /api/requests/:id/invoice-file
+app.get('/api/requests/:id/invoice-file', operatorOrAdmin, (req, res) => {
+  try {
+    const row = query('SELECT invoice_file, spec_num FROM requests WHERE id=?', [req.params.id])[0];
+    if (!row?.invoice_file) return res.status(404).json({ error: 'Счёт не прикреплён' });
+    const fname = path.basename(row.invoice_file);
+    const fpath = path.join(INVOICE_DIR, fname);
+    if (!fs.existsSync(fpath)) return res.status(404).json({ error: 'Файл не найден на диске' });
+    const ext = fname.split('.').pop();
+    const mimeMap = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' };
+    res.setHeader('Content-Type', mimeMap[ext] || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${row.spec_num}_счет.${ext}"`);
     res.send(fs.readFileSync(fpath));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -1535,6 +1613,16 @@ app.post('/api/requests/:id/layout-files', operatorOrAdmin, express.json({ limit
           results.push({ type: 'signed_spec', name });
         }
       }
+      if (r.invoiceFile === '__has_file__') {
+        const invRow = query('SELECT invoice_file FROM requests WHERE id=?', [reqId])[0]?.invoice_file || '';
+        const invPath = path.join(INVOICE_DIR, path.basename(invRow));
+        if (invRow && fs.existsSync(invPath)) {
+          const ext = invRow.split('.').pop();
+          const name = `${r.specNum}_счет.${ext}`;
+          await davPut(seg(year, monthFolder, orgFolder, requestFolderName, 'Расчеты', name), fs.readFileSync(invPath));
+          results.push({ type: 'invoice_attached', name });
+        }
+      }
       if (req.body.excelBase64) {
         const name = `${r.specNum}_расчеты.xlsx`;
         await davPut(seg(year, monthFolder, orgFolder, requestFolderName, 'Расчеты', name), Buffer.from(req.body.excelBase64, 'base64'));
@@ -1605,6 +1693,16 @@ app.post('/api/requests/:id/layout-files', operatorOrAdmin, express.json({ limit
         results.push({ type: 'signed_spec', name });
       }
     }
+    if (r.invoiceFile === '__has_file__') {
+      const invRow = query('SELECT invoice_file FROM requests WHERE id=?', [reqId])[0]?.invoice_file || '';
+      const invPath = path.join(INVOICE_DIR, nodePath.basename(invRow));
+      if (invRow && fs.existsSync(invPath)) {
+        const ext = invRow.split('.').pop();
+        const name = `${r.specNum}_счет.${ext}`;
+        fs.writeFileSync(nodePath.join(calcPath, name), fs.readFileSync(invPath));
+        results.push({ type: 'invoice_attached', name });
+      }
+    }
     if (req.body.excelBase64) {
       const name = `${r.specNum}_расчеты.xlsx`;
       fs.writeFileSync(nodePath.join(calcPath, name), Buffer.from(req.body.excelBase64, 'base64'));
@@ -1622,6 +1720,91 @@ app.post('/api/requests/:id/layout-files', operatorOrAdmin, express.json({ limit
     res.json({ ok: true, mode: 'local', folderPath: requestPath, files: results });
   } catch(e) {
     console.error('[layout-files]', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Open / create request folder in OS file manager ────────────────────────
+// Best-effort: works when the server runs on the same machine as the browser
+// (this app's normal deployment — start.bat/desktop use). Accepts an optional
+// rootPath override for the one-off "root folder not configured yet" flow.
+app.post('/api/requests/:id/open-folder', operatorOrAdmin, (req, res) => {
+  try {
+    const row = query('SELECT * FROM requests WHERE id=?', [req.params.id])[0];
+    if (!row) return res.status(404).json({ error: 'Заявка не найдена' });
+    const r = rowToRequest(row);
+
+    const settingsRows = db.exec('SELECT key, value FROM settings');
+    const cfg = { ...DEFAULT_SETTINGS };
+    if (settingsRows[0]?.values) settingsRows[0].values.forEach(([k, v]) => { if (k in cfg) cfg[k] = v; });
+
+    const rootPath = ((req.body && req.body.rootPath) || cfg.networkFolder || '').trim();
+    if (!rootPath) {
+      return res.status(400).json({ error: 'Не указана корневая папка', code: 'NO_ROOT' });
+    }
+    if (/^https?:\/\//i.test(rootPath)) {
+      // WebDAV — nothing to "open" locally, hand the URL back so the client can open a tab
+      return res.json({ ok: true, mode: 'webdav', url: rootPath });
+    }
+
+    const nodePath = require('path');
+    const date = new Date(r.date || Date.now());
+    const year = String(date.getFullYear());
+    const monthNum = String(date.getMonth() + 1).padStart(2, '0');
+    const RU_M = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+    const monthFolder = `${monthNum}_${RU_M[date.getMonth()]}`;
+    const orgFolder = (r.orgShort || r.orgFull || 'Организация').replace(/[\\/:*?"<>|]/g, '_');
+    const safeName = (r.name || 'Заявка').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+
+    if (cfg.networkUser && cfg.networkPass && process.platform === 'win32' && rootPath.startsWith('\\\\')) {
+      const safeUser = (cfg.networkUser || '').replace(/["&|<>]/g, '');
+      const safePass = (cfg.networkPass || '').replace(/["&|<>]/g, '');
+      const safePath = rootPath.replace(/["&|<>]/g, '');
+      try {
+        require('child_process').execSync(
+          `net use "${safePath}" /user:"${safeUser}" "${safePass}" /persistent:no`,
+          { stdio: 'pipe' }
+        );
+      } catch(e) { /* already mounted */ }
+    }
+
+    const orgPath = nodePath.join(rootPath, year, monthFolder, orgFolder);
+    fs.mkdirSync(orgPath, { recursive: true });
+
+    let maxNum = 0, requestFolderName = null;
+    try {
+      for (const e of fs.readdirSync(orgPath, { withFileTypes: true })) {
+        if (!e.isDirectory()) continue;
+        const m = e.name.match(/^(\d+)_/);
+        if (m) maxNum = Math.max(maxNum, parseInt(m[1]));
+        if (r.specNum && e.name.includes(r.specNum)) requestFolderName = e.name;
+      }
+    } catch(e) {}
+    if (!requestFolderName) requestFolderName = `${String(maxNum + 1).padStart(2, '0')}_${safeName}`;
+
+    const requestPath = nodePath.join(orgPath, requestFolderName);
+    fs.mkdirSync(requestPath, { recursive: true });
+
+    // Optionally remember this root path for next time (admin only)
+    if (req.body && req.body.saveAsDefault && req.userRole === 'admin') {
+      try {
+        run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['networkFolder', rootPath]);
+      } catch(e) { /* non-fatal */ }
+    }
+
+    // Best-effort: open in the OS file manager. Silently ignored if the
+    // server has no GUI session (headless/Docker) — the client still gets
+    // the resolved path back to show/copy.
+    try {
+      const { exec } = require('child_process');
+      if (process.platform === 'win32') exec(`start "" "${requestPath.replace(/"/g, '')}"`);
+      else if (process.platform === 'darwin') exec(`open "${requestPath.replace(/"/g, '')}"`);
+      else exec(`xdg-open "${requestPath.replace(/"/g, '')}"`);
+    } catch(e) { /* non-fatal */ }
+
+    res.json({ ok: true, mode: 'local', folderPath: requestPath });
+  } catch(e) {
+    console.error('[open-folder]', e);
     res.status(500).json({ error: e.message });
   }
 });

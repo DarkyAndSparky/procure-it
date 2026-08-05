@@ -503,17 +503,10 @@ if (typeof XLSX === 'undefined') {
   .spec-preview .sign-block {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 32px;
+    column-gap: 24px;
     margin-top: 32px;
-    border-top: 1px solid #333;
-    padding-top: 16px;
   }
-  .spec-preview .sign-title { font-weight: bold; font-size: 12px; margin-bottom: 8px; }
-  .spec-preview .sign-line {
-    border-bottom: 1px solid #333;
-    height: 32px;
-    margin: 16px 0 4px;
-  }
+  .spec-preview .sign-title { font-weight: bold; font-size: 12px; }
   .spec-preview .app-ref {
     text-align: right;
     font-size: 11px;
@@ -1346,6 +1339,30 @@ if (typeof XLSX === 'undefined') {
         </div>
       </div>
 
+      <!-- Поставщик -->
+      <div class="card" style="max-width:680px;margin-top:16px">
+        <div class="card-header">🏢 Поставщик по умолчанию</div>
+        <div class="card-body">
+          <div class="field" style="margin-bottom:12px">
+            <label>Наименование поставщика</label>
+            <input type="text" id="cfg-supplier-name" placeholder="ИП Иванов И.И." style="width:100%">
+          </div>
+          <div class="form-grid" style="margin-bottom:12px">
+            <div class="field">
+              <label>ФИО подписанта (со стороны поставщика)</label>
+              <input type="text" id="cfg-supplier-signatory" placeholder="И. О. Фамилия">
+            </div>
+            <div class="field">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="cfg-supplier-stamp" style="width:16px;height:16px;cursor:pointer">
+                С печатью (М.П.)
+              </label>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Если включено — в строке подписи поставщика добавляется «М.П.»</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- О системе -->
       <div class="card" style="max-width:680px;margin-top:16px">
         <div class="card-header">ℹ️ О системе</div>
@@ -1990,7 +2007,9 @@ function collectForm() {
     mol: document.getElementById('f-mol').value,
     date,
     address: document.getElementById('f-address').value,
-    supplier: document.getElementById('f-supplier').value,
+    supplier: document.getElementById('f-supplier').value || appConfig.supplierName || '',
+    supplierSignatory: appConfig.supplierSignatory || '',
+    supplierStamp: appConfig.supplierStamp === '1',
     invoiceNum: document.getElementById('f-invoice-num').value,
     contract: document.getElementById('f-contract').value,
     status: document.getElementById('f-status').value,
@@ -2043,13 +2062,21 @@ async function forceLayoutFiles(id, btn) {
 // ─── Layout files to network folder ──────────────────────────────────────────
 async function layoutFilesToFolder(reqId, req) {
   const payload = {};
+  // Same fallback as loadSpec/collectForm: supplier defaults live in
+  // appConfig and may not be baked into the stored request yet.
+  const specReq = {
+    ...req,
+    supplier: req.supplier || appConfig.supplierName || '',
+    supplierSignatory: appConfig.supplierSignatory || '',
+    supplierStamp: appConfig.supplierStamp === '1',
+  };
 
   // 1. Generate DOCX spec and convert to base64
   try {
     const res = await fetch('/api/spec-docx', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Auth-Token': authToken },
-      body: JSON.stringify(req)
+      body: JSON.stringify(specReq)
     });
     if (res.ok) {
       const blob = await res.blob();
@@ -2690,21 +2717,25 @@ function previewSpec() {
   showPage('spec');
 }
 
-function loadSpec(id) {
-  const req = db.requests.find(r => r.id === id) || allReqs.find(r => r.id === id);
+async function loadSpec(id) {
+  // Fetch fresh from the server rather than the (possibly stale) client-side
+  // cache — address/supplier can change between when the list was cached and now.
+  let req = await api('GET', '/api/requests/' + id).catch(() => null);
+  if (!req) req = db.requests.find(r => r.id === id) || allReqs.find(r => r.id === id);
   if (!req) return;
-  currentSpecReq = req;
-  document.getElementById('spec-preview-content').innerHTML = buildSpecHtml(req);
+  currentSpecReq = { ...req, supplier: req.supplier || appConfig.supplierName || '', supplierSignatory: appConfig.supplierSignatory || '', supplierStamp: appConfig.supplierStamp === '1' };
+  document.getElementById('spec-preview-content').innerHTML = buildSpecHtml(currentSpecReq);
   showPage('spec');
 }
 
-function loadSpecFromRegistry() {
+async function loadSpecFromRegistry() {
   const id = document.getElementById('spec-select').value;
   if (!id) return;
-  const req = db.requests.find(r => r.id === id) || allReqs.find(r => r.id === id);
+  let req = await api('GET', '/api/requests/' + id).catch(() => null);
+  if (!req) req = db.requests.find(r => r.id === id) || allReqs.find(r => r.id === id);
   if (req) {
-    currentSpecReq = req;
-    document.getElementById('spec-preview-content').innerHTML = buildSpecHtml(req);
+    currentSpecReq = { ...req, supplier: req.supplier || appConfig.supplierName || '', supplierSignatory: appConfig.supplierSignatory || '', supplierStamp: appConfig.supplierStamp === '1' };
+    document.getElementById('spec-preview-content').innerHTML = buildSpecHtml(currentSpecReq);
   }
 }
 
@@ -2761,7 +2792,15 @@ function buildSpecHtml(req) {
   });
 
   return `
-    <div class="app-ref">Приложение №1 к договору поставки № ${esc(req.contract || '—')}</div>
+    <div class="app-ref">${(() => {
+      const contract = req.contract || '—';
+      const fromIdx = contract.indexOf(' от ');
+      const contractNum  = fromIdx > -1 ? contract.slice(0, fromIdx) : contract;
+      const contractDate = fromIdx > -1 ? 'от ' + contract.slice(fromIdx + 4) : '';
+      const lines = [`Приложение №1`, `к договору поставки № ${esc(contractNum)}`];
+      if (contractDate) lines.push(esc(contractDate));
+      return lines.join('<br>');
+    })()}</div>
     <div class="spec-title">СПЕЦИФИКАЦИЯ № ${esc(req.specNum)}</div>
     <div class="spec-city-date">
       <span>г. Екатеринбург</span>
@@ -2792,18 +2831,20 @@ function buildSpecHtml(req) {
     <p style="margin-top:8px"><strong>Порядок оплаты:</strong><br>
     — Аванс (предварительная оплата) в размере 100 % от стоимости Товара, подлежащего поставке по настоящей Спецификации. Цена указана с доставкой до Покупателя.</p>
     ${req.address ? `<p style="margin-top:8px">Адрес доставки/выборки: ${esc(req.address)}</p>` : ''}
-    <p style="margin-top:8px">Качество Товара должно соответствовать установленным требованиям государственных стандартов качества.</p>
-    <p style="margin-top:8px">Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу.</p>
+    <p style="margin-top:8px">Качество Товара должно соответствовать установленным требованиям государственных стандартов качества в соответствии с действующим законодательством Российской Федерации. При поставке необходимо наличие всех необходимых сертификатов, удостоверений качества, протоколов лабораторных испытаний и т.д. на поставляемый Товар.</p>
+    <p style="margin-top:8px">Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон и является неотъемлемой частью Договора.</p>
     <div class="sign-block">
       <div>
-        <div class="sign-title">Поставщик: ${esc(req.supplier || '___________')}</div>
-        <div class="sign-line"></div>
-        <div style="font-size:11px">подпись / Б.П.</div>
+        <div class="sign-title">Поставщик:</div>
+        <div class="sign-title" style="margin-top:6px">${esc(req.supplier || '___________')}</div>
+        <div style="margin-top:32px">______________________/${esc(req.supplierSignatory || '___________')}/</div>
+        <div style="margin-top:8px">${req.supplierStamp ? 'М.П.' : 'Б.П.'}</div>
       </div>
       <div>
-        <div class="sign-title">Покупатель: ${esc(req.orgFull || '___________')}</div>
-        <div class="sign-line"></div>
-        <div style="font-size:11px">______________________/${esc(req.orgSignatory || 'Директор')}/ М.П.</div>
+        <div class="sign-title">Покупатель:</div>
+        <div class="sign-title" style="margin-top:6px">${esc(req.orgFull || '___________')}</div>
+        <div style="margin-top:32px">______________________/${esc(req.orgSignatory || '___________')}/</div>
+        <div style="margin-top:8px">М.П.</div>
       </div>
     </div>`;
 }
@@ -2914,7 +2955,7 @@ function renderRegistryRows(reqs) {
           <div class="detail-item"><span>Битрикс</span>${r.bitrix?'#'+esc(r.bitrix):'—'}</div>
           <div class="detail-item"><span>Адрес</span>${esc(r.address||'—')}</div>
           ${r.comment?`<div class="detail-item" style="grid-column:1/-1"><span>Комментарий</span>${esc(r.comment)}</div>`:''}
-          <div class="detail-item" style="grid-column:1/-1"><span>Путь папки</span><span style="font-family:monospace;font-size:11px;color:var(--accent);cursor:pointer" onclick="navigator.clipboard.writeText('${esc(buildFolderPath(r))}')" title="Нажать для копирования">📁 ${esc(buildFolderPath(r))}</span></div>
+          <div class="detail-item" style="grid-column:1/-1"><span>Путь папки</span><span style="font-family:monospace;font-size:11px;color:var(--accent);cursor:pointer" onclick="openRequestFolder('${r.id}')" title="Нажать, чтобы открыть папку заявки">📁 ${esc(buildFolderPath(r))}</span></div>
         </div>
         <table style="font-size:12px;width:100%;border-collapse:collapse">
           <tr><th style="padding:4px 8px;background:none;border-bottom:1px solid var(--border);font-size:11px">Наименование</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:120px">${r.isRealization?'ЮЛ / Кому':'Комментарий'}</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:60px">Кол-во</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:90px">Закуп</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:90px">Продажа</th></tr>
@@ -2926,13 +2967,18 @@ function renderRegistryRows(reqs) {
           ${userRole !== 'viewer' ? `
           <button class="btn btn-sm" onclick="loadToForm('${r.id}',true)">📋 Копировать</button>
           <label class="btn btn-sm" style="cursor:pointer;background:${r.signedSpecPdf?'var(--success)':'var(--surface-2)'};border-color:${r.signedSpecPdf?'var(--success)':'var(--border)'};color:${r.signedSpecPdf?'#fff':'var(--text)'}" title="${r.signedSpecPdf?'Подписанная спецификация прикреплена. Нажмите чтобы заменить':'Прикрепить подписанную спецификацию PDF'}">
-            ${(r.signedSpecPdf&&r.signedSpecPdf!=='')?'✅ Подписано':'📎 Прикрепить подпись'}
+            ${(r.signedSpecPdf&&r.signedSpecPdf!=='')?'✅ Спецификация подписана':'📎 Прикрепить подпись'}
             <input type="file" accept=".pdf" style="display:none" onchange="uploadSignedSpec('${r.id}',this)">
           </label>
           ${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${r.id}','${esc(r.specNum)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}
+          <label class="btn btn-sm" style="cursor:pointer;background:${r.invoiceFile?'var(--success)':'var(--surface-2)'};border-color:${r.invoiceFile?'var(--success)':'var(--border)'};color:${r.invoiceFile?'#fff':'var(--text)'}" title="${r.invoiceFile?'Счёт прикреплён. Нажмите чтобы заменить':'Прикрепить счёт (PDF/фото)'}">
+            ${(r.invoiceFile&&r.invoiceFile!=='')?'✅ Счёт прикреплён':'🧾 Прикрепить счёт'}
+            <input type="file" accept=".pdf,image/*" style="display:none" onchange="uploadInvoiceFile('${r.id}',this)">
+          </label>
+          ${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${r.id}','${esc(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}
           ${appConfig.networkFolder?`<button class="btn btn-sm" id="layout-btn-${r.id}" onclick="forceLayoutFiles('${r.id}',this)" title="Разложить файлы в сетевую папку" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">📁 Разложить файлы</button>`:''}
           <button class="btn btn-sm" style="margin-left:auto;color:var(--danger);border-color:var(--danger)" onclick="deleteRequest('${r.id}')">Удалить</button>
-          ` : `${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${r.id}','${esc(r.specNum)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}`}
+          ` : `${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${r.id}','${esc(r.specNum)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${r.id}','${esc(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}`}
         </div>
         <div id="audit-${r.id}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;font-size:12px"></div>
       </div>
@@ -3169,7 +3215,7 @@ function clearForm() {
   document.getElementById('f-mol').value = '';
   document.getElementById('f-date').value = '';
   document.getElementById('f-address').value = '';
-  document.getElementById('f-supplier').value = '';
+  document.getElementById('f-supplier').value = appConfig.supplierName || '';
   document.getElementById('f-contract').value = '';
   document.getElementById('f-invoice-num').value = '';
   document.getElementById('f-status').value = 'new';
@@ -3384,6 +3430,72 @@ async function downloadSignedSpec(id, specNum) {
     document.body.appendChild(a); a.click();
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
   } catch(e) { toast('Ошибка скачивания: ' + e.message); }
+}
+
+// ─── Invoice (счёт) file ─────────────────────────────────────────────────────
+async function uploadInvoiceFile(id, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+  if (!allowed.includes(file.type)) { toast('Допустимые форматы: PDF, PNG, JPG, WebP'); input.value=''; return; }
+  if (file.size > 10 * 1024 * 1024) { toast('Файл слишком большой (макс. 10МБ)'); input.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      await api('POST', `/api/requests/${id}/invoice-file`, { file: e.target.result, name: file.name });
+      toast('✅ Счёт прикреплён');
+      renderRegistry();
+    } catch(err) { toast('Ошибка загрузки: ' + err.message); }
+    input.value = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function downloadInvoiceFile(id, specNum) {
+  try {
+    const res = await fetch(`/api/requests/${id}/invoice-file`, {
+      headers: authToken ? { 'X-Auth-Token': authToken } : {}
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const cd = res.headers.get('Content-Disposition') || '';
+    const m = /filename="([^"]+)"/.exec(cd);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = m ? m[1] : `${specNum}_счет`;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  } catch(e) { toast('Ошибка скачивания: ' + e.message); }
+}
+
+// ─── Open / create request folder ───────────────────────────────────────────
+async function openRequestFolder(id, rootPathOverride) {
+  const body = rootPathOverride ? { rootPath: rootPathOverride, saveAsDefault: userRole === 'admin' } : {};
+  try {
+    const res = await fetch(`/api/requests/${id}/open-folder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(authToken ? { 'X-Auth-Token': authToken } : {}) },
+      body: JSON.stringify(body)
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (result.code === 'NO_ROOT') {
+        const root = prompt('Корневая сетевая папка не указана. Введите путь к ней (например, папка «Платежи»):');
+        if (!root) return;
+        return openRequestFolder(id, root.trim());
+      }
+      toast('Ошибка открытия папки: ' + (result.error || res.statusText));
+      return;
+    }
+    if (result.mode === 'webdav' && result.url) {
+      window.open(result.url, '_blank');
+      return;
+    }
+    toast(`📁 Открыта папка: ${result.folderPath}`);
+    if (rootPathOverride) loadConfig(); // refresh appConfig if we just saved a new default
+  } catch(e) {
+    toast('Ошибка открытия папки: ' + e.message);
+  }
 }
 
 // ─── Backup download (auth-aware) ─────────────────────────────────────────────
@@ -4144,6 +4256,9 @@ async function saveConfig() {
     networkFolder: document.getElementById('cfg-network-folder')?.value.trim() || '',
     networkUser:   document.getElementById('cfg-network-user')?.value.trim() || '',
     networkPass:   document.getElementById('cfg-network-pass')?.value || '',
+    supplierName:      document.getElementById('cfg-supplier-name')?.value.trim() || '',
+    supplierSignatory: document.getElementById('cfg-supplier-signatory')?.value.trim() || '',
+    supplierStamp:     document.getElementById('cfg-supplier-stamp')?.checked ? '1' : '0',
   };
 
   await api('PUT', '/api/settings', payload);
@@ -4268,6 +4383,12 @@ function populateConfigPage() {
   const nu = document.getElementById('cfg-network-user');
   if (nu) nu.value = appConfig.networkUser || '';
   // Don't pre-fill password field for security
+  const sn = document.getElementById('cfg-supplier-name');
+  if (sn) sn.value = appConfig.supplierName || '';
+  const ss = document.getElementById('cfg-supplier-signatory');
+  if (ss) ss.value = appConfig.supplierSignatory || '';
+  const st = document.getElementById('cfg-supplier-stamp');
+  if (st) st.checked = appConfig.supplierStamp === '1';
 
   // Fetch actual version from server
   fetch('/api/version').then(r => r.json()).then(d => {

@@ -1467,6 +1467,10 @@ if (typeof XLSX === 'undefined') {
           <label>Адрес доставки (по умолчанию)</label>
           <input type="text" id="new-org-address" placeholder="г. Екатеринбург, ул. Первомайская д.15">
         </div>
+        <div class="field" style="margin-bottom:12px">
+          <label>Папка для файлов</label>
+          <input type="text" id="new-org-folder" placeholder="напр. ЛД (если пусто — короткое название)">
+        </div>
         <button class="btn btn-primary" onclick="addOrg()" style="width:100%">Добавить организацию</button>
 
         <hr class="divider" style="margin:20px 0">
@@ -1507,7 +1511,10 @@ if (typeof XLSX === 'undefined') {
       <div class="field"><label>Короткое название</label><input type="text" id="modal-org-short"></div>
       <div class="field"><label>Подписант</label><input type="text" id="modal-org-signatory"></div>
     </div>
-    <div class="field" style="margin-bottom:10px"><label>Договор поставки (по умолчанию)</label><input type="text" id="modal-org-contract"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="field"><label>Договор поставки (по умолчанию)</label><input type="text" id="modal-org-contract"></div>
+      <div class="field"><label>Папка для файлов</label><input type="text" id="modal-org-folder" placeholder="напр. ЛД (если пусто — короткое название)"></div>
+    </div>
     <div class="field" style="margin-bottom:20px"><label>Адрес доставки (по умолчанию)</label><input type="text" id="modal-org-address"></div>
     <div class="field" style="margin-bottom:20px;display:flex;align-items:center;gap:8px">
       <input type="checkbox" id="modal-org-stamp" checked style="width:16px;height:16px">
@@ -1625,6 +1632,22 @@ function showLoginModal() {
         </button>
       </div>`;
     document.body.appendChild(modal);
+    // Ловушка фокуса: без неё Tab уводит фокус на элементы фоновой (затемнённой)
+    // страницы, которые остаются в DOM и доступны с клавиатуры несмотря на
+    // визуальное затемнение. Циклим Tab/Shift+Tab между полями внутри модалки.
+    modal.addEventListener('keydown', function(e) {
+      if (e.key !== 'Tab') return;
+      const focusable = Array.from(modal.querySelectorAll('input, button'))
+        .filter(el => !el.disabled && el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last  = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus();
+      }
+    });
   }
   modal.style.display = 'flex';
   document.body.appendChild(modal); // move to end of <body> so it always paints on top of everything else
@@ -2043,6 +2066,7 @@ function collectForm() {
     orgId,
     orgFull: org?.full || '',
     orgShort: org?.short || '',
+    orgFolder: org?.folder || '',
     orgSignatory: db.orgs.find(o => o.id === orgId)?.signatory || org?.signatory || '',
     orgStamp: (() => { const oc = db.orgs.find(o => o.id === orgId) || org; return oc?.stamp === undefined ? true : oc.stamp === '1' || oc.stamp === true; })(),
     bitrix: document.getElementById('f-bitrix').value,
@@ -2191,10 +2215,10 @@ function showChangePasswordModal(forced = false) {
         <h2 style="font-size:17px;font-weight:600">${forced ? 'Смените пароль' : 'Изменение пароля'}</h2>
         ${forced ? '<p style="color:var(--warning);font-size:12px;margin-top:6px">⚠️ Вы используете временный пароль.<br>Смените его перед началом работы.</p>' : ''}
       </div>
-      <div class="field" style="margin-bottom:12px">
+      ${!forced ? `<div class="field" style="margin-bottom:12px">
         <label>Текущий пароль</label>
         <input type="password" id="cpw-current" placeholder="••••••••" style="width:100%">
-      </div>
+      </div>` : ''}
       <div class="field" style="margin-bottom:12px">
         <label>Новый пароль</label>
         <input type="password" id="cpw-new" placeholder="минимум 6 символов" style="width:100%">
@@ -2213,15 +2237,33 @@ function showChangePasswordModal(forced = false) {
         style="width:100%;margin-top:8px;justify-content:center">Отмена</button>` : ''}
     </div>`;
   modal.style.display = 'flex';
-  setTimeout(() => document.getElementById('cpw-current')?.focus(), 100);
+  if (!modal.dataset.trapBound) {
+    modal.dataset.trapBound = '1';
+    modal.addEventListener('keydown', function(e) {
+      if (e.key !== 'Tab') return;
+      const focusable = Array.from(modal.querySelectorAll('input, button'))
+        .filter(el => !el.disabled && el.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last  = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault(); first.focus();
+      }
+    });
+  }
+  // При принудительной смене поля "Текущий пароль" в форме нет — фокусируем
+  // сразу поле нового пароля; иначе фокусируем поле текущего пароля.
+  setTimeout(() => (forced ? document.getElementById('cpw-new') : document.getElementById('cpw-current'))?.focus(), 100);
 }
 
 async function doChangePassword(forced = false) {
-  const current = document.getElementById('cpw-current')?.value;
+  const current = forced ? undefined : document.getElementById('cpw-current')?.value;
   const nw      = document.getElementById('cpw-new')?.value;
   const confirm = document.getElementById('cpw-confirm')?.value;
   const errEl   = document.getElementById('cpw-error');
-  if (!current || !nw || !confirm) {
+  if ((!forced && !current) || !nw || !confirm) {
     errEl.textContent = 'Заполните все поля'; errEl.style.display = 'block'; return;
   }
   if (nw.length < 6) {
@@ -2231,7 +2273,8 @@ async function doChangePassword(forced = false) {
     errEl.textContent = 'Пароли не совпадают'; errEl.style.display = 'block'; return;
   }
   try {
-    await api('POST', '/api/auth/change-password', { currentPassword: current, newPassword: nw });
+    const payload = forced ? { newPassword: nw } : { currentPassword: current, newPassword: nw };
+    await api('POST', '/api/auth/change-password', payload);
     document.getElementById('change-pw-modal').style.display = 'none';
     toast('✓ Пароль успешно изменён');
     if (forced) {
@@ -2538,6 +2581,19 @@ function buildAndDownloadExcel(req, existingWb) {
   // R2 = markup (строка 1, col 17 = R)
   ws1['I2'] = { t: 'n', v: deliveryCost };
   ws1['R2'] = { t: 'n', v: markup };
+
+  // ВАЖНО: aoa_to_sheet построил '!ref' только по 15 колонкам (A:O), т.к. все
+  // строки массива были такой длины. Ячейка R2 (наценка), от которой зависят
+  // формулы "Цена продажи за единицу" (N) и "Стоимость продажи" (O), лежит
+  // ЗА пределами этого диапазона — Excel не пересчитывает такие ячейки при
+  // открытии и трактует их как пустые (0), из-за чего наценка "терялась" и
+  // цена продажи в файле совпадала с ценой закупки. Расширяем диапазон листа,
+  // чтобы включить колонку R.
+  {
+    const ref = XLSX.utils.decode_range(ws1['!ref']);
+    ref.e.c = Math.max(ref.e.c, XLSX.utils.decode_col('R'));
+    ws1['!ref'] = XLSX.utils.encode_range(ref);
+  }
 
   // Применяем рамки к шапке (строка 3 = индекс 2) + данные + итого
   // ВАЖНО: applyBorders вызывается ПОСЛЕ всех ws1[addr] присвоений,
@@ -3194,10 +3250,11 @@ async function addOrg() {
   const signatory = document.getElementById('new-org-signatory').value.trim();
   const contract  = document.getElementById('new-org-contract').value.trim();
   const address   = document.getElementById('new-org-address').value.trim();
+  const folder    = document.getElementById('new-org-folder').value.trim();
   if (!full || !short || !prefix) { toast('Заполните все поля'); return; }
-  const org = await api('POST', '/api/orgs', { full, short, prefix, signatory, contract, address });
+  const org = await api('POST', '/api/orgs', { full, short, prefix, signatory, contract, address, folder });
   db.orgs.push(org);
-  ['full','short','prefix','signatory','contract','address'].forEach(f => {
+  ['full','short','prefix','signatory','contract','address','folder'].forEach(f => {
     const el = document.getElementById('new-org-' + f); if (el) el.value = '';
   });
   renderOrgs();
@@ -3620,11 +3677,17 @@ async function restoreBackup(input) {
   const text = await file.text();
   let data;
   try { data = JSON.parse(text); } catch(e) { toast('Ошибка: файл повреждён'); return; }
-  await api('POST', '/api/restore', data);
+  const result = await api('POST', '/api/restore', data);
   // Server invalidated all sessions after restore — clear local token and reload
   localStorage.removeItem('procure_token');
-  toast('✓ Данные восстановлены. Страница перезагрузится...');
-  setTimeout(() => location.reload(), 1200);
+  const f = result?.files;
+  let msg = '✓ Данные восстановлены.';
+  if (f && (f.restored || f.missing)) {
+    msg += ` Файлов возвращено из зеркала бэкапов: ${f.restored}.`;
+    if (f.missing) msg += ` Не найдено: ${f.missing} (проверьте лог сервера).`;
+  }
+  toast(msg + ' Страница перезагрузится...');
+  setTimeout(() => location.reload(), f?.missing ? 3500 : 1200);
   input.value = '';
 }
 
@@ -3639,6 +3702,7 @@ function openOrgModal(id) {
   document.getElementById('modal-org-signatory').value = org.signatory || '';
   document.getElementById('modal-org-contract').value = org.contract || '';
   document.getElementById('modal-org-address').value = org.address || '';
+  document.getElementById('modal-org-folder').value = org.folder || '';
   document.getElementById('modal-org-stamp').checked = org.stamp === undefined ? true : (org.stamp === '1' || org.stamp === true);
   document.getElementById('org-modal').style.display = 'flex';
 }
@@ -3656,6 +3720,7 @@ async function saveOrgModal() {
     signatory: document.getElementById('modal-org-signatory').value.trim(),
     contract:  document.getElementById('modal-org-contract').value.trim(),
     address:   document.getElementById('modal-org-address').value.trim(),
+    folder:    document.getElementById('modal-org-folder').value.trim(),
     stamp:     document.getElementById('modal-org-stamp').checked ? '1' : '0',
   };
   if (!data.full || !data.short || !data.prefix) { toast('Заполните обязательные поля'); return; }

@@ -413,6 +413,25 @@ async function initDb() {
   db.run(`PRAGMA journal_mode=WAL`);
   db.run(`PRAGMA foreign_keys=ON`);
 
+  // NOTE: the `requests` table must exist before we try to ALTER it below —
+  // on a brand-new database these ALTERs used to run before CREATE TABLE
+  // requests (further down this function), so they silently failed and the
+  // resulting fresh table was permanently missing these columns, breaking
+  // every save with "table requests has no column named ...". Create the
+  // core tables first, then run the column migrations against them.
+  db.run(`CREATE TABLE IF NOT EXISTS requests (
+    id TEXT PRIMARY KEY, spec_num TEXT NOT NULL UNIQUE,
+    org_id TEXT, org_full TEXT, org_short TEXT, org_signatory TEXT,
+    bitrix TEXT DEFAULT '', name TEXT NOT NULL, mol TEXT DEFAULT '',
+    date TEXT DEFAULT '', address TEXT DEFAULT '', supplier TEXT DEFAULT '', invoice_num TEXT DEFAULT '',
+    contract TEXT DEFAULT '', status TEXT DEFAULT 'new', comment TEXT DEFAULT '',
+    is_realization INTEGER DEFAULT 0, delivery_cost REAL DEFAULT 0,
+    markup REAL DEFAULT 5, total_purchase REAL DEFAULT 0, total REAL DEFAULT 0,
+    positions TEXT DEFAULT '[]',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )`);
+
   // Migrations — add new columns to existing DBs
   const migrations = [
     `ALTER TABLE requests ADD COLUMN invoice_num TEXT DEFAULT ''`,
@@ -459,12 +478,16 @@ async function initDb() {
   db.run(`CREATE TABLE IF NOT EXISTS orgs (
     id TEXT PRIMARY KEY, full TEXT NOT NULL, short TEXT NOT NULL,
     prefix TEXT NOT NULL, signatory TEXT DEFAULT '', contract TEXT DEFAULT '',
-    address TEXT DEFAULT '', supplier TEXT DEFAULT '', created_at TEXT DEFAULT (datetime('now'))
+    address TEXT DEFAULT '', supplier TEXT DEFAULT '', folder TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now'))
   )`);
   // Migration: add supplier column if it doesn't exist yet
   try { db.run(`ALTER TABLE orgs ADD COLUMN supplier TEXT DEFAULT ''`); } catch(e) {}
   // Migration: печать покупателя (М.П./Б.П.) — по умолчанию '1' (с печатью), как было раньше
   try { db.run(`ALTER TABLE orgs ADD COLUMN stamp TEXT DEFAULT '1'`); } catch(e) {}
+  // Migration: отдельное имя папки для раскладки файлов (напр. «ЛД»), может
+  // отличаться от короткого названия, которое показывается в интерфейсе
+  try { db.run(`ALTER TABLE orgs ADD COLUMN folder TEXT DEFAULT ''`); } catch(e) {}
 
   db.run(`CREATE TABLE IF NOT EXISTS requests (
     id TEXT PRIMARY KEY, spec_num TEXT NOT NULL UNIQUE,
@@ -592,21 +615,21 @@ app.get('/api/orgs', (req, res) => {
 });
 
 app.post('/api/orgs', operatorOrAdmin, (req, res) => {
-  const { full, short, prefix, signatory='', contract='', address='', supplier='', stamp='1' } = req.body;
+  const { full, short, prefix, signatory='', contract='', address='', supplier='', stamp='1', folder='' } = req.body;
   if (!full || !short || !prefix) return res.status(400).json({ error: 'Обязательные поля: full, short, prefix' });
   const id = Date.now().toString();
-  run('INSERT INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp) VALUES (?,?,?,?,?,?,?,?,?)',
-    [id, full, short, prefix, signatory, contract, address, supplier, stamp]);
+  run('INSERT INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp,folder) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    [id, full, short, prefix, signatory, contract, address, supplier, stamp, folder]);
   res.json(query('SELECT * FROM orgs WHERE id=?', [id])[0]);
 });
 
 app.put('/api/orgs/:id', operatorOrAdmin, (req, res) => {
-  const { full, short, prefix, signatory='', contract='', address='', supplier='', stamp='1' } = req.body;
+  const { full, short, prefix, signatory='', contract='', address='', supplier='', stamp='1', folder='' } = req.body;
   if (!full || !short || !prefix) return res.status(400).json({ error: 'Обязательные поля: full, short, prefix' });
   const exists = query('SELECT id FROM orgs WHERE id=?', [req.params.id])[0];
   if (!exists) return res.status(404).json({ error: 'Организация не найдена' });
-  run('UPDATE orgs SET full=?,short=?,prefix=?,signatory=?,contract=?,address=?,supplier=?,stamp=? WHERE id=?',
-    [full, short, prefix, signatory, contract, address, supplier, stamp, req.params.id]);
+  run('UPDATE orgs SET full=?,short=?,prefix=?,signatory=?,contract=?,address=?,supplier=?,stamp=?,folder=? WHERE id=?',
+    [full, short, prefix, signatory, contract, address, supplier, stamp, folder, req.params.id]);
   res.json(query('SELECT * FROM orgs WHERE id=?', [req.params.id])[0]);
 });
 
@@ -916,12 +939,18 @@ app.post('/api/auth/change-password', strictLimiter, (req, res) => {
   const user  = token ? sessionGetUser(token) : null;
   if (!user || !user.id) return res.status(401).json({ error: 'Не авторизован' });
   const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Укажите текущий и новый пароль' });
+  if (!newPassword) return res.status(400).json({ error: 'Укажите новый пароль' });
   if (newPassword.length < 6) return res.status(400).json({ error: 'Новый пароль должен быть минимум 6 символов' });
-  // Verify current password
-  const currentHash = hashPassword(currentPassword);
-  const check = db.exec('SELECT id FROM users WHERE id=? AND password=?', [user.id, currentHash]);
-  if (!check[0]?.values?.length) return res.status(401).json({ error: 'Текущий пароль неверен' });
+  // При принудительной смене (временный пароль) текущий пароль не спрашиваем —
+  // пользователь только что ввёл его при входе, повторный запрос избыточен.
+  // В остальных случаях (добровольная смена пароля) текущий пароль обязателен
+  // и проверяется как раньше.
+  if (!user.mustChangePassword) {
+    if (!currentPassword) return res.status(400).json({ error: 'Укажите текущий пароль' });
+    const currentHash = hashPassword(currentPassword);
+    const check = db.exec('SELECT id FROM users WHERE id=? AND password=?', [user.id, currentHash]);
+    if (!check[0]?.values?.length) return res.status(401).json({ error: 'Текущий пароль неверен' });
+  }
   run('UPDATE users SET password=?, must_change_password=0 WHERE id=?', [hashPassword(newPassword), user.id]);
   saveDb();
   res.json({ ok: true });
@@ -958,7 +987,19 @@ app.get('/api/stats', (req, res) => {
 // ── BACKUP / RESTORE ──────────────────────────────────────────────────────────
 app.get('/api/backup', adminOnly, (req, res) => {
   const orgs      = query('SELECT * FROM orgs');
-  const requests  = query('SELECT * FROM requests').map(rowToRequest);
+  // ВАЖНО: rowToRequest() отдаёт signedSpecPdf/invoiceFile как заглушки
+  // ('__has_pdf__'/'__has_file__'), а не реальные имена файлов — это верно
+  // для обычных API-ответов (чтобы не светить путь клиенту), но для бэкапа
+  // нужны настоящие имена файлов, иначе восстановление не сможет привязать
+  // прикреплённые файлы обратно к заявкам. Подмешиваем их поверх маппинга.
+  const rawFileRows = Object.fromEntries(
+    query('SELECT id, signed_spec_pdf, invoice_file FROM requests').map(r => [r.id, r])
+  );
+  const requests  = query('SELECT * FROM requests').map(rowToRequest).map(r => ({
+    ...r,
+    signedSpecPdf: rawFileRows[r.id]?.signed_spec_pdf || '',
+    invoiceFile:   rawFileRows[r.id]?.invoice_file || '',
+  }));
   const addresses = query('SELECT address FROM addresses').map(r => r.address);
   const templates = query('SELECT * FROM templates').map(r => ({ ...r, positions: JSON.parse(r.positions||'[]') }));
   const date = new Date().toISOString().slice(0,10);
@@ -971,28 +1012,62 @@ app.get('/api/backup', adminOnly, (req, res) => {
   // Include users (with hashed passwords) so restore preserves auth
   const users = query('SELECT id, username, password, role, must_change_password, created_at FROM users');
   res.setHeader('Content-Disposition', `attachment; filename="zakupki_backup_${date}.json"`);
-  res.json({ version: 3, exported: new Date().toISOString(), orgs, requests, addresses, templates, settings, audit: auditRows, users });
+  res.json({ version: 4, exported: new Date().toISOString(), orgs, requests, addresses, templates, settings, audit: auditRows, users });
 });
 
 app.post('/api/restore', adminOnly, strictLimiter, (req, res) => {
   const { orgs=[], requests=[], addresses=[], templates=[] } = req.body;
+  let filesRestored = 0, filesMissing = 0;
   try {
     if (orgs.length) {
       run('DELETE FROM orgs');
       for (const o of orgs) {
-        run('INSERT OR REPLACE INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp) VALUES (?,?,?,?,?,?,?,?,?)',
-          [o.id, o.full, o.short, o.prefix, o.signatory||'', o.contract||'', o.address||'', o.supplier||'', o.stamp !== undefined ? String(o.stamp) : '1']);
+        run('INSERT OR REPLACE INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp,folder) VALUES (?,?,?,?,?,?,?,?,?,?)',
+          [o.id, o.full, o.short, o.prefix, o.signatory||'', o.contract||'', o.address||'', o.supplier||'', o.stamp !== undefined ? String(o.stamp) : '1', o.folder||'']);
       }
     }
     if (requests.length) {
       run('DELETE FROM requests');
+      const SENTINELS = new Set(['__has_pdf__', '__has_file__']);
+      const FILES_MIRROR = path.join(DATA_DIR, 'backups', 'files_mirror');
       for (const r of requests) {
-        run(`INSERT OR REPLACE INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        // Бэкапы, снятые до этого фикса, могли содержать заглушки
+        // '__has_pdf__'/'__has_file__' вместо реальных имён файлов —
+        // писать их в БД как имя файла нельзя, иначе привязка сломается.
+        const signedSpecPdf = SENTINELS.has(r.signedSpecPdf) ? '' : (r.signedSpecPdf || '');
+        const invoiceFile   = SENTINELS.has(r.invoiceFile)   ? '' : (r.invoiceFile || '');
+        run(`INSERT OR REPLACE INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type,signed_spec_pdf,invoice_file,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [r.id, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
            r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
            r.status||'new', r.comment||'', r.isRealization?1:0,
            r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,
-           JSON.stringify(r.positions||[]), r.docType || 'goods', r.createdAt||new Date().toISOString()]);
+           JSON.stringify(r.positions||[]), r.docType || 'goods', signedSpecPdf, invoiceFile, r.createdAt||new Date().toISOString()]);
+
+        // Сама база хранит только имя файла — реальный PDF в JSON-бэкапе не
+        // лежит (см. /api/backup). Если физического файла нет на диске
+        // (например, восстанавливаемся после потери data/signed_specs или
+        // data/invoices), пробуем достать его из зеркала files_mirror,
+        // которое обновляется при каждом автобэкапе.
+        for (const [fname, destDir, mirrorSub] of [
+          [signedSpecPdf, SIGNED_DIR, 'signed_specs'],
+          [invoiceFile,   INVOICE_DIR, 'invoices'],
+        ]) {
+          if (!fname) continue;
+          const destPath = path.join(destDir, path.basename(fname));
+          if (fs.existsSync(destPath)) continue;
+          const mirrorPath = path.join(FILES_MIRROR, mirrorSub, path.basename(fname));
+          if (fs.existsSync(mirrorPath)) {
+            fs.mkdirSync(destDir, { recursive: true });
+            fs.copyFileSync(mirrorPath, destPath);
+            filesRestored++;
+          } else {
+            filesMissing++;
+            console.warn(`[restore] Файл не найден ни на диске, ни в зеркале бэкапов: ${fname} (заявка ${r.id})`);
+          }
+        }
+      }
+      if (filesRestored || filesMissing) {
+        console.log(`[restore] Прикреплённые файлы: восстановлено из зеркала — ${filesRestored}, не найдено — ${filesMissing}`);
       }
     }
     for (const a of addresses) {
@@ -1023,7 +1098,7 @@ app.post('/api/restore', adminOnly, strictLimiter, (req, res) => {
     saveDb();
     // Invalidate all sessions after restore — DB state changed, force re-login
     try { db.run('DELETE FROM sessions'); } catch(e) {}
-    res.json({ ok: true, restored: { orgs: orgs.length, requests: requests.length } });
+    res.json({ ok: true, restored: { orgs: orgs.length, requests: requests.length }, files: { restored: filesRestored, missing: filesMissing } });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
@@ -1118,11 +1193,46 @@ function doBackup() {
     const fpath = path.join(BACKUP_DIR, fname);
     fs.writeFileSync(fpath, Buffer.from(data));
 
-    // Удаляем бэкапы старше 30 дней
+    // Прикреплённые файлы (подписанные PDF-спецификации, счета) хранятся на
+    // диске отдельно от SQLite (см. комментарий у /signed-spec — «avoids
+    // bloating SQLite with binary data»), поэтому сами по себе .db-снапшоты
+    // их не содержат и раньше эти файлы вообще не бэкапились. Держим
+    // единое зеркало (не версионируем на каждый запуск, чтобы не раздувать
+    // диск копиями одних и тех же PDF каждые 6 часов) — просто обновляем
+    // его текущим содержимым signed_specs/ и invoices/ при каждом бэкапе.
+    const filesMirrorDir = path.join(BACKUP_DIR, 'files_mirror');
+    let filesCopied = 0;
+    try {
+      for (const [srcDir, label] of [[SIGNED_DIR, 'signed_specs'], [INVOICE_DIR, 'invoices']]) {
+        const destDir = path.join(filesMirrorDir, label);
+        fs.mkdirSync(destDir, { recursive: true });
+        if (!fs.existsSync(srcDir)) continue;
+        const srcEntries = new Set(fs.readdirSync(srcDir));
+        // Копируем новые/изменившиеся файлы
+        for (const entry of srcEntries) {
+          const srcPath = path.join(srcDir, entry);
+          const destPath = path.join(destDir, entry);
+          const srcStat = fs.statSync(srcPath);
+          const destStat = fs.existsSync(destPath) ? fs.statSync(destPath) : null;
+          if (!destStat || destStat.mtimeMs < srcStat.mtimeMs || destStat.size !== srcStat.size) {
+            fs.copyFileSync(srcPath, destPath);
+            filesCopied++;
+          }
+        }
+        // Убираем из зеркала файлы, удалённые из исходной папки
+        for (const entry of fs.readdirSync(destDir)) {
+          if (!srcEntries.has(entry)) fs.rmSync(path.join(destDir, entry), { force: true });
+        }
+      }
+    } catch(e) {
+      console.error('[BACKUP] Ошибка синхронизации вложенных файлов:', e.message);
+    }
+
+    // Удаляем .db-снапшоты старше 30 дней (файловое зеркало не версионируется —
+    // оно всегда актуально и не растёт со временем)
     const files = fs.readdirSync(BACKUP_DIR)
       .filter(f => f.endsWith('.db'))
-      .map(f => ({ name: f, time: fs.statSync(path.join(BACKUP_DIR, f)).mtime }))
-      .sort((a, b) => b.time - a.time);
+      .map(f => ({ name: f, time: fs.statSync(path.join(BACKUP_DIR, f)).mtime }));
 
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
     files.forEach(f => {
@@ -1132,7 +1242,7 @@ function doBackup() {
       }
     });
 
-    console.log(`[BACKUP] ✓ ${fname} (${(data.byteLength / 1024).toFixed(1)} KB)`);
+    console.log(`[BACKUP] ✓ ${fname} (${(data.byteLength / 1024).toFixed(1)} KB)${filesCopied ? `, файлов синхронизировано: ${filesCopied}` : ''}`);
   } catch(e) {
     console.error('[BACKUP] Ошибка:', e.message);
   }
@@ -1273,7 +1383,7 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
     const colWidths = [545, 5449, 900, 1372, 1373]; // sum = 9639
 
     // Header row
-    const headerRow = new TableRow({ tableHeader: true, children: [
+    const headerRow = new TableRow({ tableHeader: true, cantSplit: true, children: [
       cell('№ п/п',   { width: colWidths[0], align: AlignmentType.CENTER, bold: true }),
       cell(L.colHeader, { width: colWidths[1], bold: true }),
       cell('Кол-во (шт.)',        { width: colWidths[2], align: AlignmentType.CENTER, bold: true }),
@@ -1285,7 +1395,7 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
       const rMarkup = (r.markup!==undefined&&r.markup!==null?r.markup:5);
       const sellUnit = p.sellPerUnit || (p.purchasePrice||0)*(1+rMarkup/100);
       const sellSum  = p.sellSum    || sellUnit * p.qty;
-      return new TableRow({ children: [
+      return new TableRow({ cantSplit: true, children: [
         cell(i+1,               { width: colWidths[0], align: AlignmentType.CENTER }),
         cell(p.name||'',        { width: colWidths[1] }),
         cell(p.qty||1,          { width: colWidths[2], align: AlignmentType.CENTER }),
@@ -1294,7 +1404,7 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
       ]});
     });
 
-    const itogRow = new TableRow({ children: [
+    const itogRow = new TableRow({ cantSplit: true, children: [
       cell('', { width: colWidths[0] }),
       cell('', { width: colWidths[1] }),
       cell('', { width: colWidths[2] }),
@@ -1302,7 +1412,7 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
       cell(fmtRub(total), { width: colWidths[4], align: AlignmentType.RIGHT, bold: true }),
     ]});
 
-    const ndsRow = new TableRow({ children: [
+    const ndsRow = new TableRow({ cantSplit: true, children: [
       new TableCell({ columnSpan: 5, borders: allBorders, shading: { type: ShadingType.CLEAR, color: 'auto', fill: 'FFFFFF' },
         children: [new Paragraph({ children: [new TextRun({ text: 'НДС: не облагается', size: 22, font: 'Times New Roman' })] })] })
     ]});
@@ -1317,6 +1427,8 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
       return new Paragraph({
         alignment: opts.align || AlignmentType.LEFT,
         spacing: { before: opts.before || 120, after: opts.after || 0 },
+        keepNext: !!opts.keepNext,
+        keepLines: !!opts.keepLines,
         children: [new TextRun({
           text, size: opts.size || 22, font: 'Times New Roman',
           bold: !!opts.bold, italics: !!opts.italic
@@ -1379,7 +1491,7 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
           // Таблица
           specTable,
           // Текст
-          para(`Всего наименований ${(r.positions||[]).length}, на сумму ${fmtRub(total)} рублей, без НДС`, { before: 180 }),
+          para(`Всего наименований ${(r.positions||[]).length}, на сумму ${fmtRub(total)} рублей, без НДС`, { before: 180, keepNext: true }),
           new Paragraph({
             spacing: { before: 80, after: 0 },
             children: [new TextRun({ text: `${numToWords(total)}, НДС не облагается.`, size: 22, font: 'Times New Roman', italics: true })]
@@ -1392,9 +1504,14 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
           para(L.finalLine, { before: 80 }),
           // Подписи — без таблицы: два столбца через табуляцию, чтобы в Word
           // не было вообще никакого табличного объекта (и, соответственно, рамки/сетки)
-          new Paragraph({ spacing: { before: 300, after: 0 }, children: [] }),
+          // keepNext/keepLines на всех параграфах блока подписей, кроме последнего,
+          // чтобы Word не разрывал этот блок между страницами (актуально при большом
+          // числе позиций, когда таблица занимает много страниц и конец документа
+          // может случайно попасть на границу страницы).
+          new Paragraph({ spacing: { before: 300, after: 0 }, keepNext: true, keepLines: true, children: [] }),
           new Paragraph({
             tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
+            keepNext: true, keepLines: true,
             children: [
               new TextRun({ text: 'Поставщик:', size: 22, font: 'Times New Roman', bold: true }),
               new TextRun({ text: '\tПокупатель:', size: 22, font: 'Times New Roman', bold: true }),
@@ -1403,6 +1520,7 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
           new Paragraph({
             spacing: { before: 120 },
             tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
+            keepNext: true, keepLines: true,
             children: [
               new TextRun({ text: r.supplier || '___________', size: 22, font: 'Times New Roman', bold: true }),
               new TextRun({ text: `\t${r.orgFull || '___________'}`, size: 22, font: 'Times New Roman', bold: true }),
@@ -1411,6 +1529,7 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
           new Paragraph({
             spacing: { before: 480 },
             tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
+            keepNext: true, keepLines: true,
             children: [
               new TextRun({ text: `______________________/${r.supplierSignatory || '___________'}/`, size: 22, font: 'Times New Roman' }),
               new TextRun({ text: `\t______________________/${r.orgSignatory || '___________'}/`, size: 22, font: 'Times New Roman' }),
@@ -1419,6 +1538,7 @@ app.post('/api/spec-docx', operatorOrAdmin, (req, res) => {
           new Paragraph({
             spacing: { before: 80 },
             tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
+            keepLines: true,
             children: [
               new TextRun({ text: r.supplierStamp ? 'М.П.' : 'Б.П.', size: 22, font: 'Times New Roman' }),
               new TextRun({ text: `\t${r.orgStamp === false ? 'Б.П.' : 'М.П.'}`, size: 22, font: 'Times New Roman' }),
@@ -1562,7 +1682,10 @@ app.post('/api/requests/:id/layout-files', operatorOrAdmin, express.json({ limit
     const monthNum = String(date.getMonth() + 1).padStart(2, '0');
     const RU_M = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
     const monthFolder = `${monthNum}_${RU_M[date.getMonth()]}`;
-    const orgFolder   = (r.orgShort || r.orgFull || 'Организация').replace(/[\\/:*?"<>|]/g, '_');
+    // Папка организации: сначала выделенное поле «Папка для файлов» из
+    // карточки организации (org_id → orgs.folder), затем короткое/полное имя.
+    const orgRow      = r.orgId ? query('SELECT folder, short, full FROM orgs WHERE id=?', [r.orgId])[0] : null;
+    const orgFolder   = (orgRow?.folder || orgRow?.short || r.orgShort || r.orgFull || 'Организация').replace(/[\\/:*?"<>|]/g, '_');
     const safeName    = (r.name || 'Заявка').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
     const results     = [];
 
@@ -1807,7 +1930,8 @@ app.post('/api/requests/:id/open-folder', operatorOrAdmin, (req, res) => {
     const monthNum = String(date.getMonth() + 1).padStart(2, '0');
     const RU_M = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
     const monthFolder = `${monthNum}_${RU_M[date.getMonth()]}`;
-    const orgFolder = (r.orgShort || r.orgFull || 'Организация').replace(/[\\/:*?"<>|]/g, '_');
+    const orgRow = r.orgId ? query('SELECT folder, short, full FROM orgs WHERE id=?', [r.orgId])[0] : null;
+    const orgFolder = (orgRow?.folder || orgRow?.short || r.orgShort || r.orgFull || 'Организация').replace(/[\\/:*?"<>|]/g, '_');
     const safeName = (r.name || 'Заявка').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
 
     if (cfg.networkUser && cfg.networkPass && process.platform === 'win32' && rootPath.startsWith('\\\\')) {

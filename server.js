@@ -676,12 +676,19 @@ app.post('/api/requests', operatorOrAdmin, (req, res) => {
   const id = r.id || Date.now().toString();
   const ALLOWED_STATUSES = ['new','ordered','partial','delivered','cancelled'];
   if (r.status && !ALLOWED_STATUSES.includes(r.status)) r.status = 'new';
-  run(`INSERT INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  // Guard against spec_num collisions — e.g. a stale client-side registry cache
+  // suggesting a number that was already taken by another request in the meantime.
+  if (r.specNum) {
+    const dup = query('SELECT id FROM requests WHERE spec_num=?', [r.specNum])[0];
+    if (dup) return res.status(409).json({ error: `Спецификация с номером «${r.specNum}» уже существует. Обновите страницу и попробуйте снова.` });
+  }
+  const ok = run(`INSERT INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
      r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
      r.status||'new', r.comment||'', r.isRealization?1:0,
      r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,
      JSON.stringify(r.positions||[]), r.docType || 'goods']);
+  if (!ok) return res.status(500).json({ error: 'Не удалось сохранить заявку. Возможно, номер спецификации уже занят — обновите страницу и попробуйте снова.' });
   auditLog('CREATE', id, null, null, r.specNum, { name: r.name, org: r.orgShort });
   res.json(rowToRequest(query('SELECT * FROM requests WHERE id=?', [id])[0]));
 });
@@ -747,12 +754,19 @@ app.put('/api/requests/:id', operatorOrAdmin, (req, res) => {
     }
   }
 
-  run(`UPDATE requests SET spec_num=?,org_id=?,org_full=?,org_short=?,org_signatory=?,org_stamp=?,bitrix=?,name=?,mol=?,date=?,address=?,supplier=?,invoice_num=?,contract=?,status=?,comment=?,is_realization=?,delivery_cost=?,markup=?,total_purchase=?,total=?,positions=?,doc_type=?,updated_at=datetime('now') WHERE id=?`,
+  // Guard against spec_num collisions with a DIFFERENT request
+  if (r.specNum && r.specNum !== prev.spec_num) {
+    const dup = query('SELECT id FROM requests WHERE spec_num=? AND id!=?', [r.specNum, req.params.id])[0];
+    if (dup) return res.status(409).json({ error: `Спецификация с номером «${r.specNum}» уже существует. Обновите страницу и попробуйте снова.` });
+  }
+
+  const ok = run(`UPDATE requests SET spec_num=?,org_id=?,org_full=?,org_short=?,org_signatory=?,org_stamp=?,bitrix=?,name=?,mol=?,date=?,address=?,supplier=?,invoice_num=?,contract=?,status=?,comment=?,is_realization=?,delivery_cost=?,markup=?,total_purchase=?,total=?,positions=?,doc_type=?,updated_at=datetime('now') WHERE id=?`,
     [r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
      r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
      r.status||'new', r.comment||'', r.isRealization?1:0,
      r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,
      JSON.stringify(r.positions||[]), r.docType || 'goods', req.params.id]);
+  if (!ok) return res.status(500).json({ error: 'Не удалось сохранить заявку. Возможно, номер спецификации уже занят — обновите страницу и попробуйте снова.' });
   auditLog('UPDATE', req.params.id, 'request', null, r.specNum, { name: r.name, diff: diffFields });
   res.json(rowToRequest(query('SELECT * FROM requests WHERE id=?', [req.params.id])[0]));
 });
@@ -1465,14 +1479,14 @@ app.get('/api/requests/:id/signed-spec', operatorOrAdmin, (req, res) => {
       run("UPDATE requests SET signed_spec_pdf=? WHERE id=?", [fname, req.params.id]);
       saveDb();
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${row.spec_num}_подписано.pdf"`);
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(row.spec_num + '_подписано.pdf')}`);
       return res.send(buf);
     }
 
     const fpath = path.join(SIGNED_DIR, path.basename(row.signed_spec_pdf));
     if (!fs.existsSync(fpath)) return res.status(404).json({ error: 'Файл не найден на диске' });
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${row.spec_num}_подписано.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(row.spec_num + '_подписано.pdf')}`);
     res.send(fs.readFileSync(fpath));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -1520,7 +1534,7 @@ app.get('/api/requests/:id/invoice-file', operatorOrAdmin, (req, res) => {
     const ext = fname.split('.').pop();
     const mimeMap = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp' };
     res.setHeader('Content-Type', mimeMap[ext] || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${row.spec_num}_счет.${ext}"`);
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(row.spec_num + '_счет.' + ext)}`);
     res.send(fs.readFileSync(fpath));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });

@@ -83,17 +83,53 @@ BACKUP_INTERVAL_MS=21600000      # auto-backup interval (default 6 h)
 
 ```
 procure-it/
-├── server.js           # Express + SQLite backend
+├── server.js                    # Entry point: Express app assembly, middleware, mount routers, listen
+├── src/
+│   ├── config.js                 # Paths, ports, default settings
+│   ├── certs.js                  # Self-signed TLS cert generation (openssl → selfsigned fallback)
+│   ├── db/
+│   │   ├── connection.js         # sql.js instance, query()/run()/saveDb(), rowToRequest()
+│   │   ├── schema.js             # CREATE TABLE + all migrations
+│   │   └── audit.js              # audit_log writer
+│   ├── auth/
+│   │   ├── crypto.js             # Password hashing (PBKDF2 + legacy migration), token generation
+│   │   ├── users.js              # User lookup / credential check
+│   │   ├── sessions.js           # Session create/lookup/delete
+│   │   └── middleware.js         # Role-based route guards (viewer/operator/admin)
+│   ├── services/
+│   │   ├── docxService.js        # Specification .docx generation
+│   │   ├── fileLayoutService.js  # Network folder / WebDAV file layout
+│   │   ├── backupService.js      # Scheduled DB backup + attached-files mirror sync
+│   │   └── bitrixService.js      # Bitrix24 deal creation + status webhook
+│   ├── utils/
+│   │   └── docFormat.js          # RU month names, currency formatting, number-to-words
+│   └── routes/                   # One Express router per resource — thin, delegate to services/db
+│       ├── auth.js, orgs.js, requests.js, files.js,
+│       └── backup.js, settings.js, docx.js, bitrix.js
 ├── public/
-│   └── zakupki.html    # Single-page frontend (vanilla JS)
+│   ├── zakupki.html              # Markup only — no inline styles/scripts
+│   ├── css/style.css
+│   └── js/                       # Loaded as plain <script src> (shared global scope, no bundler)
+│       ├── auth.js, positions.js, request-form.js, users.js, save-export.js,
+│       ├── request-detail.js, registry.js, files.js, modals-misc.js,
+│       ├── helpers.js, export-templates.js, config.js
+│       └── main.js               # Bootstrap — must load last
 ├── docs/
-│   └── index.html      # Project documentation site
-├── start.bat           # Windows launcher
-├── start.sh            # Linux/macOS launcher
+│   └── index.html                # Project documentation site
+├── data/                          # Runtime data (gitignored, Docker volume)
+│   ├── zakupki.db
+│   ├── certs/                    # TLS cert (auto-generated)
+│   ├── backups/                  # .db snapshots (30-day retention) + files_mirror/ (attached-file mirror)
+│   ├── signed_specs/              # Uploaded signed specification PDFs
+│   └── invoices/                  # Uploaded invoice files
+├── start.bat                      # Windows launcher
+├── start.sh                       # Linux/macOS launcher
 ├── .env.example
 ├── CONTRIBUTING.md
 └── LICENSE
 ```
+
+**Layering rule:** `routes/` handle HTTP concerns (validation, status codes) and delegate everything else; `services/` hold the actual business logic (docx building, file layout, backups); `db/connection.js` is the only module that touches the live sql.js instance directly — everything else goes through `query()`/`run()`/`saveDb()`. Frontend JS files share one global scope on purpose (loaded in dependency order, `main.js` last) so the many `onclick="..."` handlers in the markup keep working without a bundler.
 
 ---
 
@@ -154,12 +190,16 @@ BACKUP_INTERVAL_MS=21600000      # интервал автобэкапа (6 ча
 ### Данные на хосте
 
 ```
-data/zakupki.db          # База данных (SQLite)
-data/certs/              # TLS сертификат (генерируется автоматически)
-data/backups/            # Автобэкапы каждые 6 часов, хранятся 30 дней
-data/signed_specs/       # Подписанные спецификации (PDF)
-logs/access.log          # Логи запросов (morgan combined)
+data/zakupki.db               # База данных (SQLite)
+data/certs/                   # TLS сертификат (генерируется автоматически)
+data/backups/                 # Автобэкапы .db каждые 6 часов, хранятся 30 дней
+data/backups/files_mirror/    # Зеркало прикреплённых файлов (см. ниже) — актуально всегда, не версионируется
+data/signed_specs/            # Подписанные спецификации (PDF)
+data/invoices/                # Приложенные файлы счетов
+logs/access.log                # Логи запросов (morgan combined)
 ```
+
+> **О бэкапах прикреплённых файлов:** сами PDF (подписанные спецификации, счета) хранятся на диске отдельно от SQLite, поэтому `.db`-снапшот их не содержит. При каждом автобэкапе `data/backups/files_mirror/` синхронизируется с текущим содержимым `signed_specs/`/`invoices/` (копируются только новые/изменённые файлы). При восстановлении (`POST /api/restore`) сервер сначала пытается найти файл на месте, а если его нет — берёт из `files_mirror/`.
 
 ### Команды
 

@@ -419,7 +419,14 @@
     <h2>Структура проекта</h2>
     <div class="tree">
       <span class="dir">procure-it/</span><br>
-      ├── <span class="file">server.js</span>         <span class="comment"># Express + SQLite backend</span><br>
+      ├── <span class="file">server.js</span>         <span class="comment"># Сборка приложения: middleware, роуты, запуск сервера</span><br>
+      ├── <span class="dir">src/</span><br>
+      │   ├── <span class="file">config.js</span>, <span class="file">certs.js</span><br>
+      │   ├── <span class="dir">db/</span>            <span class="comment"># connection.js, schema.js, audit.js</span><br>
+      │   ├── <span class="dir">auth/</span>          <span class="comment"># crypto.js, users.js, sessions.js, middleware.js</span><br>
+      │   ├── <span class="dir">services/</span>      <span class="comment"># docxService.js, fileLayoutService.js, backupService.js, bitrixService.js</span><br>
+      │   ├── <span class="dir">utils/</span>         <span class="comment"># docFormat.js</span><br>
+      │   └── <span class="dir">routes/</span>        <span class="comment"># auth, orgs, requests, files, backup, settings, docx, bitrix</span><br>
       ├── <span class="file">package.json</span><br>
       ├── <span class="file">start.bat</span>          <span class="comment"># Запуск Windows</span><br>
       ├── <span class="file">start.sh</span>           <span class="comment"># Запуск Linux/macOS</span><br>
@@ -427,13 +434,16 @@
       ├── <span class="file">CONTRIBUTING.md</span><br>
       ├── <span class="file">LICENSE</span><br>
       ├── <span class="dir">public/</span><br>
-      │   └── <span class="file">zakupki.html</span>   <span class="comment"># SPA фронтенд (vanilla JS)</span><br>
+      │   ├── <span class="file">zakupki.html</span>   <span class="comment"># Только разметка</span><br>
+      │   ├── <span class="dir">css/</span>            <span class="comment"># style.css</span><br>
+      │   └── <span class="dir">js/</span>             <span class="comment"># auth.js…main.js — обычные &lt;script src&gt;, без сборщика</span><br>
       ├── <span class="dir">docs/</span><br>
       │   └── <span class="file">index.html</span>     <span class="comment"># Эта страница</span><br>
       └── <span class="dir dim">data/</span>              <span class="comment dim"># git-ignored, создаётся автоматически</span><br>
           ├── <span class="dim">zakupki.db</span>     <span class="comment dim"># SQLite база данных</span><br>
           ├── <span class="dir dim">certs/</span>         <span class="comment dim"># TLS сертификат</span><br>
-          └── <span class="dir dim">backups/</span>       <span class="comment dim"># Автоматические бэкапы</span>
+          ├── <span class="dir dim">signed_specs/</span>, <span class="dir dim">invoices/</span> <span class="comment dim"># Прикреплённые файлы</span><br>
+          └── <span class="dir dim">backups/</span>       <span class="comment dim"># .db-снапшоты + зеркало прикреплённых файлов</span><br>
     </div>
   </section>
 

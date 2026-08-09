@@ -89,9 +89,26 @@ const strictLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 
 // Body parsers
-app.use(express.json({ limit: '20mb' }));
-// Отдельный маленький лимит для settings (логотип max 512KB base64 ≈ 380KB файл)
+// ВАЖНО (найдено при аудите): раньше здесь стоял ГЛОБАЛЬНЫЙ express.json({limit:'20mb'})
+// на все /api/*, а некоторые роуты (layout-files, signed-spec и др.) пытались
+// переопределить лимит своим собственным express.json(...) прямо на роуте.
+// Это не работает: Express/body-parser не перечитывает уже потреблённый поток
+// запроса, поэтому реально применяется только ПЕРВЫЙ парсер, вставший в цепочку
+// раньше остальных — а это всегда был глобальный. Проверено на практике:
+// layout-files с заявленным лимитом 50mb на деле обрывался на 20mb (413),
+// а /api/settings с заявленным лимитом 600kb на деле пропускал body почти
+// до 20mb (спасала только ручная проверка длины поля logoBase64 внутри
+// самого роута, а не парсер).
+//
+// Правильный порядок: сначала монтируем роутер с файловыми загрузками
+// (routes/files.js) — там каждый POST сам объявляет свой express.json(limit),
+// и раз это первый парсер, тронувший тело запроса, он реально работает.
+// Затем — точечный лимит для /api/settings. И только потом — общий дефолт
+// для всех остальных /api-роутов (orgs, requests, auth, backup/restore,
+// docx, bitrix), которые сами парсер не объявляют.
+app.use('/api', require('./src/routes/files'));
 app.use('/api/settings', express.json({ limit: '600kb' }));
+app.use('/api', express.json({ limit: '15mb' }));
 
 // Suppress favicon 404
 app.get('/favicon.ico', (req, res) => res.status(204).end());
@@ -107,10 +124,10 @@ app.get('/', (req, res) => {
 });
 
 // ── Routes ────────────────────────────────────────────────────────────────────
+// (routes/files уже смонтирован выше — см. секцию Body parsers, порядок там критичен)
 app.use('/api', require('./src/routes/auth')(strictLimiter));
 app.use('/api', require('./src/routes/orgs'));
 app.use('/api', require('./src/routes/requests'));
-app.use('/api', require('./src/routes/files'));
 app.use('/api', require('./src/routes/backup')(strictLimiter));
 const { router: settingsRouter, PKG_VERSION } = require('./src/routes/settings');
 app.use('/api', settingsRouter);

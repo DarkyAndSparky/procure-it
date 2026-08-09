@@ -119,9 +119,9 @@ async function loadUsers() {
               </select>
             </td>
             <td style="padding:6px 8px;text-align:right">
-              <button class="btn btn-sm" onclick="resetUserPassword(${u.id},'${esc(u.username)}')"
+              <button class="btn btn-sm" onclick="resetUserPassword(${u.id},'${escJsAttr(u.username)}')"
                 title="Сменить пароль">🔑</button>
-              <button class="btn btn-sm" onclick="deleteUser(${u.id},'${esc(u.username)}')"
+              <button class="btn btn-sm" onclick="deleteUser(${u.id},'${escJsAttr(u.username)}')"
                 style="color:var(--danger)" title="Удалить">×</button>
             </td>
           </tr>`).join('')}

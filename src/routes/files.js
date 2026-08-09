@@ -16,9 +16,23 @@ function readSettings() {
   return cfg;
 }
 
+// Защита в глубину (defense in depth) для роутов, которые строят путь на
+// диске из req.params.id. Сама по себе заявка с "грязным" id (../.. и т.п.)
+// уже не может быть создана через POST /api/requests (id всегда генерируется
+// сервером), но записи, восстановленные из старого бэкапа через /api/restore,
+// теоретически могли сохранить произвольный id — так что здесь тоже сверяем
+// формат перед тем как использовать id в имени файла.
+const SAFE_ID = /^[A-Za-z0-9_-]+$/;
+function requireSafeId(req, res, next) {
+  if (!SAFE_ID.test(req.params.id)) {
+    return res.status(400).json({ error: 'Некорректный идентификатор заявки' });
+  }
+  next();
+}
+
 // ── Signed spec PDF ───────────────────────────────────────────────────────────
 // Upload: POST /api/requests/:id/signed-spec  { pdf: base64 }
-router.post('/requests/:id/signed-spec', operatorOrAdmin, express.json({ limit: '20mb' }), (req, res) => {
+router.post('/requests/:id/signed-spec', operatorOrAdmin, requireSafeId, express.json({ limit: '20mb' }), (req, res) => {
   try {
     const { pdf } = req.body;
     if (!pdf || !pdf.startsWith('data:application/pdf')) {
@@ -70,7 +84,7 @@ router.get('/requests/:id/signed-spec', operatorOrAdmin, (req, res) => {
 
 // ── Invoice (счёт) file ───────────────────────────────────────────────────────
 // Upload: POST /api/requests/:id/invoice-file  { file: base64, name }
-router.post('/requests/:id/invoice-file', operatorOrAdmin, express.json({ limit: '20mb' }), (req, res) => {
+router.post('/requests/:id/invoice-file', operatorOrAdmin, requireSafeId, express.json({ limit: '20mb' }), (req, res) => {
   try {
     const { file, name } = req.body;
     const m = /^data:([\w/.+-]+);base64,/.exec(file || '');
@@ -117,7 +131,7 @@ router.get('/requests/:id/invoice-file', operatorOrAdmin, (req, res) => {
 });
 
 // ── Network folder / WebDAV file layout ──────────────────────────────────────
-router.post('/requests/:id/layout-files', operatorOrAdmin, express.json({ limit: '50mb' }), async (req, res) => {
+router.post('/requests/:id/layout-files', operatorOrAdmin, requireSafeId, express.json({ limit: '50mb' }), async (req, res) => {
   try {
     const reqId = req.params.id;
     const row = query('SELECT * FROM requests WHERE id=?', [reqId])[0];
@@ -136,13 +150,22 @@ router.post('/requests/:id/layout-files', operatorOrAdmin, express.json({ limit:
 // Best-effort: works when the server runs on the same machine as the browser
 // (this app's normal deployment — start.bat/desktop use). Accepts an optional
 // rootPath override for the one-off "root folder not configured yet" flow.
-router.post('/requests/:id/open-folder', operatorOrAdmin, (req, res) => {
+router.post('/requests/:id/open-folder', operatorOrAdmin, requireSafeId, express.json({ limit: '10kb' }), (req, res) => {
   try {
     const row = query('SELECT * FROM requests WHERE id=?', [req.params.id])[0];
     if (!row) return res.status(404).json({ error: 'Заявка не найдена' });
     const r = rowToRequest(row);
     const cfg = readSettings();
 
+    // Проверено при аудите: rootPath от клиента используется здесь ТОЛЬКО для
+    // создания дерева папок (fs.mkdirSync) и открытия его в проводнике ОС —
+    // сама запись содержимого файлов (docx/excel/счета) всегда идёт через
+    // layout-files, который берёт путь исключительно из серверных настроек
+    // и клиентский rootPath не принимает вовсе. Поэтому здесь оставляем как
+    // есть — это осознанный сценарий первого запуска, когда сетевая папка ещё
+    // не настроена и operator легитимно указывает путь вручную (см. фронтенд:
+    // prompt при ошибке NO_ROOT). Сохранение выбора как настройки по
+    // умолчанию (saveAsDefault) уже ограничено ролью admin — см. ниже.
     const result = openFolder(r, cfg, { rootPath: req.body?.rootPath });
 
     // Optionally remember this root path for next time (admin only)
@@ -160,7 +183,7 @@ router.post('/requests/:id/open-folder', operatorOrAdmin, (req, res) => {
 });
 
 // Test folder connection
-router.post('/test-folder', operatorOrAdmin, async (req, res) => {
+router.post('/test-folder', operatorOrAdmin, express.json({ limit: '10kb' }), async (req, res) => {
   const { path: folderPath, user, pass } = req.body || {};
   if (!folderPath) return res.status(400).json({ ok: false, error: 'Путь не указан' });
   try {

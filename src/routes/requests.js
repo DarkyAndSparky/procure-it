@@ -64,7 +64,16 @@ router.post('/requests', operatorOrAdmin, (req, res) => {
       if (p.purchasePrice !== undefined && isNaN(p.purchasePrice)) return res.status(400).json({ error: 'Некорректная цена' });
     }
   }
-  const id = r.id || Date.now().toString();
+  // Уязвимость (найдена при аудите): раньше id можно было задать в теле
+  // запроса (`r.id || Date.now()...`). Фронтенд этим никогда не пользовался
+  // (id для новой заявки не отправляется — только при PUT/обновлении, и там
+  // используется req.params.id из URL, а не тело), то есть легитимной нужды
+  // в клиентском id на создании нет. При этом id напрямую попадает в имя
+  // файла при загрузке подписанной спецификации/счёта (`${req.params.id}.pdf`),
+  // и id вида "../../../../tmp/evil" позволял записать файл ЗА пределами
+  // data/signed_specs — path traversal, подтверждено на практике. Теперь id
+  // всегда генерируется на сервере.
+  const id = Date.now().toString();
   if (r.status && !ALLOWED_STATUSES.includes(r.status)) r.status = 'new';
   // Guard against spec_num collisions — e.g. a stale client-side registry cache
   // suggesting a number that was already taken by another request in the meantime.

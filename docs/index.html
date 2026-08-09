@@ -333,7 +333,7 @@
 <aside class="sidebar">
   <div class="sidebar-logo">
     <h1>procure-it</h1>
-    <span class="version">26w31-b01</span>
+    <span class="version"><!--VERSION-->26w31-b01<!--/VERSION--></span>
   </div>
   <div class="nav-section">Начало</div>
   <a href="#intro"     class="nav-link active">О проекте</a>
@@ -373,7 +373,7 @@
     <h1>procure-it</h1>
     <p>Self-hosted web tool for IT asset procurement — manage purchase requests, calculate prices, generate Excel sheets and specifications.</p>
     <div class="badges">
-      <span class="badge badge-blue">26w31-b01</span>
+      <span class="badge badge-blue"><!--VERSION-->26w31-b01<!--/VERSION--></span>
       <span class="badge badge-green">MIT</span>
       <span class="badge badge-green">Node.js 18+</span>
       <span class="badge badge-blue">SQLite</span>
@@ -455,12 +455,27 @@
       <table>
         <tr><th>Переменная</th><th>По умолчанию</th><th>Описание</th></tr>
         <tr><td>PORT</td><td>9111</td><td>Порт HTTPS сервера. HTTP-редирект = PORT+1 (9112)</td></tr>
-        <tr><td>PROCURE_PASSWORD</td><td><em>пусто</em></td><td>Пароль доступа. Если не задан — аутентификация отключена</td></tr>
+        <tr><td>PROCURE_PASSWORD</td><td><em>пусто</em></td><td>Legacy-режим единого пароля — см. «Аутентификация» ниже</td></tr>
         <tr><td>BACKUP_INTERVAL_MS</td><td>21600000</td><td>Интервал автобэкапа (мс). 21600000 = 6 часов</td></tr>
       </table>
     </div>
     <div class="alert alert-info">
       HTTP-редирект всегда слушает на <code>PORT + 1</code> (по умолчанию 9112).
+    </div>
+
+    <h3>Аутентификация</h3>
+    <p>В приложении встроена система пользователей с тремя ролями:</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Роль</th><th>Доступ</th></tr>
+        <tr><td><code>viewer</code></td><td>Только чтение — без входа вообще</td></tr>
+        <tr><td><code>operator</code></td><td>Создание/редактирование заявок, организаций, загрузка файлов</td></tr>
+        <tr><td><code>admin</code></td><td>Всё, что может operator, плюс пользователи, настройки, восстановление из бэкапа</td></tr>
+      </table>
+    </div>
+    <p>При первом запуске автоматически создаётся администратор — <strong>логин <code>admin</code>, пароль <code>admin0000</code></strong> — и приложение сразу требует сменить пароль. Управление остальными пользователями — в боковом меню (только для admin).</p>
+    <div class="alert alert-warn">
+      <code>PROCURE_PASSWORD</code> — это <strong>legacy-заглушка</strong>, а не основной механизм входа: она работает только пока в базе вообще нет ни одного пользователя (например, самый первый запуск до первого входа через интерфейс). Как только появился хотя бы один пользователь, <code>PROCURE_PASSWORD</code> игнорируется — доступом управляют через интерфейс.
     </div>
   </section>
 
@@ -471,7 +486,7 @@
     <ul>
       <li><strong>Организация</strong> — выбирается из справочника, автоматически подставляет договор и адрес доставки</li>
       <li><strong>Номер задачи Битрикс</strong> — для связи с системой задач</li>
-      <li><strong>Номер счёта поставщика</strong> — текстовое поле, ищется в реестре</li>
+      <li><strong>Номер счёта поставщика</strong> — текстовое поле</li>
       <li><strong>МОЛ</strong> — материально ответственное лицо / получатель</li>
       <li><strong>Позиции</strong> — таблица товаров с полями: наименование, комментарий/ФИО, ссылка, кол-во, ед., цена закупа</li>
     </ul>
@@ -511,7 +526,10 @@
   <section class="section" id="registry">
     <h2>Реестр заявок</h2>
     <h3>Поиск</h3>
-    <p>Поиск работает по: названию заявки, МОЛ, организации, номеру Битрикс, номеру счёта, наименованиям позиций.</p>
+    <p>Поиск работает по: названию заявки, МОЛ, номеру спецификации, номеру Битрикс, наименованиям позиций.</p>
+    <div class="alert alert-info">
+      Организация и номер счёта поставщика в текстовый поиск не входят — для них есть отдельные фильтры ниже.
+    </div>
 
     <h3>Фильтры</h3>
     <div class="table-wrap">
@@ -519,7 +537,7 @@
         <tr><th>Фильтр</th><th>Описание</th></tr>
         <tr><td>Организация</td><td>Только заявки выбранной организации</td></tr>
         <tr><td>Месяц</td><td>По дате заявки</td></tr>
-        <tr><td>Статус</td><td>Новая / В работе / Оплачено / Отменена</td></tr>
+        <tr><td>Статус</td><td>См. таблицу статусов ниже</td></tr>
         <tr><td>Поставщик</td><td>По полю «Поставщик»</td></tr>
       </table>
     </div>
@@ -528,7 +546,18 @@
     <p>25 / 50 / 100 заявок на странице. Появляется автоматически когда заявок больше выбранного размера страницы.</p>
 
     <h3>Статусы</h3>
-    <p>Кнопка «Статус» в строке реестра переключает по кругу. Цвета: синий → жёлтый → зелёный → красный.</p>
+    <p>Выпадающий список в строке реестра меняет статус напрямую (это select, а не циклическая кнопка).</p>
+    <div class="table-wrap">
+      <table>
+        <tr><th>Статус</th><th>Значение</th><th>Цвет</th></tr>
+        <tr><td>🆕 Новая</td><td>Заявка только создана</td><td>синий</td></tr>
+        <tr><td>📦 Заказано</td><td>Отправлено поставщику</td><td>жёлтый</td></tr>
+        <tr><td>🔄 Частично</td><td>Получена частичная поставка</td><td>оранжевый</td></tr>
+        <tr><td>✅ Получено</td><td>Заявка выполнена полностью</td><td>зелёный</td></tr>
+        <tr><td>❌ Отменена</td><td>Заявка отменена</td><td>красный</td></tr>
+      </table>
+    </div>
+    <p>Каждая смена статуса пишется в <a href="#api" style="color:var(--accent)">audit log</a>, а если в Конфиге настроен «Webhook при смене статуса» — отправляется туда же.</p>
   </section>
 
   <!-- Excel -->
@@ -611,15 +640,19 @@ data/certs/key.pem    # приватный ключ</pre>
   <section class="section" id="backup">
     <h2>Бэкап</h2>
     <h3>Автоматический</h3>
-    <p>Запускается через 10 секунд после старта, затем каждые 6 часов. Файлы сохраняются в <code>data/backups/zakupki_YYYY-MM-DD_HH-MM.db</code>. Файлы старше 30 дней удаляются автоматически.</p>
+    <p>Запускается через 10 секунд после старта, затем каждые 6 часов. Снапшот БД сохраняется в <code>data/backups/zakupki_YYYY-MM-DD_HH-MM.db</code>, файлы старше 30 дней удаляются автоматически.</p>
+    <p>Одновременно синхронизируется <code>data/backups/files_mirror/</code> — зеркало прикреплённых файлов (подписанные PDF-спецификации, счета). Сами файлы хранятся на диске отдельно от SQLite, поэтому снапшот <code>.db</code> их не содержит — зеркало закрывает этот пробел. Копируются только новые/изменённые файлы, зеркало не версионируется и не растёт бесконечно.</p>
 
     <h3>Ручной (из интерфейса)</h3>
     <p>Раздел «Организации» → кнопки:</p>
     <ul>
-      <li><strong>💾 JSON бэкап</strong> — полный экспорт в JSON (организации, заявки, адреса, шаблоны)</li>
-      <li><strong>🗄️ DB бэкап</strong> — скачать SQLite файл</li>
+      <li><strong>💾 JSON бэкап</strong> — полный экспорт в JSON (организации, заявки, адреса, шаблоны, пользователи, настройки)</li>
+      <li><strong>🗄️ DB бэкап</strong> — скачать SQLite файл (заодно синхронизирует зеркало прикреплённых файлов)</li>
       <li><strong>📂 Восстановить</strong> — загрузить JSON бэкап</li>
     </ul>
+    <div class="alert alert-info">
+      При восстановлении сервер сначала ищет прикреплённый файл на месте, а если его там нет (например, диск был потерян) — берёт из <code>files_mirror/</code>.
+    </div>
 
     <h3>Через API</h3>
     <pre>GET  /api/backup     → JSON
@@ -630,50 +663,78 @@ POST /api/restore    → восстановить из JSON</pre>
   <!-- API -->
   <section class="section" id="api">
     <h2>REST API</h2>
+    <div class="alert alert-info">
+      Роли указаны в скобках: <code>public</code> — без токена, <code>operator</code> — оператор или admin, <code>admin</code> — только admin.
+    </div>
+
+    <h3>Аутентификация и пользователи</h3>
+    <div class="table-wrap"><table>
+      <tr><th>Метод</th><th>Путь</th><th>Описание</th></tr>
+      <tr><td><span class="method GET">GET</span>/api/auth/status</td><td>Статус авторизации <em>(public)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/auth/login</td><td>Войти (body: <code>{username, password}</code>) <em>(public)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/auth/logout</td><td>Выйти <em>(public)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/auth/change-password</td><td>Сменить свой пароль (body: <code>{currentPassword?, newPassword}</code> — currentPassword не нужен при принудительной смене временного пароля)</td></tr>
+      <tr><td><span class="method GET">GET</span>/api/users</td><td>Список пользователей <em>(admin)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/users</td><td>Создать пользователя <em>(admin)</em></td></tr>
+      <tr><td><span class="method PUT">PUT</span>/api/users/:id</td><td>Изменить роль/пароль <em>(admin)</em></td></tr>
+      <tr><td><span class="method DELETE">DELETE</span>/api/users/:id</td><td>Удалить (нельзя удалить последнего admin) <em>(admin)</em></td></tr>
+    </table></div>
 
     <h3>Организации</h3>
     <div class="table-wrap"><table>
       <tr><th>Метод</th><th>Путь</th><th>Описание</th></tr>
-      <tr><td><span class="method GET">GET</span>/api/orgs</td><td>Список организаций</td></tr>
-      <tr><td><span class="method POST">POST</span>/api/orgs</td><td>Создать организацию</td></tr>
-      <tr><td><span class="method PUT">PUT</span>/api/orgs/:id</td><td>Обновить организацию</td></tr>
-      <tr><td><span class="method DELETE">DELETE</span>/api/orgs/:id</td><td>Удалить (если нет заявок)</td></tr>
+      <tr><td><span class="method GET">GET</span>/api/orgs</td><td>Список организаций <em>(public)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/orgs</td><td>Создать организацию <em>(operator)</em></td></tr>
+      <tr><td><span class="method PUT">PUT</span>/api/orgs/:id</td><td>Обновить организацию <em>(operator)</em></td></tr>
+      <tr><td><span class="method DELETE">DELETE</span>/api/orgs/:id</td><td>Удалить (если нет заявок) <em>(operator)</em></td></tr>
     </table></div>
 
     <h3>Заявки</h3>
     <div class="table-wrap"><table>
       <tr><th>Метод</th><th>Путь</th><th>Описание</th></tr>
-      <tr><td><span class="method GET">GET</span>/api/requests</td><td>Список. Query: <code>?q= &org= &month= &status= &supplier=</code></td></tr>
-      <tr><td><span class="method GET">GET</span>/api/requests/:id</td><td>Одна заявка</td></tr>
-      <tr><td><span class="method POST">POST</span>/api/requests</td><td>Создать</td></tr>
-      <tr><td><span class="method PUT">PUT</span>/api/requests/:id</td><td>Обновить</td></tr>
-      <tr><td><span class="method PATCH">PATCH</span>/api/requests/:id/status</td><td>Только статус</td></tr>
-      <tr><td><span class="method DELETE">DELETE</span>/api/requests/:id</td><td>Удалить</td></tr>
+      <tr><td><span class="method GET">GET</span>/api/requests</td><td>Список. Query: <code>?q= &org= &month= &status= &supplier= &limit= &offset=</code> <em>(public)</em></td></tr>
+      <tr><td><span class="method GET">GET</span>/api/requests/:id</td><td>Одна заявка <em>(public)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/requests</td><td>Создать <em>(operator)</em></td></tr>
+      <tr><td><span class="method PUT">PUT</span>/api/requests/:id</td><td>Обновить <em>(operator)</em></td></tr>
+      <tr><td><span class="method PATCH">PATCH</span>/api/requests/:id/status</td><td>Только статус — см. <a href="#registry" style="color:var(--accent)">таблицу статусов</a> <em>(operator)</em></td></tr>
+      <tr><td><span class="method DELETE">DELETE</span>/api/requests/:id</td><td>Удалить <em>(operator)</em></td></tr>
+    </table></div>
+
+    <h3>Файлы заявки</h3>
+    <div class="table-wrap"><table>
+      <tr><th>Метод</th><th>Путь</th><th>Описание</th></tr>
+      <tr><td><span class="method POST">POST</span>/api/requests/:id/signed-spec</td><td>Загрузить подписанную спецификацию, PDF (body: <code>{pdf: base64}</code>, лимит 20MB) <em>(operator)</em></td></tr>
+      <tr><td><span class="method GET">GET</span>/api/requests/:id/signed-spec</td><td>Скачать подписанную спецификацию <em>(operator)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/requests/:id/invoice-file</td><td>Загрузить счёт — PDF/PNG/JPG/WebP (лимит 20MB) <em>(operator)</em></td></tr>
+      <tr><td><span class="method GET">GET</span>/api/requests/:id/invoice-file</td><td>Скачать счёт <em>(operator)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/requests/:id/layout-files</td><td>Разложить docx/excel/счёт в сетевую папку (лимит 50MB) <em>(operator)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/requests/:id/open-folder</td><td>Создать/открыть папку заявки в проводнике ОС (Windows/macOS/Linux) <em>(operator)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/test-folder</td><td>Проверить доступность сетевой папки/WebDAV <em>(operator)</em></td></tr>
     </table></div>
 
     <h3>Прочее</h3>
     <div class="table-wrap"><table>
       <tr><th>Метод</th><th>Путь</th><th>Описание</th></tr>
-      <tr><td><span class="method GET">GET</span>/api/addresses</td><td>Последние адреса доставки</td></tr>
-      <tr><td><span class="method POST">POST</span>/api/addresses</td><td>Сохранить адрес</td></tr>
-      <tr><td><span class="method GET">GET</span>/api/templates</td><td>Шаблоны позиций</td></tr>
-      <tr><td><span class="method POST">POST</span>/api/templates</td><td>Создать шаблон</td></tr>
-      <tr><td><span class="method DELETE">DELETE</span>/api/templates/:id</td><td>Удалить шаблон</td></tr>
-      <tr><td><span class="method GET">GET</span>/api/stats</td><td>Агрегированная статистика</td></tr>
-      <tr><td><span class="method GET">GET</span>/api/backup</td><td>JSON бэкап</td></tr>
-      <tr><td><span class="method POST">POST</span>/api/restore</td><td>Восстановить из JSON</td></tr>
-      <tr><td><span class="method GET">GET</span>/api/backup/db</td><td>SQLite бэкап</td></tr>
-      <tr><td><span class="method GET">GET</span>/health</td><td>Health check</td></tr>
-      <tr><td><span class="method GET">GET</span>/api/audit</td><td>История изменений (<code>?request_id=&amp;limit=50</code>)</td></tr>
-      <tr><td><span class="method GET">GET</span>/api/auth/status</td><td>Статус авторизации</td></tr>
-      <tr><td><span class="method POST">POST</span>/api/auth/login</td><td>Войти (body: <code>{password}</code>)</td></tr>
-      <tr><td><span class="method POST">POST</span>/api/auth/logout</td><td>Выйти</td></tr>
-      <tr><td><span class="method GET">GET</span>/api/settings</td><td>Настройки приложения (логотип, цвета, webhook)</td></tr>
-      <tr><td><span class="method PUT">PUT</span>/api/settings</td><td>Сохранить настройки</td></tr>
-      <tr><td><span class="method POST">POST</span>/api/spec-docx</td><td>Сгенерировать спецификацию в .docx</td></tr>
-      <tr><td><span class="method POST">POST</span>/api/send-bitrix</td><td>Отправить заявку в Bitrix24 через webhook</td></tr>
-      <tr><td><span class="method POST">POST</span>/api/open-folder</td><td>Открыть сетевую папку (только Windows)</td></tr>
+      <tr><td><span class="method GET">GET</span>/api/addresses</td><td>Последние адреса доставки <em>(operator)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/addresses</td><td>Сохранить адрес <em>(operator)</em></td></tr>
+      <tr><td><span class="method GET">GET</span>/api/templates</td><td>Шаблоны позиций <em>(operator)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/templates</td><td>Создать шаблон <em>(operator)</em></td></tr>
+      <tr><td><span class="method DELETE">DELETE</span>/api/templates/:id</td><td>Удалить шаблон <em>(operator)</em></td></tr>
+      <tr><td><span class="method GET">GET</span>/api/stats</td><td>Агрегированная статистика <em>(public)</em></td></tr>
+      <tr><td><span class="method GET">GET</span>/api/backup</td><td>JSON бэкап <em>(admin)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/restore</td><td>Восстановить из JSON <em>(admin)</em></td></tr>
+      <tr><td><span class="method GET">GET</span>/api/backup/db</td><td>SQLite бэкап <em>(admin)</em></td></tr>
+      <tr><td><span class="method GET">GET</span>/health</td><td>Health check <em>(public)</em></td></tr>
+      <tr><td><span class="method GET">GET</span>/api/audit</td><td>История изменений (<code>?request_id=&amp;limit=50</code>) <em>(operator)</em></td></tr>
+      <tr><td><span class="method GET">GET</span>/api/settings</td><td>Настройки приложения (логотип, цвета, webhook) <em>(operator, часть полей скрыта)</em></td></tr>
+      <tr><td><span class="method PUT">PUT</span>/api/settings</td><td>Сохранить настройки <em>(admin)</em></td></tr>
+      <tr><td><span class="method GET">GET</span>/api/version</td><td>Версия приложения <em>(operator)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/spec-docx</td><td>Сгенерировать спецификацию в .docx <em>(operator)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/send-bitrix</td><td>Отправить заявку в Bitrix24 через webhook <em>(operator)</em></td></tr>
     </table></div>
+    <div class="alert alert-warn">
+      Операторам (не admin) в ответе <code>GET /api/settings</code> скрыты инфраструктурные поля: сетевая папка/логин/пароль и webhook'и Bitrix/статусов.
+    </div>
   </section>
 
   <!-- Health -->
@@ -683,6 +744,7 @@ POST /api/restore    → восстановить из JSON</pre>
 
 {
   "status": "ok",
+  "version": "26w31-b01",
   "requests": 42,
   "uptime": 3600
 }</pre>
@@ -697,11 +759,8 @@ POST /api/restore    → восстановить из JSON</pre>
     <pre>git clone https://github.com/DarkyAndSparky/procure-it.git
 cd procure-it
 
-# Без пароля
-docker compose up -d
-
-# С паролем
-PROCURE_PASSWORD=yourpassword docker compose up -d</pre>
+docker compose up -d</pre>
+    <p>Встроенная система ролей включена всегда — при первом запуске автоматически создаётся администратор (<strong>admin / admin0000</strong>), приложение сразу попросит сменить пароль. <code>PROCURE_PASSWORD</code> не обязателен — это legacy-заглушка на случай самого первого запуска без доступа к интерфейсу, см. <a href="#config" style="color:var(--accent)">«Аутентификация»</a>.</p>
 
     <div class="alert alert-warn">
       При первом открытии браузер покажет предупреждение о сертификате.<br>
@@ -717,10 +776,12 @@ PROCURE_PASSWORD=yourpassword docker compose up -d</pre>
 
     <h3>Данные</h3>
     <p>Все данные хранятся в папке <code>./data/</code> на хосте (volume mount) — не теряются при пересборке контейнера.</p>
-    <pre>data/zakupki.db      # База данных
-data/certs/          # TLS сертификат
-data/backups/        # Автобэкапы каждые 6ч
-logs/access.log      # Логи запросов</pre>
+    <pre>data/zakupki.db               # База данных
+data/certs/                   # TLS сертификат
+data/backups/                 # Автобэкапы .db каждые 6ч + files_mirror/ (зеркало прикреплённых файлов)
+data/signed_specs/            # Подписанные спецификации (PDF)
+data/invoices/                # Приложенные файлы счетов
+logs/access.log                # Логи запросов</pre>
 
     <h3>Команды</h3>
     <pre>docker compose ps             # статус
@@ -733,7 +794,7 @@ docker exec -it procure-it sh # войти в контейнер</pre>
     <div class="table-wrap"><table>
       <tr><th>Переменная</th><th>По умолчанию</th><th>Описание</th></tr>
       <tr><td>PORT</td><td>9111</td><td>HTTPS порт</td></tr>
-      <tr><td>PROCURE_PASSWORD</td><td>не задан</td><td>Пароль для входа (если задан — auth включена)</td></tr>
+      <tr><td>PROCURE_PASSWORD</td><td>не задан</td><td>Legacy-заглушка для самого первого запуска — см. <a href="#config" style="color:var(--accent)">«Аутентификация»</a></td></tr>
       <tr><td>BACKUP_INTERVAL_MS</td><td>21600000</td><td>Интервал автобэкапа (мс)</td></tr>
     </table></div>
   </section>
@@ -760,17 +821,35 @@ docker exec -it procure-it sh # войти в контейнер</pre>
   <!-- Versioning -->
   <section class="section" id="versioning">
     <h2>Версионирование</h2>
-    <p>Формат: <code>YYwWW-bNN</code></p>
+    <p>Формат: <code>YYwWW-СТАДИЯNN</code></p>
     <div class="table-wrap"><table>
       <tr><th>Часть</th><th>Значение</th><th>Пример</th></tr>
       <tr><td>YY</td><td>Год (2 цифры)</td><td>26</td></tr>
       <tr><td>wWW</td><td>ISO-номер недели</td><td>w31</td></tr>
-      <tr><td>bNN</td><td>Номер сборки на неделе</td><td>b01</td></tr>
+      <tr><td>СТАДИЯ</td><td>Стадия сборки — см. таблицу ниже</td><td>b</td></tr>
+      <tr><td>NN</td><td>Порядковый номер сборки на этой неделе (с этой стадией)</td><td>01</td></tr>
     </table></div>
-    <pre>26w31-b01   # 2026, неделя 31, первая сборка
-26w31-b02   # 2026, неделя 31, вторая сборка
-26w32-b01   # 2026, неделя 32, первая сборка</pre>
-    <p>При релизе обновить: <code>package.json</code> → <code>version</code>, <code>README.md</code> badge, тег в git.</p>
+
+    <h3>Стадии</h3>
+    <div class="table-wrap"><table>
+      <tr><th>Код</th><th>Стадия</th><th>Когда использовать</th></tr>
+      <tr><td><code>a</code></td><td>Alpha</td><td>Ранняя, потенциально нестабильная сборка — активная разработка в <code>dev</code></td></tr>
+      <tr><td><code>b</code></td><td>Beta</td><td>Функционал закончен, идёт обкатка/тестирование</td></tr>
+      <tr><td><code>rc</code></td><td>Release Candidate</td><td>Кандидат в релиз — багов не найдено, финальная проверка перед merge в <code>main</code></td></tr>
+      <tr><td><code>r</code></td><td>Release</td><td>Финальный релиз в <code>main</code></td></tr>
+    </table></div>
+
+    <pre>26w31-b01    # 2026, неделя 31, бета, первая сборка
+26w31-b02    # 2026, неделя 31, бета, вторая сборка
+26w31-rc01   # 2026, неделя 31, кандидат в релиз, первая сборка
+26w31-r01    # 2026, неделя 31, релиз, первая сборка
+26w32-a01    # 2026, неделя 32, альфа, первая сборка</pre>
+
+    <div class="alert alert-warn">
+      <strong>package.json — единственный источник правды.</strong> Номер версии больше не редактируется вручную в README/доках — при бампе версии меняется <em>только</em> <code>package.json</code> → <code>version</code>, а затем запускается синхронизация:
+      <pre>npm run version:sync</pre>
+      Скрипт (<code>scripts/sync-version.js</code>) сам подставит новый номер во все места, где он отображается: бейдж в README, версия в шапке и футере этой страницы, тег Docker-образа в <code>docker-compose.yml</code>. Иллюстративные примеры формата (как в таблице выше) скрипт не трогает — только реальные «текущая версия» плейсхолдеры, помеченные комментариями <code>&lt;!--VERSION--&gt;…&lt;!--/VERSION--&gt;</code> в исходниках.
+    </div>
   </section>
 
   <!-- Contributing -->
@@ -808,7 +887,7 @@ git checkout dev</pre>
   </section>
 
   <div style="border-top:1px solid var(--border);margin-top:48px;padding-top:24px;color:var(--text2);font-size:12px;display:flex;justify-content:space-between;align-items:center">
-    <span>procure-it 26w31-b01 · MIT License</span>
+    <span>procure-it <!--VERSION-->26w31-b01<!--/VERSION--> · MIT License</span>
     <a href="https://github.com/DarkyAndSparky" style="color:var(--text2);text-decoration:none">© DarkyAndSparky</a>
   </div>
 

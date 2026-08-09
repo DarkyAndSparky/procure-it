@@ -6,7 +6,12 @@ const { operatorOrAdmin, adminOnly } = require('../auth/middleware');
 const { DEFAULT_SETTINGS } = require('../config');
 
 const PKG_VERSION = (() => {
-  try { return require('../../package.json').version; } catch(e) { return '26w31-b01'; }
+  // package.json — единственный источник правды для версии (см. scripts/sync-version.js,
+  // который подставляет её же во все остальные места: README, docs/index.html,
+  // docker-compose.yml). Фолбэк здесь — не конкретная версия (иначе он сам стал бы
+  // ещё одним местом, которое незаметно устареет), а нейтральная метка на случай,
+  // если package.json почему-то не читается (битая установка).
+  try { return require('../../package.json').version; } catch(e) { return 'unknown'; }
 })();
 
 router.get('/settings', operatorOrAdmin, (req, res) => {

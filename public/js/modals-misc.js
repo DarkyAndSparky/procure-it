@@ -91,7 +91,7 @@ function acRender(key) {
   acIdx[key] = -1;
   if (!matches.length) { drop.classList.remove('open'); return; }
   drop.innerHTML = matches.map((m, i) =>
-    `<div class="ac-item" data-i="${i}" onmousedown="acPick('${key}','${m.replace(/'/g,"\\'")}')">
+    `<div class="ac-item" data-i="${i}" onmousedown="acPick('${key}','${escJsAttr(m)}')">
       ${acHighlight(m, inp.value)}
     </div>`
   ).join('');

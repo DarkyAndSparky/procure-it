@@ -18,9 +18,9 @@ function addRow(name='', qty=1, unit='шт', price=0, link='', purchasePrice=0, 
     <td><input type="text" value="${esc(name)}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;font-family:inherit" placeholder="Наименование товара" oninput="renumber()"></td>
     ${commentCell}
     <td><input type="text" value="${esc(link)}" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;font-family:inherit" placeholder="URL" title="${esc(link)}"></td>
-    <td><input type="number" value="${qty}" min="1" step="1" style="width:58px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" oninput="calcRow('${id}')"></td>
-    <td><input type="text" value="${unit}" style="width:42px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px"></td>
-    <td><input type="text" inputmode="decimal" value="${pp||''}" style="width:100px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" oninput="this.value=this.value.replace(/[\\s\\u00a0\\u202f]/g,'');calcRow('${id}')" onpaste="setTimeout(()=>{this.value=this.value.replace(/[\\s\\u00a0\\u202f]/g,'');calcRow('${id}')},0)" title="Цена закупа за единицу"></td>
+    <td><input type="number" value="${esc(qty)}" min="1" step="1" style="width:58px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" oninput="calcRow('${id}')"></td>
+    <td><input type="text" value="${esc(unit)}" style="width:42px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px"></td>
+    <td><input type="text" inputmode="decimal" value="${esc(pp||'')}" style="width:100px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" oninput="this.value=this.value.replace(/[\\s\\u00a0\\u202f]/g,'');calcRow('${id}')" onpaste="setTimeout(()=>{this.value=this.value.replace(/[\\s\\u00a0\\u202f]/g,'');calcRow('${id}')},0)" title="Цена закупа за единицу"></td>
     <td id="${id}-sell" style="font-size:12px;font-weight:500;text-align:right;padding-right:8px;color:var(--accent)">—</td>
     <td id="${id}-sum" style="font-size:12px;font-weight:500;text-align:right;padding-right:8px">—</td>
     <td><button class="del-btn" onclick="removeRow('${id}')">×</button></td>`;

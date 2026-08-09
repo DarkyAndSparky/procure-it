@@ -2,7 +2,7 @@
 
 > Web-based IT asset procurement tool — manage purchase requests, generate Excel calculation sheets and specifications.
 
-[![Version](https://img.shields.io/badge/version-26w31--b01-blue)](#)
+[![Version](https://img.shields.io/badge/version-<!--VERSION_SHIELDS-->26w31--b01<!--/VERSION_SHIELDS-->-blue)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-brightgreen)](https://nodejs.org/)
 [![SQLite](https://img.shields.io/badge/Database-SQLite-blue)](https://www.sqlite.org/)
@@ -24,7 +24,7 @@
 5. Optionally send request to Bitrix24 CRM via webhook
 6. All data in a local SQLite database, accessible from any LAN device
 
-**Also included:** drag & drop row reordering · position templates · Excel import · audit log with field-level diff · auto-backup every 6h · token-based auth · Docker support
+**Also included:** drag & drop row reordering · position templates · Excel import · audit log with field-level diff · auto-backup every 6h (including attached files) · role-based auth (viewer/operator/admin) · Docker support
 
 ---
 
@@ -73,9 +73,25 @@ cp .env.example .env
 
 ```env
 PORT=9111                        # HTTPS port (default 9111); HTTP redirect = PORT+1 (9112)
-# PROCURE_PASSWORD=yourpassword  # leave empty to disable auth
+# PROCURE_PASSWORD=yourpassword  # legacy fallback only — see "Authentication" below
 BACKUP_INTERVAL_MS=21600000      # auto-backup interval (default 6 h)
 ```
+
+---
+
+## Authentication
+
+The app has a built-in multi-user system with three roles:
+
+| Role | Can do |
+|------|--------|
+| `viewer` | Read-only — no login needed at all |
+| `operator` | Create/edit requests, orgs, upload files |
+| `admin` | Everything operator can, plus users, settings, restore |
+
+On first run a default admin account is created automatically — **login `admin` / password `admin0000`** — and the app forces a password change on first login. Manage additional users from the sidebar (admin only).
+
+`PROCURE_PASSWORD` is a **legacy fallback**, not the primary auth mechanism: it only takes effect if the `users` table is still empty (e.g. a fresh install where you haven't logged in via the UI yet). Once any user exists, `PROCURE_PASSWORD` is ignored — manage access through the UI instead.
 
 ---
 

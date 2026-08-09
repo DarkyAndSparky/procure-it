@@ -79,7 +79,7 @@ function renderRegistryRows(reqs) {
     const docTypeBadge = r.docType === 'install' ? ' <span style="font-size:10px;background:var(--warning-bg);color:var(--warning);padding:1px 5px;border-radius:4px;margin-left:4px">монтаж</span>'
       : r.docType === 'support' ? ' <span style="font-size:10px;background:var(--surface-2);color:var(--text-secondary);padding:1px 5px;border-radius:4px;margin-left:4px">сопровождение</span>' : '';
     tr.innerHTML = `
-      <td><span class="chevron" id="ch-${r.id}">▶</span></td>
+      <td><span class="chevron" id="ch-${esc(r.id)}">▶</span></td>
       <td><span style="font-family:monospace;font-size:12px;color:var(--accent)">${esc(r.specNum)}</span>${realizBadge}${docTypeBadge}</td>
       <td style="font-size:12px;color:var(--text-secondary)">${fmtDate(r.date)}</td>
       <td>${esc(r.orgShort||'')}</td>
@@ -89,8 +89,8 @@ function renderRegistryRows(reqs) {
       <td style="text-align:center"><span class="num-badge">${r.positions.length}</span></td>
       <td style="font-weight:600;font-size:12px">${fmtRub(r.total)}</td>
       <td>
-        <button class="btn btn-sm" onclick="event.stopPropagation();loadToForm('${r.id}')">Ред.</button>
-        <select class="btn btn-sm status-select" onchange="event.stopPropagation();changeStatus('${r.id}',this.value)" onclick="event.stopPropagation()" style="margin-left:4px;padding:2px 4px;font-size:11px;cursor:pointer" ${userRole==='viewer'?'disabled title="Только для операторов"':''}>
+        <button class="btn btn-sm" onclick="event.stopPropagation();loadToForm('${escJsAttr(r.id)}')">Ред.</button>
+        <select class="btn btn-sm status-select" onchange="event.stopPropagation();changeStatus('${escJsAttr(r.id)}',this.value)" onclick="event.stopPropagation()" style="margin-left:4px;padding:2px 4px;font-size:11px;cursor:pointer" ${userRole==='viewer'?'disabled title="Только для операторов"':''}>
           ${Object.entries(STATUS_MAP).map(([k,v])=>`<option value="${k}" ${r.status===k?'selected':''}>${v.label}</option>`).join('')}
         </select>
       </td>`;
@@ -98,7 +98,7 @@ function renderRegistryRows(reqs) {
 
     const detail = document.createElement('tr');
     detail.innerHTML = `<td colspan="10" style="padding:0">
-      <div id="detail-${r.id}" class="registry-detail">
+      <div id="detail-${esc(r.id)}" class="registry-detail">
         <div class="detail-grid">
           <div class="detail-item"><span>Поставщик</span>${esc(r.supplier||'—')}</div>
           <div class="detail-item"><span>Номер счёта</span>${r.invoiceNum ? `<span style="font-family:monospace;color:var(--accent)">${esc(r.invoiceNum)}</span>` : '—'}</div>
@@ -106,32 +106,32 @@ function renderRegistryRows(reqs) {
           <div class="detail-item"><span>Битрикс</span>${r.bitrix?'#'+esc(r.bitrix):'—'}</div>
           <div class="detail-item"><span>Адрес</span>${esc(r.address||'—')}</div>
           ${r.comment?`<div class="detail-item" style="grid-column:1/-1"><span>Комментарий</span>${esc(r.comment)}</div>`:''}
-          <div class="detail-item" style="grid-column:1/-1"><span>Путь папки</span><span style="font-family:monospace;font-size:11px;color:var(--accent);cursor:pointer" onclick="openRequestFolder('${r.id}')" title="Нажать, чтобы открыть папку заявки">📁 ${esc(buildFolderPath(r))}</span></div>
+          <div class="detail-item" style="grid-column:1/-1"><span>Путь папки</span><span style="font-family:monospace;font-size:11px;color:var(--accent);cursor:pointer" onclick="openRequestFolder('${escJsAttr(r.id)}')" title="Нажать, чтобы открыть папку заявки">📁 ${esc(buildFolderPath(r))}</span></div>
         </div>
         <table style="font-size:12px;width:100%;border-collapse:collapse">
           <tr><th style="padding:4px 8px;background:none;border-bottom:1px solid var(--border);font-size:11px">Наименование</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:120px">${r.isRealization?'ЮЛ / Кому':'Комментарий'}</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:60px">Кол-во</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:90px">Закуп</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:90px">Продажа</th></tr>
           ${r.positions.map(p=>`<tr><td style="padding:3px 8px;border:none">${esc(p.name)}</td><td style="padding:3px 4px;border:none;font-size:11px;color:var(--text-secondary)">${esc(p.comment||p.rowOrgName||'—')}</td><td style="padding:3px 4px;border:none">${p.qty} ${p.unit||'шт'}</td><td style="padding:3px 4px;border:none;text-align:right">${fmtRub(p.purchasePrice)}</td><td style="padding:3px 4px;border:none;text-align:right;color:var(--accent)">${fmtRub(p.sellPerUnit||0)}</td></tr>`).join('')}
         </table>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
-          <button class="btn btn-sm btn-success" onclick="exportExcelById('${r.id}')">📊 Excel</button>
-          ${!r.isRealization?`<button class="btn btn-sm" onclick="loadSpec('${r.id}')">${r.docType==='install'?'🔧 Смета на работы':r.docType==='support'?'🛠️ Сопровождение':'📄 Спецификация'}</button>`:''}
+          <button class="btn btn-sm btn-success" onclick="exportExcelById('${escJsAttr(r.id)}')">📊 Excel</button>
+          ${!r.isRealization?`<button class="btn btn-sm" onclick="loadSpec('${escJsAttr(r.id)}')">${r.docType==='install'?'🔧 Смета на работы':r.docType==='support'?'🛠️ Сопровождение':'📄 Спецификация'}</button>`:''}
           ${userRole !== 'viewer' ? `
-          <button class="btn btn-sm" onclick="loadToForm('${r.id}',true)">📋 Копировать</button>
+          <button class="btn btn-sm" onclick="loadToForm('${escJsAttr(r.id)}',true)">📋 Копировать</button>
           <label class="btn btn-sm" style="cursor:pointer;background:${r.signedSpecPdf?'var(--success)':'var(--surface-2)'};border-color:${r.signedSpecPdf?'var(--success)':'var(--border)'};color:${r.signedSpecPdf?'#fff':'var(--text)'}" title="${r.signedSpecPdf?'Подписанная спецификация прикреплена. Нажмите чтобы заменить':'Прикрепить подписанную спецификацию PDF'}">
             ${(r.signedSpecPdf&&r.signedSpecPdf!=='')?'✅ Спецификация подписана':'📎 Прикрепить подпись'}
-            <input type="file" accept=".pdf" style="display:none" onchange="uploadSignedSpec('${r.id}',this)">
+            <input type="file" accept=".pdf" style="display:none" onchange="uploadSignedSpec('${escJsAttr(r.id)}',this)">
           </label>
-          ${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${r.id}','${esc(r.specNum)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}
+          ${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}
           <label class="btn btn-sm" style="cursor:pointer;background:${r.invoiceFile?'var(--success)':'var(--surface-2)'};border-color:${r.invoiceFile?'var(--success)':'var(--border)'};color:${r.invoiceFile?'#fff':'var(--text)'}" title="${r.invoiceFile?'Счёт прикреплён. Нажмите чтобы заменить':'Прикрепить счёт (PDF/фото)'}">
             ${(r.invoiceFile&&r.invoiceFile!=='')?'✅ Счёт прикреплён':'🧾 Прикрепить счёт'}
-            <input type="file" accept=".pdf,image/*" style="display:none" onchange="uploadInvoiceFile('${r.id}',this)">
+            <input type="file" accept=".pdf,image/*" style="display:none" onchange="uploadInvoiceFile('${escJsAttr(r.id)}',this)">
           </label>
-          ${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${r.id}','${esc(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}
-          ${appConfig.networkFolder?`<button class="btn btn-sm" id="layout-btn-${r.id}" onclick="forceLayoutFiles('${r.id}',this)" title="Разложить файлы в сетевую папку" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">📁 Разложить файлы</button>`:''}
-          <button class="btn btn-sm" style="margin-left:auto;color:var(--danger);border-color:var(--danger)" onclick="deleteRequest('${r.id}')">Удалить</button>
-          ` : `${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${r.id}','${esc(r.specNum)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${r.id}','${esc(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}`}
+          ${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}
+          ${appConfig.networkFolder?`<button class="btn btn-sm" id="layout-btn-${esc(r.id)}" onclick="forceLayoutFiles('${escJsAttr(r.id)}',this)" title="Разложить файлы в сетевую папку" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">📁 Разложить файлы</button>`:''}
+          <button class="btn btn-sm" style="margin-left:auto;color:var(--danger);border-color:var(--danger)" onclick="deleteRequest('${escJsAttr(r.id)}')">Удалить</button>
+          ` : `${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}`}
         </div>
-        <div id="audit-${r.id}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;font-size:12px"></div>
+        <div id="audit-${esc(r.id)}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;font-size:12px"></div>
       </div>
     </td>`;
     body.appendChild(detail);
@@ -209,7 +209,7 @@ async function renderRegistry() {
     orgSel.innerHTML = '<option value="">Все организации</option>';
     db.orgs.forEach(o => {
       if (reqs.some(r=>r.orgId===o.id) || db.requests.some(r=>r.orgId===o.id))
-        orgSel.innerHTML += `<option value="${o.id}" ${curOrg===o.id?'selected':''}>${o.short}</option>`;
+        orgSel.innerHTML += `<option value="${esc(o.id)}" ${curOrg===o.id?'selected':''}>${o.short}</option>`;
     });
 
     // Supplier filter
@@ -287,7 +287,7 @@ function renderOrgs() {
     return;
   }
   list.innerHTML = db.orgs.map(o => `
-    <div class="org-item" style="cursor:pointer" onclick="openOrgModal('${o.id}')">
+    <div class="org-item" style="cursor:pointer" onclick="openOrgModal('${escJsAttr(o.id)}')">
       <div style="flex:1">
         <div class="org-name">${esc(o.full)}</div>
         <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${esc(o.short)} · Префикс: <strong>${esc(o.prefix)}</strong> · ${esc(o.signatory||'—')}</div>
@@ -295,8 +295,8 @@ function renderOrgs() {
         ${o.address  ? `<div style="font-size:11px;color:var(--text-muted);margin-top:1px">📍 ${esc(o.address)}</div>`  : ''}
       </div>
       <div style="display:flex;gap:4px;align-items:center">
-        <button class="btn btn-sm" onclick="event.stopPropagation();openOrgModal('${o.id}')" style="font-size:11px">✏️ Ред.</button>
-        <button class="del-btn" onclick="event.stopPropagation();deleteOrg('${o.id}')">×</button>
+        <button class="btn btn-sm" onclick="event.stopPropagation();openOrgModal('${escJsAttr(o.id)}')" style="font-size:11px">✏️ Ред.</button>
+        <button class="del-btn" onclick="event.stopPropagation();deleteOrg('${escJsAttr(o.id)}')">×</button>
       </div>
     </div>`).join('');
 }
@@ -306,14 +306,14 @@ function populateOrgSelect() {
   const cur = sel.value;
   sel.innerHTML = '<option value="">— выбрать —</option>';
   db.orgs.forEach(o => {
-    sel.innerHTML += `<option value="${o.id}" ${cur===o.id?'selected':''}>${o.short}</option>`;
+    sel.innerHTML += `<option value="${esc(o.id)}" ${cur===o.id?'selected':''}>${o.short}</option>`;
   });
 
   const specSel = document.getElementById('spec-select');
   const pool = allReqs.length ? allReqs : db.requests;
   specSel.innerHTML = '<option value="">— Выбрать сохранённую заявку —</option>';
   pool.forEach(r => {
-    specSel.innerHTML += `<option value="${r.id}">${r.specNum} — ${r.name}</option>`;
+    specSel.innerHTML += `<option value="${esc(r.id)}">${esc(r.specNum)} — ${esc(r.name)}</option>`;
   });
 }
 

@@ -15,7 +15,14 @@ function resolveFolderNames(r) {
   const orgRow    = r.orgId ? query('SELECT folder, short, full FROM orgs WHERE id=?', [r.orgId])[0] : null;
   const orgFolder = (orgRow?.folder || orgRow?.short || r.orgShort || r.orgFull || 'Организация').replace(/[\\/:*?"<>|]/g, '_');
   const safeName  = (r.name || 'Заявка').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
-  return { year, monthFolder, orgFolder, safeName };
+  // Уязвимость (найдена при аудите): specNum подставляется прямо в имена
+  // файлов (`${r.specNum}_спецификация.docx` и т.д.) — значение вида
+  // "../../../tmp/pwned" в specNum позволяло записать файл ЗА пределами
+  // папки заявки (path traversal), подтверждено на практике для локального/
+  // SMB режима. Санитизируем так же, как orgFolder/safeName выше, до любого
+  // использования в путях на диске.
+  const safeSpecNum = String(r.specNum || 'spec').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+  return { year, monthFolder, orgFolder, safeName, safeSpecNum };
 }
 
 // ── WebDAV helpers ────────────────────────────────────────────────────────────
@@ -87,7 +94,7 @@ function buildDavClient(baseUrl, user, pass) {
 
 // Раскладывает файлы заявки на WebDAV-сервере (Nextcloud/ownCloud/любой WebDAV).
 async function layoutFilesWebDav(reqId, r, cfg, body) {
-  const { year, monthFolder, orgFolder, safeName } = resolveFolderNames(r);
+  const { year, monthFolder, orgFolder, safeName, safeSpecNum } = resolveFolderNames(r);
   const { davMkdir, davPut, davList, seg } = buildDavClient(cfg.networkFolder, cfg.networkUser, cfg.networkPass);
   const results = [];
 
@@ -112,14 +119,14 @@ async function layoutFilesWebDav(reqId, r, cfg, body) {
   await davMkdir(seg(year, monthFolder, orgFolder, requestFolderName, 'Расчеты'));
 
   if (body.docxBase64) {
-    const name = `${r.specNum}_спецификация.docx`;
+    const name = `${safeSpecNum}_спецификация.docx`;
     await davPut(seg(year, monthFolder, orgFolder, requestFolderName, name), Buffer.from(body.docxBase64, 'base64'));
     results.push({ type: 'docx', name });
   }
   if (r.signedSpecPdf === '__has_pdf__') {
     const pdfPath = path.join(SIGNED_DIR, path.basename(query('SELECT signed_spec_pdf FROM requests WHERE id=?', [reqId])[0]?.signed_spec_pdf || ''));
     if (fs.existsSync(pdfPath)) {
-      const name = `${r.specNum}_спецификация_подписано.pdf`;
+      const name = `${safeSpecNum}_спецификация_подписано.pdf`;
       await davPut(seg(year, monthFolder, orgFolder, requestFolderName, name), fs.readFileSync(pdfPath));
       results.push({ type: 'signed_spec', name });
     }
@@ -129,13 +136,13 @@ async function layoutFilesWebDav(reqId, r, cfg, body) {
     const invPath = path.join(INVOICE_DIR, path.basename(invRow));
     if (invRow && fs.existsSync(invPath)) {
       const ext = invRow.split('.').pop();
-      const name = `${r.specNum}_счет.${ext}`;
+      const name = `${safeSpecNum}_счет.${ext}`;
       await davPut(seg(year, monthFolder, orgFolder, requestFolderName, 'Расчеты', name), fs.readFileSync(invPath));
       results.push({ type: 'invoice_attached', name });
     }
   }
   if (body.excelBase64) {
-    const name = `${r.specNum}_расчеты.xlsx`;
+    const name = `${safeSpecNum}_расчеты.xlsx`;
     await davPut(seg(year, monthFolder, orgFolder, requestFolderName, 'Расчеты', name), Buffer.from(body.excelBase64, 'base64'));
     results.push({ type: 'excel', name });
   }
@@ -172,7 +179,7 @@ function mountSmbIfNeeded(cfg, rootPath) {
 // Раскладывает файлы заявки в локальную (или примонтированную SMB) папку.
 async function layoutFilesLocal(reqId, r, cfg, body) {
   const rootPath = cfg.networkFolder.trim();
-  const { year, monthFolder, orgFolder, safeName } = resolveFolderNames(r);
+  const { year, monthFolder, orgFolder, safeName, safeSpecNum } = resolveFolderNames(r);
   const results = [];
 
   mountSmbIfNeeded(cfg, rootPath);
@@ -200,7 +207,7 @@ async function layoutFilesLocal(reqId, r, cfg, body) {
   const wb64 = b64 => Buffer.from(b64.replace(/^data:[^;]+;base64,/, ''), 'base64');
 
   if (body.docxBase64) {
-    const name = `${r.specNum}_спецификация.docx`;
+    const name = `${safeSpecNum}_спецификация.docx`;
     fs.writeFileSync(path.join(requestPath, name), Buffer.from(body.docxBase64, 'base64'));
     results.push({ type: 'docx', name });
   }
@@ -208,7 +215,7 @@ async function layoutFilesLocal(reqId, r, cfg, body) {
     const pdfRow = query('SELECT signed_spec_pdf FROM requests WHERE id=?', [reqId])[0];
     const pdfPath = path.join(SIGNED_DIR, path.basename(pdfRow?.signed_spec_pdf || ''));
     if (fs.existsSync(pdfPath)) {
-      const name = `${r.specNum}_спецификация_подписано.pdf`;
+      const name = `${safeSpecNum}_спецификация_подписано.pdf`;
       fs.writeFileSync(path.join(requestPath, name), fs.readFileSync(pdfPath));
       results.push({ type: 'signed_spec', name });
     }
@@ -218,13 +225,13 @@ async function layoutFilesLocal(reqId, r, cfg, body) {
     const invPath = path.join(INVOICE_DIR, path.basename(invRow));
     if (invRow && fs.existsSync(invPath)) {
       const ext = invRow.split('.').pop();
-      const name = `${r.specNum}_счет.${ext}`;
+      const name = `${safeSpecNum}_счет.${ext}`;
       fs.writeFileSync(path.join(calcPath, name), fs.readFileSync(invPath));
       results.push({ type: 'invoice_attached', name });
     }
   }
   if (body.excelBase64) {
-    const name = `${r.specNum}_расчеты.xlsx`;
+    const name = `${safeSpecNum}_расчеты.xlsx`;
     fs.writeFileSync(path.join(calcPath, name), Buffer.from(body.excelBase64, 'base64'));
     results.push({ type: 'excel', name });
   }
@@ -260,7 +267,7 @@ function openFolder(r, cfg, opts = {}) {
     return { ok: true, mode: 'webdav', url: rootPath };
   }
 
-  const { year, monthFolder, orgFolder, safeName } = resolveFolderNames(r);
+  const { year, monthFolder, orgFolder, safeName, safeSpecNum } = resolveFolderNames(r);
   mountSmbIfNeeded(cfg, rootPath);
 
   const orgPath = path.join(rootPath, year, monthFolder, orgFolder);

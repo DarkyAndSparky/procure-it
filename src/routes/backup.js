@@ -42,12 +42,27 @@ module.exports = (strictLimiter) => {
   router.post('/restore', adminOnly, strictLimiter, (req, res) => {
     const { orgs=[], requests=[], addresses=[], templates=[] } = req.body;
     let filesRestored = 0, filesMissing = 0;
+    // Уязвимость (найдена при аудите): id заявок/организаций из бэкапа
+    // раньше писались в БД без проверки формата. Сама по себе загрузка
+    // JSON-бэкапа — действие только для admin, но восстановленный id затем
+    // попадает НЕЭКРАНИРОВАННЫМ в атрибуты onclick фронтенда (id используется
+    // в одинарных кавычках внутри JS-строки — см. фикс escJsAttr() в
+    // public/js/helpers.js), так что id вида XSS');alert(1);// превращался в
+    // выполняющийся код при простом открытии реестра ЛЮБЫМ пользователем —
+    // то есть один тронутый/скомпрометированный бэкап-файл давал сохранённый
+    // XSS на всех, кто потом откроет реестр. Раньше id всегда были простыми
+    // числами (Date.now()), но раз это больше не гарантия (JSON можно
+    // отредактировать руками перед восстановлением), проверяем формат явно.
+    const SAFE_ID = /^[A-Za-z0-9_-]+$/;
+    function safeId(id, fallbackPrefix) {
+      return SAFE_ID.test(String(id)) ? String(id) : `${fallbackPrefix}${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+    }
     try {
       if (orgs.length) {
         run('DELETE FROM orgs');
         for (const o of orgs) {
           run('INSERT OR REPLACE INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp,folder) VALUES (?,?,?,?,?,?,?,?,?,?)',
-            [o.id, o.full, o.short, o.prefix, o.signatory||'', o.contract||'', o.address||'', o.supplier||'', o.stamp !== undefined ? String(o.stamp) : '1', o.folder||'']);
+            [safeId(o.id, 'org-'), o.full, o.short, o.prefix, o.signatory||'', o.contract||'', o.address||'', o.supplier||'', o.stamp !== undefined ? String(o.stamp) : '1', o.folder||'']);
         }
       }
       if (requests.length) {
@@ -60,8 +75,9 @@ module.exports = (strictLimiter) => {
           // писать их в БД как имя файла нельзя, иначе привязка сломается.
           const signedSpecPdf = SENTINELS.has(r.signedSpecPdf) ? '' : (r.signedSpecPdf || '');
           const invoiceFile   = SENTINELS.has(r.invoiceFile)   ? '' : (r.invoiceFile || '');
+          const reqId = safeId(r.id, 'req-');
           run(`INSERT OR REPLACE INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type,signed_spec_pdf,invoice_file,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [r.id, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
+            [reqId, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
              r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
              r.status||'new', r.comment||'', r.isRealization?1:0,
              r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,

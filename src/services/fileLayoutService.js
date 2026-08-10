@@ -21,8 +21,9 @@ function resolveFolderNames(r) {
   // папки заявки (path traversal), подтверждено на практике для локального/
   // SMB режима. Санитизируем так же, как orgFolder/safeName выше, до любого
   // использования в путях на диске.
-  const safeSpecNum = String(r.specNum || 'spec').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
-  return { year, monthFolder, orgFolder, safeName, safeSpecNum };
+  const safeSpecNum  = String(r.specNum || 'spec').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+  const safeOrgShort = (orgRow?.short || r.orgShort || '').replace(/[\\/:*?"<>|]/g, '_').slice(0, 20);
+  return { year, monthFolder, orgFolder, safeName, safeSpecNum, safeOrgShort };
 }
 
 // ── WebDAV helpers ────────────────────────────────────────────────────────────
@@ -76,6 +77,15 @@ function buildDavClient(baseUrl, user, pass) {
     }
   }
 
+  // Читает содержимое файла, если он существует; возвращает null, если нет
+  // (404) — используется для чтения маркер-файла с id заявки, см. ниже.
+  async function davGetIfExists(u) {
+    const r2 = await davReq('GET', u);
+    if (r2.status === 404) return null;
+    if (r2.status < 200 || r2.status > 299) return null;
+    return r2.body.toString('utf8');
+  }
+
   async function davList(u) {
     // PROPFIND Depth:1 → returns XML with hrefs
     const body = Buffer.from('<?xml version="1.0"?><d:propfind xmlns:d="DAV:"><d:prop><d:displayname/></d:prop></d:propfind>');
@@ -89,13 +99,13 @@ function buildDavClient(baseUrl, user, pass) {
 
   const seg = (...parts) => baseUrl.replace(/\/$/, '') + '/' + parts.map(p => encodeURIComponent(p)).join('/');
 
-  return { davMkdir, davPut, davList, seg };
+  return { davMkdir, davPut, davList, davGetIfExists, seg };
 }
 
 // Раскладывает файлы заявки на WebDAV-сервере (Nextcloud/ownCloud/любой WebDAV).
 async function layoutFilesWebDav(reqId, r, cfg, body) {
-  const { year, monthFolder, orgFolder, safeName, safeSpecNum } = resolveFolderNames(r);
-  const { davMkdir, davPut, davList, seg } = buildDavClient(cfg.networkFolder, cfg.networkUser, cfg.networkPass);
+  const { year, monthFolder, orgFolder, safeName, safeSpecNum, safeOrgShort } = resolveFolderNames(r);
+  const { davMkdir, davPut, davList, davGetIfExists, seg } = buildDavClient(cfg.networkFolder, cfg.networkUser, cfg.networkPass);
   const results = [];
 
   // Create folder hierarchy
@@ -103,46 +113,72 @@ async function layoutFilesWebDav(reqId, r, cfg, body) {
   await davMkdir(seg(year, monthFolder));
   await davMkdir(seg(year, monthFolder, orgFolder));
 
-  // Find existing or next folder for this request
+  // Найти СУЩЕСТВУЮЩУЮ папку этой заявки. Раньше сопоставление шло по
+  // вхождению specNum в имя папки — но имя папки строится из НАЗВАНИЯ
+  // заявки (safeName), а не из specNum, поэтому проверка никогда не
+  // срабатывала: каждый повторный вызов (например, сначала выгрузили
+  // спецификацию, потом отдельно прикрепили счёт) создавал НОВУЮ папку
+  // "02_...", "03_..." вместо переиспользования уже существующей —
+  // подтверждённый баг. Теперь ищем по скрытому маркер-файлу с id заявки
+  // внутри каждой папки-кандидата — это надёжно и не зависит от того, что
+  // видимое имя папки построено из названия заявки, которое к тому же может
+  // повторяться у разных заявок.
+  const MARKER = '.procure-spec-id';
   const children = await davList(seg(year, monthFolder, orgFolder));
   let maxNum = 0, requestFolderName = null;
   for (const name of children) {
     const m = name.match(/^(\d+)_/);
     if (m) maxNum = Math.max(maxNum, parseInt(m[1]));
-    if (r.specNum && name.includes(r.specNum)) requestFolderName = name;
   }
+  for (const name of children) {
+    if (!/^\d+_/.test(name)) continue;
+    const marker = await davGetIfExists(seg(year, monthFolder, orgFolder, name, MARKER));
+    if (marker && marker.trim() === String(reqId)) { requestFolderName = name; break; }
+  }
+  const isNewFolder = !requestFolderName;
   if (!requestFolderName) {
     requestFolderName = `${String(maxNum + 1).padStart(2, '0')}_${safeName}`;
   }
 
   await davMkdir(seg(year, monthFolder, orgFolder, requestFolderName));
   await davMkdir(seg(year, monthFolder, orgFolder, requestFolderName, 'Расчеты'));
+  if (isNewFolder) {
+    await davPut(seg(year, monthFolder, orgFolder, requestFolderName, MARKER), Buffer.from(String(reqId), 'utf8'));
+  }
 
   if (body.docxBase64) {
-    const name = `${safeSpecNum}_спецификация.docx`;
+    const name = `${safeOrgShort}_Спецификация_${safeSpecNum}.docx`;
     await davPut(seg(year, monthFolder, orgFolder, requestFolderName, name), Buffer.from(body.docxBase64, 'base64'));
     results.push({ type: 'docx', name });
   }
   if (r.signedSpecPdf === '__has_pdf__') {
     const pdfPath = path.join(SIGNED_DIR, path.basename(query('SELECT signed_spec_pdf FROM requests WHERE id=?', [reqId])[0]?.signed_spec_pdf || ''));
     if (fs.existsSync(pdfPath)) {
-      const name = `${safeSpecNum}_спецификация_подписано.pdf`;
+      const name = `${safeOrgShort}_Спецификация_${safeSpecNum}_подписано.pdf`;
       await davPut(seg(year, monthFolder, orgFolder, requestFolderName, name), fs.readFileSync(pdfPath));
       results.push({ type: 'signed_spec', name });
     }
   }
   if (r.invoiceFile === '__has_file__') {
-    const invRow = query('SELECT invoice_file FROM requests WHERE id=?', [reqId])[0]?.invoice_file || '';
+    const invMeta = query('SELECT invoice_file, invoice_file_original_name FROM requests WHERE id=?', [reqId])[0];
+    const invRow = invMeta?.invoice_file || '';
     const invPath = path.join(INVOICE_DIR, path.basename(invRow));
     if (invRow && fs.existsSync(invPath)) {
       const ext = invRow.split('.').pop();
-      const name = `${safeSpecNum}_счет.${ext}`;
+      // Сохраняем оригинальное имя файла счёта (например, полученного от
+      // поставщика письмом), а не переименовываем его в свою схему — это
+      // чужой документ со своим номером, важным для сверки с поставщиком.
+      // Если оригинальное имя почему-то не сохранилось (старые записи до
+      // этого фикса) — используем прежнюю схему именования как запасной вариант.
+      const name = invMeta?.invoice_file_original_name
+        ? path.basename(invMeta.invoice_file_original_name).replace(/[^\w.\-\u0400-\u04ff ]/g, '_').slice(0, 120)
+        : `${safeOrgShort}_Счет_${safeSpecNum}.${ext}`;
       await davPut(seg(year, monthFolder, orgFolder, requestFolderName, 'Расчеты', name), fs.readFileSync(invPath));
       results.push({ type: 'invoice_attached', name });
     }
   }
   if (body.excelBase64) {
-    const name = `${safeSpecNum}_расчеты.xlsx`;
+    const name = `${safeOrgShort}_Расчеты_${safeSpecNum}.xlsx`;
     await davPut(seg(year, monthFolder, orgFolder, requestFolderName, 'Расчеты', name), Buffer.from(body.excelBase64, 'base64'));
     results.push({ type: 'excel', name });
   }
@@ -176,10 +212,46 @@ function mountSmbIfNeeded(cfg, rootPath) {
   }
 }
 
+// Ищет уже существующую папку заявки внутри orgPath по скрытому
+// маркер-файлу с id заявки (см. подробный комментарий в layoutFilesWebDav
+// про то, почему сопоставление по имени папки было ошибочным). Если не
+// нашли — создаёт новую, следующую по порядку, и сразу пишет в неё маркер.
+// Общая для layoutFilesLocal и openFolder, чтобы не дублировать одну и ту
+// же логику (и один и тот же потенциальный баг) в двух местах.
+const REQUEST_MARKER_FILE = '.procure-spec-id';
+function findOrCreateRequestFolderLocal(orgPath, reqId, safeName) {
+  let maxNum = 0, requestFolderName = null;
+  try {
+    for (const e of fs.readdirSync(orgPath, { withFileTypes: true })) {
+      if (!e.isDirectory()) continue;
+      const m = e.name.match(/^(\d+)_/);
+      if (m) maxNum = Math.max(maxNum, parseInt(m[1]));
+    }
+    for (const e of fs.readdirSync(orgPath, { withFileTypes: true })) {
+      if (!e.isDirectory() || !/^\d+_/.test(e.name)) continue;
+      const markerPath = path.join(orgPath, e.name, REQUEST_MARKER_FILE);
+      if (fs.existsSync(markerPath) && fs.readFileSync(markerPath, 'utf8').trim() === String(reqId)) {
+        requestFolderName = e.name;
+        break;
+      }
+    }
+  } catch(e) {}
+
+  const isNewFolder = !requestFolderName;
+  if (!requestFolderName) requestFolderName = `${String(maxNum + 1).padStart(2, '0')}_${safeName}`;
+
+  const requestPath = path.join(orgPath, requestFolderName);
+  fs.mkdirSync(requestPath, { recursive: true });
+  if (isNewFolder) {
+    try { fs.writeFileSync(path.join(requestPath, REQUEST_MARKER_FILE), String(reqId), 'utf8'); } catch(e) {}
+  }
+  return requestPath;
+}
+
 // Раскладывает файлы заявки в локальную (или примонтированную SMB) папку.
 async function layoutFilesLocal(reqId, r, cfg, body) {
   const rootPath = cfg.networkFolder.trim();
-  const { year, monthFolder, orgFolder, safeName, safeSpecNum } = resolveFolderNames(r);
+  const { year, monthFolder, orgFolder, safeName, safeSpecNum, safeOrgShort } = resolveFolderNames(r);
   const results = [];
 
   mountSmbIfNeeded(cfg, rootPath);
@@ -187,27 +259,14 @@ async function layoutFilesLocal(reqId, r, cfg, body) {
   const orgPath = path.join(rootPath, year, monthFolder, orgFolder);
   fs.mkdirSync(orgPath, { recursive: true });
 
-  let maxNum = 0, requestFolderName = null;
-  try {
-    for (const e of fs.readdirSync(orgPath, { withFileTypes: true })) {
-      if (!e.isDirectory()) continue;
-      const m = e.name.match(/^(\d+)_/);
-      if (m) maxNum = Math.max(maxNum, parseInt(m[1]));
-      if (r.specNum && e.name.includes(r.specNum)) requestFolderName = e.name;
-    }
-  } catch(e) {}
-
-  if (!requestFolderName) requestFolderName = `${String(maxNum + 1).padStart(2, '0')}_${safeName}`;
-
-  const requestPath = path.join(orgPath, requestFolderName);
+  const requestPath = findOrCreateRequestFolderLocal(orgPath, reqId, safeName);
   const calcPath    = path.join(requestPath, 'Расчеты');
-  fs.mkdirSync(requestPath, { recursive: true });
-  fs.mkdirSync(calcPath,    { recursive: true });
+  fs.mkdirSync(calcPath, { recursive: true });
 
   const wb64 = b64 => Buffer.from(b64.replace(/^data:[^;]+;base64,/, ''), 'base64');
 
   if (body.docxBase64) {
-    const name = `${safeSpecNum}_спецификация.docx`;
+    const name = `${safeOrgShort}_Спецификация_${safeSpecNum}.docx`;
     fs.writeFileSync(path.join(requestPath, name), Buffer.from(body.docxBase64, 'base64'));
     results.push({ type: 'docx', name });
   }
@@ -215,23 +274,28 @@ async function layoutFilesLocal(reqId, r, cfg, body) {
     const pdfRow = query('SELECT signed_spec_pdf FROM requests WHERE id=?', [reqId])[0];
     const pdfPath = path.join(SIGNED_DIR, path.basename(pdfRow?.signed_spec_pdf || ''));
     if (fs.existsSync(pdfPath)) {
-      const name = `${safeSpecNum}_спецификация_подписано.pdf`;
+      const name = `${safeOrgShort}_Спецификация_${safeSpecNum}_подписано.pdf`;
       fs.writeFileSync(path.join(requestPath, name), fs.readFileSync(pdfPath));
       results.push({ type: 'signed_spec', name });
     }
   }
   if (r.invoiceFile === '__has_file__') {
-    const invRow = query('SELECT invoice_file FROM requests WHERE id=?', [reqId])[0]?.invoice_file || '';
+    const invMeta = query('SELECT invoice_file, invoice_file_original_name FROM requests WHERE id=?', [reqId])[0];
+    const invRow = invMeta?.invoice_file || '';
     const invPath = path.join(INVOICE_DIR, path.basename(invRow));
     if (invRow && fs.existsSync(invPath)) {
       const ext = invRow.split('.').pop();
-      const name = `${safeSpecNum}_счет.${ext}`;
+      // См. комментарий в layoutFilesWebDav выше — сохраняем оригинальное
+      // имя файла счёта вместо переименования в свою схему.
+      const name = invMeta?.invoice_file_original_name
+        ? path.basename(invMeta.invoice_file_original_name).replace(/[^\w.\-\u0400-\u04ff ]/g, '_').slice(0, 120)
+        : `${safeOrgShort}_Счет_${safeSpecNum}.${ext}`;
       fs.writeFileSync(path.join(calcPath, name), fs.readFileSync(invPath));
       results.push({ type: 'invoice_attached', name });
     }
   }
   if (body.excelBase64) {
-    const name = `${safeSpecNum}_расчеты.xlsx`;
+    const name = `${safeOrgShort}_Расчеты_${safeSpecNum}.xlsx`;
     fs.writeFileSync(path.join(calcPath, name), Buffer.from(body.excelBase64, 'base64'));
     results.push({ type: 'excel', name });
   }
@@ -267,25 +331,13 @@ function openFolder(r, cfg, opts = {}) {
     return { ok: true, mode: 'webdav', url: rootPath };
   }
 
-  const { year, monthFolder, orgFolder, safeName, safeSpecNum } = resolveFolderNames(r);
+  const { year, monthFolder, orgFolder, safeName, safeSpecNum, safeOrgShort } = resolveFolderNames(r);
   mountSmbIfNeeded(cfg, rootPath);
 
   const orgPath = path.join(rootPath, year, monthFolder, orgFolder);
   fs.mkdirSync(orgPath, { recursive: true });
 
-  let maxNum = 0, requestFolderName = null;
-  try {
-    for (const e of fs.readdirSync(orgPath, { withFileTypes: true })) {
-      if (!e.isDirectory()) continue;
-      const m = e.name.match(/^(\d+)_/);
-      if (m) maxNum = Math.max(maxNum, parseInt(m[1]));
-      if (r.specNum && e.name.includes(r.specNum)) requestFolderName = e.name;
-    }
-  } catch(e) {}
-  if (!requestFolderName) requestFolderName = `${String(maxNum + 1).padStart(2, '0')}_${safeName}`;
-
-  const requestPath = path.join(orgPath, requestFolderName);
-  fs.mkdirSync(requestPath, { recursive: true });
+  const requestPath = findOrCreateRequestFolderLocal(orgPath, r.id, safeName);
 
   // Best-effort: open in the OS file manager. Silently ignored if the
   // server has no GUI session (headless/Docker) — the client still gets

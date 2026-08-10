@@ -77,7 +77,8 @@ function renderRegistryRows(reqs) {
     tr.onclick = () => toggleDetail(r.id);
     const realizBadge = r.isRealization ? ' <span style="font-size:10px;background:var(--accent-bg);color:var(--accent);padding:1px 5px;border-radius:4px;margin-left:4px">реализация</span>' : '';
     const docTypeBadge = r.docType === 'install' ? ' <span style="font-size:10px;background:var(--warning-bg);color:var(--warning);padding:1px 5px;border-radius:4px;margin-left:4px">монтаж</span>'
-      : r.docType === 'support' ? ' <span style="font-size:10px;background:var(--surface-2);color:var(--text-secondary);padding:1px 5px;border-radius:4px;margin-left:4px">сопровождение</span>' : '';
+      : r.docType === 'support' ? ' <span style="font-size:10px;background:var(--surface-2);color:var(--text-secondary);padding:1px 5px;border-radius:4px;margin-left:4px">сопровождение</span>'
+      : r.docType === 'realization' ? ' <span style="font-size:10px;background:var(--accent-bg);color:var(--accent);padding:1px 5px;border-radius:4px;margin-left:4px">реализация</span>' : '';
     tr.innerHTML = `
       <td><span class="chevron" id="ch-${esc(r.id)}">▶</span></td>
       <td><span style="font-family:monospace;font-size:12px;color:var(--accent)">${esc(r.specNum)}</span>${realizBadge}${docTypeBadge}</td>
@@ -114,7 +115,7 @@ function renderRegistryRows(reqs) {
         </table>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
           <button class="btn btn-sm btn-success" onclick="exportExcelById('${escJsAttr(r.id)}')">📊 Excel</button>
-          ${!r.isRealization?`<button class="btn btn-sm" onclick="loadSpec('${escJsAttr(r.id)}')">${r.docType==='install'?'🔧 Смета на работы':r.docType==='support'?'🛠️ Сопровождение':'📄 Спецификация'}</button>`:''}
+          ${!r.isRealization?`<button class="btn btn-sm" onclick="loadSpec('${escJsAttr(r.id)}')">${r.docType==='install'?'🔧 Смета на работы':r.docType==='support'?'🛠️ Сопровождение':r.docType==='realization'?'🏪 Спецификация на реализацию':'📄 Спецификация'}</button>`:''}
           ${userRole !== 'viewer' ? `
           <button class="btn btn-sm" onclick="loadToForm('${escJsAttr(r.id)}',true)">📋 Копировать</button>
           <label class="btn btn-sm" style="cursor:pointer;background:${r.signedSpecPdf?'var(--success)':'var(--surface-2)'};border-color:${r.signedSpecPdf?'var(--success)':'var(--border)'};color:${r.signedSpecPdf?'#fff':'var(--text)'}" title="${r.signedSpecPdf?'Подписанная спецификация прикреплена. Нажмите чтобы заменить':'Прикрепить подписанную спецификацию PDF'}">
@@ -254,15 +255,14 @@ async function deleteRequest(id) {
 async function addOrg() {
   const full = document.getElementById('new-org-full').value.trim();
   const short = document.getElementById('new-org-short').value.trim();
-  const prefix = document.getElementById('new-org-prefix').value.trim().toUpperCase();
   const signatory = document.getElementById('new-org-signatory').value.trim();
   const contract  = document.getElementById('new-org-contract').value.trim();
   const address   = document.getElementById('new-org-address').value.trim();
   const folder    = document.getElementById('new-org-folder').value.trim();
-  if (!full || !short || !prefix) { toast('Заполните все поля'); return; }
-  const org = await api('POST', '/api/orgs', { full, short, prefix, signatory, contract, address, folder });
+  if (!full || !short) { toast('Заполните все поля'); return; }
+  const org = await api('POST', '/api/orgs', { full, short, signatory, contract, address, folder });
   db.orgs.push(org);
-  ['full','short','prefix','signatory','contract','address','folder'].forEach(f => {
+  ['full','short','signatory','contract','address','folder'].forEach(f => {
     const el = document.getElementById('new-org-' + f); if (el) el.value = '';
   });
   renderOrgs();
@@ -290,7 +290,7 @@ function renderOrgs() {
     <div class="org-item" style="cursor:pointer" onclick="openOrgModal('${escJsAttr(o.id)}')">
       <div style="flex:1">
         <div class="org-name">${esc(o.full)}</div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${esc(o.short)} · Префикс: <strong>${esc(o.prefix)}</strong> · ${esc(o.signatory||'—')}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${esc(o.short)} · ${esc(o.signatory||'—')}</div>
         ${o.contract ? `<div style="font-size:11px;color:var(--accent);margin-top:2px">📄 ${esc(o.contract)}</div>` : '<div style="font-size:11px;color:var(--danger);margin-top:2px">📄 договор не задан</div>'}
         ${o.address  ? `<div style="font-size:11px;color:var(--text-muted);margin-top:1px">📍 ${esc(o.address)}</div>`  : ''}
       </div>
@@ -351,7 +351,13 @@ function showPage(name) {
     populateConfigPage();
     if (userRole === 'admin') loadUsers();
   }
-  if (name === 'new') initDragDrop();
+  if (name === 'new') {
+    initDragDrop();
+    const supplierField = document.getElementById('f-supplier');
+    if (supplierField && !supplierField.value && appConfig.supplierName) {
+      supplierField.value = appConfig.supplierName;
+    }
+  }
 }
 
 function clearForm() {

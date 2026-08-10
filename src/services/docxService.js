@@ -44,6 +44,14 @@ async function buildSpecDocx(r) {
       qualityLine: 'Качество Товара должно соответствовать установленным требованиям государственных стандартов качества в соответствии с действующим законодательством Российской Федерации. При поставке необходимо наличие всех необходимых сертификатов, удостоверений качества, протоколов лабораторных испытаний и т.д. на поставляемый Товар.',
       finalLine: 'Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон и является неотъемлемой частью Договора.',
     },
+    realization: {
+      title: 'СПЕЦИФИКАЦИЯ НА РЕАЛИЗАЦИЮ',
+      colHeader: 'Наименование Товара',
+      contractWord: 'к договору поставки',
+      termLine: 'Срок поставки Товара: 14 дней.',
+      qualityLine: 'Качество Товара должно соответствовать установленным требованиям государственных стандартов качества в соответствии с действующим законодательством Российской Федерации. При поставке необходимо наличие всех необходимых сертификатов, удостоверений качества, протоколов лабораторных испытаний и т.д. на поставляемый Товар.',
+      finalLine: 'Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон и является неотъемлемой частью Договора.',
+    },
   };
   const L = DOC_LABELS[docType] || DOC_LABELS.goods;
 
@@ -108,10 +116,13 @@ async function buildSpecDocx(r) {
     rows: [headerRow, ...dataRows, itogRow, ndsRow]
   });
 
+  const PARA_FIRST_LINE_INDENT = 709; // ~1.25cm — стандартная «красная строка»
+
   function para(text, opts = {}) {
     return new Paragraph({
-      alignment: opts.align || AlignmentType.LEFT,
+      alignment: opts.align || AlignmentType.BOTH,
       spacing: { before: opts.before || 120, after: opts.after || 0 },
+      indent: { firstLine: PARA_FIRST_LINE_INDENT, hanging: 0, left: 0 },
       keepNext: !!opts.keepNext,
       keepLines: !!opts.keepLines,
       children: [new TextRun({
@@ -130,7 +141,8 @@ async function buildSpecDocx(r) {
       },
       children: [
         // Приложение ref — таблица: пустая левая колонка + текст справа (как "колонка Справа" в Word)
-        ...((() => {
+        // Для «Реализации» — товар для себя, договора нет, блок не выводим.
+        ...(docType === 'realization' ? [] : (() => {
           const contract = r.contract || '—';
           const fromIdx = contract.indexOf(' от ');
           const contractNum  = fromIdx > -1 ? contract.slice(0, fromIdx) : contract;
@@ -163,27 +175,36 @@ async function buildSpecDocx(r) {
           children: [new TextRun({ text: `${L.title} № ${r.specNum||''}`, size: 26, bold: true, font: 'Times New Roman' })]
         }),
         // Город / дата
-        new Table({
-          width: { size: TW, type: WidthType.DXA },
-          columnWidths: [TW/2, TW/2],
-          borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE }, insideH: { style: BorderStyle.NONE }, insideV: { style: BorderStyle.NONE } },
-          rows: [new TableRow({ children: [
-            new TableCell({ borders: { top:{style:BorderStyle.NONE}, bottom:{style:BorderStyle.NONE}, left:{style:BorderStyle.NONE}, right:{style:BorderStyle.NONE} }, children: [new Paragraph({ children: [new TextRun({ text: 'г. Екатеринбург', size: 22, font: 'Times New Roman' })] })] }),
-            new TableCell({ borders: { top:{style:BorderStyle.NONE}, bottom:{style:BorderStyle.NONE}, left:{style:BorderStyle.NONE}, right:{style:BorderStyle.NONE} }, children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: dateStr, size: 22, font: 'Times New Roman' })] })] }),
-          ]})]
-        }),
+        (() => {
+          const nb2 = { style: BorderStyle.NONE, size: 0, color: 'auto' };
+          const noBorders2 = { top: nb2, bottom: nb2, left: nb2, right: nb2 };
+          return new Table({
+            width: { size: TW, type: WidthType.DXA },
+            columnWidths: [TW/2, TW/2],
+            borders: { top: nb2, bottom: nb2, left: nb2, right: nb2, insideH: nb2, insideV: nb2 },
+            rows: [new TableRow({ children: [
+              new TableCell({ borders: noBorders2, children: [new Paragraph({ children: [new TextRun({ text: 'г. Екатеринбург', size: 22, font: 'Times New Roman' })] })] }),
+              new TableCell({ borders: noBorders2, children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: dateStr, size: 22, font: 'Times New Roman' })] })] }),
+            ]})],
+          });
+        })(),
         new Paragraph({ spacing: { before: 160, after: 0 }, children: [] }),
         // Таблица
         specTable,
         // Текст
         para(`Всего наименований ${(r.positions||[]).length}, на сумму ${fmtRub(total)} рублей, без НДС`, { before: 180, keepNext: true }),
         new Paragraph({
+          alignment: AlignmentType.BOTH,
           spacing: { before: 80, after: 0 },
+          indent: { firstLine: PARA_FIRST_LINE_INDENT, hanging: 0, left: 0 },
           children: [new TextRun({ text: `${numToWords(total)}, НДС не облагается.`, size: 22, font: 'Times New Roman', italics: true })]
         }),
         para(L.termLine, { before: 160 }),
-        new Paragraph({ spacing: { before: 120, after: 0 }, children: [new TextRun({ text: 'Порядок оплаты:', size: 22, font: 'Times New Roman', bold: true })] }),
-        para(L.paymentLine, { before: 80 }),
+        // «Порядок оплаты» не актуален для «Реализации» (товар для себя).
+        ...(docType === 'realization' ? [] : [
+          new Paragraph({ spacing: { before: 120, after: 0 }, indent: { firstLine: PARA_FIRST_LINE_INDENT, hanging: 0, left: 0 }, children: [new TextRun({ text: 'Порядок оплаты:', size: 22, font: 'Times New Roman', bold: true })] }),
+          para(L.paymentLine, { before: 80 }),
+        ]),
         ...(r.address ? [para(`${docType==='install' ? 'Адрес выполнения работ' : 'Адрес доставки/выборки'}: ${r.address}`, { before: 80 })] : []),
         para(L.qualityLine, { before: 80 }),
         para(L.finalLine, { before: 80 }),
@@ -193,42 +214,61 @@ async function buildSpecDocx(r) {
         // чтобы Word не разрывал этот блок между страницами (актуально при большом
         // числе позиций, когда таблица занимает много страниц и конец документа
         // может случайно попасть на границу страницы).
-        new Paragraph({ spacing: { before: 300, after: 0 }, keepNext: true, keepLines: true, children: [] }),
-        new Paragraph({
-          tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
-          keepNext: true, keepLines: true,
-          children: [
-            new TextRun({ text: 'Поставщик:', size: 22, font: 'Times New Roman', bold: true }),
-            new TextRun({ text: '\tПокупатель:', size: 22, font: 'Times New Roman', bold: true }),
-          ]
-        }),
-        new Paragraph({
-          spacing: { before: 120 },
-          tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
-          keepNext: true, keepLines: true,
-          children: [
-            new TextRun({ text: r.supplier || '___________', size: 22, font: 'Times New Roman', bold: true }),
-            new TextRun({ text: `\t${r.orgFull || '___________'}`, size: 22, font: 'Times New Roman', bold: true }),
-          ]
-        }),
-        new Paragraph({
-          spacing: { before: 480 },
-          tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
-          keepNext: true, keepLines: true,
-          children: [
-            new TextRun({ text: `______________________/${r.supplierSignatory || '___________'}/`, size: 22, font: 'Times New Roman' }),
-            new TextRun({ text: `\t______________________/${r.orgSignatory || '___________'}/`, size: 22, font: 'Times New Roman' }),
-          ]
-        }),
-        new Paragraph({
-          spacing: { before: 80 },
-          tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
-          keepLines: true,
-          children: [
-            new TextRun({ text: r.supplierStamp ? 'М.П.' : 'Б.П.', size: 22, font: 'Times New Roman' }),
-            new TextRun({ text: `\t${r.orgStamp === false ? 'Б.П.' : 'М.П.'}`, size: 22, font: 'Times New Roman' }),
-          ]
-        }),
+        ...(docType === 'realization' ? [
+          // Реализация — одна сторона (товар для себя), без «Поставщик/Покупатель».
+          new Paragraph({ spacing: { before: 300, after: 0 }, keepNext: true, keepLines: true, children: [] }),
+          new Paragraph({
+            keepNext: true, keepLines: true,
+            children: [new TextRun({ text: r.orgFull || '___________', size: 22, font: 'Times New Roman', bold: true })]
+          }),
+          new Paragraph({
+            spacing: { before: 480 },
+            keepNext: true, keepLines: true,
+            children: [new TextRun({ text: `______________________/${r.orgSignatory || '___________'}/`, size: 22, font: 'Times New Roman' })]
+          }),
+          new Paragraph({
+            spacing: { before: 80 },
+            keepLines: true,
+            children: [new TextRun({ text: r.orgStamp === false ? 'Б.П.' : 'М.П.', size: 22, font: 'Times New Roman' })]
+          }),
+        ] : [
+          new Paragraph({ spacing: { before: 300, after: 0 }, keepNext: true, keepLines: true, children: [] }),
+          new Paragraph({
+            tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
+            keepNext: true, keepLines: true,
+            children: [
+              new TextRun({ text: 'Поставщик:', size: 22, font: 'Times New Roman', bold: true }),
+              new TextRun({ text: '\tПокупатель:', size: 22, font: 'Times New Roman', bold: true }),
+            ]
+          }),
+          new Paragraph({
+            spacing: { before: 120 },
+            tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
+            keepNext: true, keepLines: true,
+            children: [
+              new TextRun({ text: r.supplier || '___________', size: 22, font: 'Times New Roman', bold: true }),
+              new TextRun({ text: `\t${r.orgFull || '___________'}`, size: 22, font: 'Times New Roman', bold: true }),
+            ]
+          }),
+          new Paragraph({
+            spacing: { before: 480 },
+            tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
+            keepNext: true, keepLines: true,
+            children: [
+              new TextRun({ text: `______________________/${r.supplierSignatory || '___________'}/`, size: 22, font: 'Times New Roman' }),
+              new TextRun({ text: `\t______________________/${r.orgSignatory || '___________'}/`, size: 22, font: 'Times New Roman' }),
+            ]
+          }),
+          new Paragraph({
+            spacing: { before: 80 },
+            tabStops: [{ type: TabStopType.LEFT, position: TW/2 }],
+            keepLines: true,
+            children: [
+              new TextRun({ text: r.supplierStamp ? 'М.П.' : 'Б.П.', size: 22, font: 'Times New Roman' }),
+              new TextRun({ text: `\t${r.orgStamp === false ? 'Б.П.' : 'М.П.'}`, size: 22, font: 'Times New Roman' }),
+            ]
+          }),
+        ]),
       ]
     }]
   });

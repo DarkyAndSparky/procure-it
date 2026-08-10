@@ -125,6 +125,10 @@ function applyConfig() {
 
   // Update page title
   document.title = (appConfig.appName || 'Закупки ИТ') + ' — IT Assets';
+
+  // Кнопка «Bitrix24» видна только если интеграция настроена (задан webhook)
+  const bitrixBtn = document.getElementById('btn-bitrix');
+  if (bitrixBtn) bitrixBtn.style.display = appConfig.bitrixWebhook ? '' : 'none';
 }
 
 async function saveConfig() {
@@ -279,7 +283,7 @@ function populateConfigPage() {
   if (st) st.checked = appConfig.supplierStamp === '1';
 
   // Fetch actual version from server
-  fetch('/api/version').then(r => r.json()).then(d => {
+  api('GET', '/api/version').then(d => {
     const el = document.getElementById('about-version');
     if (el && d.version) el.textContent = d.version;
   }).catch(() => {});

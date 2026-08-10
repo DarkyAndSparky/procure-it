@@ -33,7 +33,7 @@ if (typeof XLSX === 'undefined') {
 
 <!-- Sidebar -->
 <aside class="sidebar" id="sidebar">
-  <div class="sidebar-logo">
+  <div class="sidebar-logo" onclick="showPage('new')" style="cursor:pointer" title="Новая заявка">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <div id="sidebar-logo-img" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0">
         <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
@@ -49,10 +49,6 @@ if (typeof XLSX === 'undefined') {
     <button class="nav-item active" id="nav-new" onclick="showPage('new')" data-role-min="operator">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
       Новая заявка
-    </button>
-    <button class="nav-item" id="nav-new-real" onclick="startRealization()" data-role-min="operator">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      На реализацию
     </button>
     <div class="nav-section-label" style="margin-top:8px">Данные</div>
     <button class="nav-item" id="nav-registry" onclick="showPage('registry')">
@@ -93,7 +89,7 @@ if (typeof XLSX === 'undefined') {
     <div style="display:flex;align-items:center;gap:8px">
       <button class="theme-toggle" id="logout-btn" onclick="doLogout()" title="Выйти" style="display:none;font-size:15px">🔓</button>
       <button class="theme-toggle" id="change-pw-btn" onclick="showChangePasswordModal(false)" title="Сменить пароль" style="display:none;font-size:15px">🔑</button>
-      <span id="role-badge" style="display:none;font-size:11px;color:var(--text-muted);padding:3px 8px;background:var(--surface-2);border-radius:12px;border:1px solid var(--border)"></span>
+      <span id="role-badge" onclick="showPage('config')" style="display:none;cursor:pointer;font-size:11px;color:var(--text-muted);padding:3px 8px;background:var(--surface-2);border-radius:12px;border:1px solid var(--border)"></span>
       <button class="theme-toggle" onclick="showShortcutsHelp()" title="Горячие клавиши [?]" style="font-size:15px">⌨️</button>
       <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" title="Сменить тему">🌙</button>
       <div class="btn-group" id="topbar-actions"></div>
@@ -130,6 +126,7 @@ if (typeof XLSX === 'undefined') {
             <select id="f-doc-type" onchange="onDocTypeChange()">
               <option value="goods">📦 Товары (спецификация)</option>
               <option value="install">🔧 Услуги монтажа</option>
+              <option value="realization">🏪 Реализация</option>
               <option value="support">🛠️ Сопровождение (заглушка)</option>
             </select>
           </div>
@@ -183,8 +180,9 @@ if (typeof XLSX === 'undefined') {
             <input type="text" id="f-supplier" placeholder="Название поставщика">
           </div>
           <div class="field">
-            <label>Номер счёта</label>
-            <input type="text" id="f-invoice-num" placeholder="СЧ-2026-0042">
+            <label>Номер счёта поставщика</label>
+            <input type="text" id="f-invoice-num" placeholder="напр. V051302203">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Вручную — просто для справки в реестре. Сам файл счёта прикладывается ниже, в «Счёт и комментарий».</div>
           </div>
           <div class="field">
             <label>Договор поставки</label>
@@ -317,7 +315,7 @@ if (typeof XLSX === 'undefined') {
         <button class="btn" onclick="exportExcel()" style="background:var(--accent);border-color:var(--accent);color:#fff">📊 Excel</button>
         <button class="btn" onclick="previewSpec()" style="background:#7c3aed;border-color:#7c3aed;color:#fff">📄 Спецификация</button>
         <button class="btn" onclick="showFolderPath()" style="background:var(--warning);border-color:var(--warning);color:#fff">📁 Путь папки</button>
-        <button class="btn" id="btn-bitrix" onclick="sendToBitrix()" data-role-action style="background:#1a9bf0;border-color:#1a9bf0;color:#fff" title="Отправить заявку в Bitrix24">🔗 Bitrix24</button>
+        <button class="btn" id="btn-bitrix" onclick="sendToBitrix()" data-role-action style="background:#1a9bf0;border-color:#1a9bf0;color:#fff;display:none" title="Отправить заявку в Bitrix24">🔗 Bitrix24</button>
         <button class="btn" onclick="clearForm()" data-role-action style="background:var(--surface);border-color:var(--border-strong);color:var(--text-secondary)">✕ Очистить</button>
       </div>
     </div>
@@ -649,6 +647,27 @@ if (typeof XLSX === 'undefined') {
         </div>
       </div>
 
+      <!-- Backup — включает ВСЁ: организации, поставщика по умолчанию,
+           адреса, шаблоны, пользователей и остальные настройки приложения -->
+      <div class="card" style="max-width:680px">
+        <div class="card-header">
+          <span class="card-title">Резервная копия</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">
+          JSON — полный снапшот: организации, настройки (включая поставщика по умолчанию),
+          адреса доставки, шаблоны, пользователи и заявки. Для восстановления данных.
+          DB — полный снапшот SQLite для техподдержки.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" onclick="downloadBackup('json')" style="flex:1;background:var(--success);border-color:var(--success);color:#fff">💾 Скачать JSON</button>
+          <button class="btn" onclick="downloadBackup('db')" style="flex:1;background:var(--surface-2);border-color:var(--border)">🗄️ Скачать DB</button>
+          <label class="btn" style="flex:1;justify-content:center;cursor:pointer">
+            📂 Восстановить из JSON
+            <input type="file" accept=".json" style="display:none" onchange="restoreBackup(this)">
+          </label>
+        </div>
+      </div>
+
       <!-- Save -->
       <div class="btn-group" style="max-width:680px">
         <button class="btn btn-primary" onclick="saveConfig()" style="background:var(--success);border-color:var(--success);color:#fff">💾 Сохранить настройки</button>
@@ -662,19 +681,14 @@ if (typeof XLSX === 'undefined') {
         <div class="card-header">
           <span class="card-title">Управление организациями</span>
         </div>
-        <div class="form-grid" style="grid-template-columns:1fr auto;align-items:end;gap:8px;margin-bottom:8px">
+        <div class="form-grid" style="grid-template-columns:1fr;align-items:end;gap:8px;margin-bottom:8px">
           <div class="field">
             <label>Полное название</label>
             <input type="text" id="new-org-full" placeholder='ООО "Название организации"'>
           </div>
-          <div></div>
           <div class="field">
             <label>Короткое название</label>
             <input type="text" id="new-org-short" placeholder="Краткое название">
-          </div>
-          <div class="field">
-            <label>Префикс</label>
-            <input type="text" id="new-org-prefix" placeholder="ОРГ" style="width:70px">
           </div>
         </div>
         <div class="field" style="margin-bottom:12px">
@@ -695,18 +709,6 @@ if (typeof XLSX === 'undefined') {
         </div>
         <button class="btn btn-primary" onclick="addOrg()" style="width:100%">Добавить организацию</button>
 
-        <hr class="divider" style="margin:20px 0">
-        <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.4px">Резервная копия</div>
-        <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">JSON — для восстановления данных. DB — полный снапшот SQLite для техподдержки.</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn" onclick="downloadBackup('json')" style="flex:1;background:var(--success);border-color:var(--success);color:#fff">💾 Скачать JSON</button>
-          <button class="btn" onclick="downloadBackup('db')" style="flex:1;background:var(--surface-2);border-color:var(--border)">🗄️ Скачать DB</button>
-          <label class="btn" style="flex:1;justify-content:center;cursor:pointer">
-            📂 Восстановить из JSON
-            <input type="file" accept=".json" style="display:none" onchange="restoreBackup(this)">
-          </label>
-        </div>
-
         <hr class="divider">
 
         <div class="org-list" id="org-list"></div>
@@ -725,9 +727,8 @@ if (typeof XLSX === 'undefined') {
       <button onclick="closeOrgModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);line-height:1">×</button>
     </div>
     <input type="hidden" id="modal-org-id">
-    <div style="display:grid;grid-template-columns:1fr 80px;gap:10px;margin-bottom:10px">
+    <div style="margin-bottom:10px">
       <div class="field"><label>Полное название</label><input type="text" id="modal-org-full"></div>
-      <div class="field"><label>Префикс</label><input type="text" id="modal-org-prefix"></div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div class="field"><label>Короткое название</label><input type="text" id="modal-org-short"></div>

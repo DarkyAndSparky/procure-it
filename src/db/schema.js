@@ -31,6 +31,7 @@ function runMigrations(db) {
     `ALTER TABLE requests ADD COLUMN invoice_num TEXT DEFAULT ''`,
     `ALTER TABLE requests ADD COLUMN signed_spec_pdf TEXT DEFAULT ''`,  // base64 подписанной спецификации
     `ALTER TABLE requests ADD COLUMN invoice_file TEXT DEFAULT ''`,     // имя файла приложенного счёта
+    `ALTER TABLE requests ADD COLUMN invoice_file_original_name TEXT DEFAULT ''`, // оригинальное имя файла счёта (для раскладки в сетевую папку без переименования)
     `ALTER TABLE requests ADD COLUMN org_stamp TEXT DEFAULT '1'`,       // печать покупателя: '1' с печатью (М.П.), '0' без (Б.П.)
     `ALTER TABLE requests ADD COLUMN doc_type TEXT DEFAULT 'goods'`,    // тип документа: goods | install | support
     `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')`,

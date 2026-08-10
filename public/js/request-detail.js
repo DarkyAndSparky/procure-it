@@ -151,7 +151,9 @@ async function saveSpecWord() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${req.specNum || 'spec'}_спецификация.docx`;
+    const dlOrgShort = (req.orgShort || '').replace(/[\\/:\*?"<>|]/g, '_').slice(0, 20);
+    const dlSpecNum  = (req.specNum  || 'spec').replace(/[\\/:\*?"<>|]/g, '_');
+    a.download = dlOrgShort ? `${dlOrgShort}_Спецификация_${dlSpecNum}.docx` : `${dlSpecNum}_спецификация.docx`;
     document.body.appendChild(a); a.click();
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
     toast('Word сохранён');
@@ -204,6 +206,15 @@ function buildSpecHtml(req) {
       finalLine: 'Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон и является неотъемлемой частью Договора.',
       addressLabel: 'Адрес доставки/выборки',
     },
+    realization: {
+      title: 'СПЕЦИФИКАЦИЯ НА РЕАЛИЗАЦИЮ',
+      colHeader: 'Наименование Товара',
+      contractWord: 'к договору поставки',
+      termLine: 'Срок поставки Товара: 14 дней.',
+      qualityLine: 'Качество Товара должно соответствовать установленным требованиям государственных стандартов качества в соответствии с действующим законодательством Российской Федерации. При поставке необходимо наличие всех необходимых сертификатов, удостоверений качества, протоколов лабораторных испытаний и т.д. на поставляемый Товар.',
+      finalLine: 'Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон и является неотъемлемой частью Договора.',
+      addressLabel: 'Адрес доставки/выборки',
+    },
   };
   const L = DOC_LABELS[docType] || DOC_LABELS.goods;
 
@@ -220,8 +231,10 @@ function buildSpecHtml(req) {
     </tr>`;
   });
 
+  const isRealizationDoc = docType === 'realization';
+
   return `
-    <div class="app-ref">${(() => {
+    ${isRealizationDoc ? '' : `<div class="app-ref">${(() => {
       const contract = req.contract || '—';
       const fromIdx = contract.indexOf(' от ');
       const contractNum  = fromIdx > -1 ? contract.slice(0, fromIdx) : contract;
@@ -229,7 +242,7 @@ function buildSpecHtml(req) {
       const lines = [`Приложение №1`, `${L.contractWord} № ${esc(contractNum)}`];
       if (contractDate) lines.push(esc(contractDate));
       return lines.join('<br>');
-    })()}</div>
+    })()}</div>`}
     <div class="spec-title">${L.title} № ${esc(req.specNum)}</div>
     <div class="spec-city-date">
       <span>г. Екатеринбург</span>
@@ -257,11 +270,19 @@ function buildSpecHtml(req) {
     <p style="margin-top:16px">Всего наименований ${req.positions.length}, на сумму ${totalStr} рублей, без НДС</p>
     <p style="margin-top:4px;font-style:italic">${totalWords}, НДС не облагается.</p>
     <p style="margin-top:12px">${L.termLine}</p>
-    <p style="margin-top:8px"><strong>Порядок оплаты:</strong><br>
-    ${L.paymentLine}</p>
+    ${isRealizationDoc ? '' : `<p style="margin-top:8px"><strong>Порядок оплаты:</strong><br>
+    ${L.paymentLine}</p>`}
     ${req.address ? `<p style="margin-top:8px">${L.addressLabel}: ${esc(req.address)}</p>` : ''}
     <p style="margin-top:8px">${L.qualityLine}</p>
     <p style="margin-top:8px">${L.finalLine}</p>
+    ${isRealizationDoc ? `
+    <div class="sign-block">
+      <div>
+        <div class="sign-title" style="margin-top:6px">${esc(req.orgFull || '___________')}</div>
+        <div style="margin-top:32px">______________________/${esc(req.orgSignatory || '___________')}/</div>
+        <div style="margin-top:8px">${req.orgStamp === false ? 'Б.П.' : 'М.П.'}</div>
+      </div>
+    </div>` : `
     <div class="sign-block">
       <div>
         <div class="sign-title">Поставщик:</div>
@@ -275,6 +296,6 @@ function buildSpecHtml(req) {
         <div style="margin-top:32px">______________________/${esc(req.orgSignatory || '___________')}/</div>
         <div style="margin-top:8px">${req.orgStamp === false ? 'Б.П.' : 'М.П.'}</div>
       </div>
-    </div>`;
+    </div>`}`;
 }
 

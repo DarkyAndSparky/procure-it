@@ -17,12 +17,13 @@ module.exports = (strictLimiter) => {
     // нужны настоящие имена файлов, иначе восстановление не сможет привязать
     // прикреплённые файлы обратно к заявкам. Подмешиваем их поверх маппинга.
     const rawFileRows = Object.fromEntries(
-      query('SELECT id, signed_spec_pdf, invoice_file FROM requests').map(r => [r.id, r])
+      query('SELECT id, signed_spec_pdf, invoice_file, invoice_file_original_name FROM requests').map(r => [r.id, r])
     );
     const requests  = query('SELECT * FROM requests').map(rowToRequest).map(r => ({
       ...r,
       signedSpecPdf: rawFileRows[r.id]?.signed_spec_pdf || '',
       invoiceFile:   rawFileRows[r.id]?.invoice_file || '',
+      invoiceFileOriginalName: rawFileRows[r.id]?.invoice_file_original_name || '',
     }));
     const addresses = query('SELECT address FROM addresses').map(r => r.address);
     const templates = query('SELECT * FROM templates').map(r => ({ ...r, positions: JSON.parse(r.positions||'[]') }));
@@ -75,13 +76,14 @@ module.exports = (strictLimiter) => {
           // писать их в БД как имя файла нельзя, иначе привязка сломается.
           const signedSpecPdf = SENTINELS.has(r.signedSpecPdf) ? '' : (r.signedSpecPdf || '');
           const invoiceFile   = SENTINELS.has(r.invoiceFile)   ? '' : (r.invoiceFile || '');
+          const invoiceFileOriginalName = String(r.invoiceFileOriginalName || '').slice(0, 200);
           const reqId = safeId(r.id, 'req-');
-          run(`INSERT OR REPLACE INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type,signed_spec_pdf,invoice_file,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          run(`INSERT OR REPLACE INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type,signed_spec_pdf,invoice_file,invoice_file_original_name,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
             [reqId, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
              r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
              r.status||'new', r.comment||'', r.isRealization?1:0,
              r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,
-             JSON.stringify(r.positions||[]), r.docType || 'goods', signedSpecPdf, invoiceFile, r.createdAt||new Date().toISOString()]);
+             JSON.stringify(r.positions||[]), r.docType || 'goods', signedSpecPdf, invoiceFile, invoiceFileOriginalName, r.createdAt||new Date().toISOString()]);
 
           // Сама база хранит только имя файла — реальный PDF в JSON-бэкапе не
           // лежит (см. /api/backup). Если физического файла нет на диске

@@ -141,6 +141,21 @@ function onDocTypeChange() {
   if (dt === 'support') {
     toast('🛠️ Документ «Сопровождение» — заглушка, формат будет уточнён позже');
   }
+  if (dt === 'realization') {
+    // Реализация — товар для себя: без наценки, поставщик и организация — по умолчанию
+    const noMarkupCb = document.getElementById('f-no-markup');
+    if (noMarkupCb && !noMarkupCb.checked) { noMarkupCb.checked = true; toggleNoMarkup(); }
+    const supplierName = (appConfig.supplierName || '').toLowerCase().trim();
+    const selfOrg = supplierName
+      ? db.orgs.find(o => (o.full||'').toLowerCase().includes(supplierName) || (o.short||'').toLowerCase().includes(supplierName) || supplierName.includes((o.short||'').toLowerCase()))
+      : null;
+    const orgSel = document.getElementById('f-org');
+    if (orgSel && !orgSel.value) {
+      const ipOrg = selfOrg || db.orgs.find(o => (o.short||'').toUpperCase().startsWith('ИП') || (o.full||'').toUpperCase().startsWith('ИП')) || db.orgs[0];
+      if (ipOrg) { orgSel.value = ipOrg.id; updateSpecNum(); fillOrgDefaults(); }
+    }
+    toast('🏪 Реализация: цена без наценки, организация по умолчанию');
+  }
 }
 
 function toggleNoMarkup() {

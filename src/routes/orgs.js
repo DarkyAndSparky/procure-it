@@ -9,8 +9,11 @@ router.get('/orgs', (req, res) => {
 });
 
 router.post('/orgs', operatorOrAdmin, (req, res) => {
-  const { full, short, prefix, signatory='', contract='', address='', supplier='', stamp='1', folder='' } = req.body;
-  if (!full || !short || !prefix) return res.status(400).json({ error: 'Обязательные поля: full, short, prefix' });
+  const { full, short, prefix='', signatory='', contract='', address='', supplier='', stamp='1', folder='' } = req.body;
+  if (!full || !short) return res.status(400).json({ error: 'Обязательные поля: full, short' });
+  // Префикс больше не участвует в номере спецификации (тот теперь берётся из
+  // типа документа — П/Р/М/С), поле оставлено в схеме БД для обратной
+  // совместимости, но в UI не запрашивается.
   const id = Date.now().toString();
   run('INSERT INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp,folder) VALUES (?,?,?,?,?,?,?,?,?,?)',
     [id, full, short, prefix, signatory, contract, address, supplier, stamp, folder]);
@@ -18,8 +21,8 @@ router.post('/orgs', operatorOrAdmin, (req, res) => {
 });
 
 router.put('/orgs/:id', operatorOrAdmin, (req, res) => {
-  const { full, short, prefix, signatory='', contract='', address='', supplier='', stamp='1', folder='' } = req.body;
-  if (!full || !short || !prefix) return res.status(400).json({ error: 'Обязательные поля: full, short, prefix' });
+  const { full, short, prefix='', signatory='', contract='', address='', supplier='', stamp='1', folder='' } = req.body;
+  if (!full || !short) return res.status(400).json({ error: 'Обязательные поля: full, short' });
   const exists = query('SELECT id FROM orgs WHERE id=?', [req.params.id])[0];
   if (!exists) return res.status(404).json({ error: 'Организация не найдена' });
   run('UPDATE orgs SET full=?,short=?,prefix=?,signatory=?,contract=?,address=?,supplier=?,stamp=?,folder=? WHERE id=?',

@@ -43,8 +43,10 @@ function updateRoleUI() {
   });
   const badge = document.getElementById('role-badge');
   if (badge) {
-    const labels = { viewer: '👁 Просмотр', operator: '✏️ Оператор', admin: '⚙️ Админ' };
-    badge.textContent = (userName ? userName + ' · ' : '') + (labels[userRole] || userRole);
+    const roleTitles = { viewer: 'Просмотр', operator: 'Оператор', admin: 'Админ' };
+    // Значок аккаунта + имя пользователя (роль — во всплывающей подсказке, чтобы не захламлять бейдж)
+    badge.innerHTML = `<span aria-hidden="true">👤</span> ${esc(userName || 'Гость')}`;
+    badge.title = `${userName || 'Гость'} · ${roleTitles[userRole] || userRole} · Настройки и пользователи`;
     badge.style.display = '';
   }
   const logoutBtn = document.getElementById('logout-btn');

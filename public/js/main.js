@@ -48,6 +48,12 @@ document.getElementById('f-import-excel').addEventListener('change', function() 
   if (!authed) return; // ждём логина
   await load();
   await loadConfig();
+  // Подставляем поставщика по умолчанию сразу после загрузки конфига,
+  // иначе поле пустое до первого нажатия «Новая заявка» / Ctrl+N.
+  const supplierField = document.getElementById('f-supplier');
+  if (supplierField && !supplierField.value && appConfig.supplierName) {
+    supplierField.value = appConfig.supplierName;
+  }
   populateOrgSelect();
   populateTemplateSelect();
   await populateAddressList();

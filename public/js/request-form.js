@@ -1,4 +1,6 @@
 // ─── Spec number ─────────────────────────────────────────────────────────────
+const DOC_TYPE_PREFIX = { goods: 'П', realization: 'Р', install: 'М', support: 'С' };
+
 function updateSpecNum() {
   const orgId = document.getElementById('f-org').value;
   const org = db.orgs.find(o => o.id === orgId);
@@ -11,19 +13,22 @@ function updateSpecNum() {
     document.getElementById('spec-num-sub').textContent = 'Выберите организацию';
     return;
   }
-  const prefix = org.prefix;
-  const num = nextSpecNum(orgId, y, parseInt(m));
+  const docType = document.getElementById('f-doc-type')?.value || 'goods';
+  const prefix = DOC_TYPE_PREFIX[docType] || 'П';
+  const num = nextSpecNum(orgId, y, parseInt(m), docType);
   const specNum = `${prefix}${y}${m}-${String(num).padStart(2, '0')}`;
   document.getElementById('spec-num-display').textContent = specNum;
   document.getElementById('spec-num-sub').textContent = `${org.short} · ${months[parseInt(m)-1]} ${y} · №${num} в месяце`;
 }
 
-function nextSpecNum(orgId, year, month) {
+function nextSpecNum(orgId, year, month, docType) {
   // Use all cached requests (from registry) + fallback to local count
   const pool = allReqs.length ? allReqs : db.requests;
   const existing = pool.filter(r => {
     const d = new Date(r.date);
-    return r.orgId === orgId && d.getFullYear() === year && d.getMonth() + 1 === month;
+    const rDocType = r.docType || 'goods';
+    return r.orgId === orgId && d.getFullYear() === year && d.getMonth() + 1 === month
+      && (!docType || rDocType === docType);
   });
   // If editing existing request, don't count it twice
   const count = editingId
@@ -40,7 +45,8 @@ function collectForm() {
   const d = new Date(date);
   const y = d.getFullYear();
   const m = d.getMonth() + 1;
-  const prefix = org ? org.prefix : 'X';
+  const docType = document.getElementById('f-doc-type')?.value || 'goods';
+  const prefix = DOC_TYPE_PREFIX[docType] || 'П';
 
   // Use displayed specNum if editing (preserves original number)
   // Otherwise compute fresh — same algorithm as updateSpecNum
@@ -49,7 +55,7 @@ function collectForm() {
     specNum = document.getElementById('spec-num-display')?.textContent || '';
   }
   if (!specNum || specNum === '—') {
-    const num = nextSpecNum(orgId, y, m);
+    const num = nextSpecNum(orgId, y, m, docType);
     specNum = `${prefix}${y}${String(m).padStart(2,'0')}-${String(num).padStart(2,'0')}`;
   }
 

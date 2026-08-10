@@ -5,7 +5,6 @@ function openOrgModal(id) {
   document.getElementById('modal-org-id').value = org.id;
   document.getElementById('modal-org-full').value = org.full || '';
   document.getElementById('modal-org-short').value = org.short || '';
-  document.getElementById('modal-org-prefix').value = org.prefix || '';
   document.getElementById('modal-org-signatory').value = org.signatory || '';
   document.getElementById('modal-org-contract').value = org.contract || '';
   document.getElementById('modal-org-address').value = org.address || '';
@@ -20,17 +19,20 @@ function closeOrgModal() {
 
 async function saveOrgModal() {
   const id = document.getElementById('modal-org-id').value;
+  const org = db.orgs.find(o => o.id === id);
   const data = {
     full:      document.getElementById('modal-org-full').value.trim(),
     short:     document.getElementById('modal-org-short').value.trim(),
-    prefix:    document.getElementById('modal-org-prefix').value.trim().toUpperCase(),
+    // Префикс больше не редактируется в UI (номер спецификации теперь
+    // зависит от типа документа) — сохраняем прежнее значение как есть.
+    prefix:    org?.prefix || '',
     signatory: document.getElementById('modal-org-signatory').value.trim(),
     contract:  document.getElementById('modal-org-contract').value.trim(),
     address:   document.getElementById('modal-org-address').value.trim(),
     folder:    document.getElementById('modal-org-folder').value.trim(),
     stamp:     document.getElementById('modal-org-stamp').checked ? '1' : '0',
   };
-  if (!data.full || !data.short || !data.prefix) { toast('Заполните обязательные поля'); return; }
+  if (!data.full || !data.short) { toast('Заполните обязательные поля'); return; }
   const updated = await api('PUT', '/api/orgs/' + id, data);
   const idx = db.orgs.findIndex(o => o.id === id);
   if (idx !== -1) db.orgs[idx] = updated;

@@ -107,9 +107,18 @@ router.post('/requests/:id/invoice-file', operatorOrAdmin, requireSafeId, expres
     const buf = Buffer.from(file.replace(/^data:[\w/.+-]+;base64,/, ''), 'base64');
     fs.writeFileSync(path.join(INVOICE_DIR, fname), buf);
 
-    run('UPDATE requests SET invoice_file=? WHERE id=?', [fname, req.params.id]);
+    // Баг (найден по репорту пользователя): раньше исходное имя файла
+    // (например, "M0952860_Proforma.pdf" из письма поставщика) нигде не
+    // сохранялось — в БД писалось только служебное имя "${id}.pdf", а при
+    // раскладке в сетевую папку счёт всегда переименовывался в
+    // "${specNum}_счет.pdf", даже когда это чужой документ с собственным
+    // номером счёта, который нужен для сверки с поставщиком. Сохраняем
+    // оригинальное имя отдельно и используем его при раскладке — см.
+    // services/fileLayoutService.js.
+    const originalName = (name || '').trim().slice(0, 200);
+    run('UPDATE requests SET invoice_file=?, invoice_file_original_name=? WHERE id=?', [fname, originalName, req.params.id]);
     saveDb();
-    auditLog('UPDATE', req.params.id, 'invoice_file', '', 'uploaded', { name: name || fname });
+    auditLog('UPDATE', req.params.id, 'invoice_file', '', 'uploaded', { name: originalName || fname });
     res.json({ ok: true });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });

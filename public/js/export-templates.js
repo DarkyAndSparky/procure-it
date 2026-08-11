@@ -177,16 +177,42 @@ function importFromExcel(file) {
             return t === 'ед.' || t === 'ед' || t === 'ед,шт';
           });
           if (unitCol !== -1) { cols.unit = unitCol; taken.add(unitCol); }
-          // Цена закупа — проверяем «закуп» раньше общего «цена», чтобы не
-          // перепутать с «Цена продажи за единицу» из собственного экспорта.
-          const pricePatterns = ['цена закупа за ед', 'цена закупа', 'цена ед', 'цена за ед', 'цена'];
+          // Цена закупа — берём БАЗОВУЮ закупочную цену (без доставки),
+          // а не «...с доставкой»: сама доставка распределяется по
+          // позициям приложением отдельно (поле «Стоимость доставки»
+          // ниже), и если импортировать уже готовую цену с доставкой,
+          // при пересчёте доставка задвоится. Порядок паттернов важен:
+          // «цена закупа» матчится первым и находит именно базовую
+          // колонку раньше «...с доставкой», т.к. идёт в таблице раньше.
+          const pricePatterns = ['цена закупа', 'цена ед', 'цена за ед', 'цена'];
           let priceCol = -1;
           for (const p of pricePatterns) {
             priceCol = row.findIndex((c, i) => !taken.has(i) && norm(c).includes(p));
             if (priceCol !== -1) break;
           }
           if (priceCol !== -1) cols.price = priceCol;
+          // ФИО/комментарий и ссылка на товар — если есть, подтягиваем их
+          // тоже, чтобы не терять контекст закупки при импорте.
+          const fioCol = row.findIndex((c, i) => !taken.has(i) && norm(c).includes('фио'));
+          if (fioCol !== -1) { cols.comment = fioCol; taken.add(fioCol); }
+          const linkCol = row.findIndex((c, i) => !taken.has(i) && (norm(c).includes('где закуп') || norm(c).includes('ссылка')));
+          if (linkCol !== -1) { cols.link = linkCol; taken.add(linkCol); }
           return { headerRow: ri, cols };
+        }
+        return null;
+      }
+
+      // Общая стоимость доставки может стоять отдельной парой ячеек над
+      // таблицей («Доставка» | 650) — не в самих строках позиций.
+      function findDeliveryTotal(sheetData) {
+        for (let ri = 0; ri < Math.min(sheetData.length, 6); ri++) {
+          const row = sheetData[ri] || [];
+          for (let ci = 0; ci < row.length - 1; ci++) {
+            if (norm(row[ci]) === 'доставка') {
+              const v = parseFloat(String(row[ci + 1]).replace(',', '.'));
+              if (!isNaN(v)) return v;
+            }
+          }
         }
         return null;
       }
@@ -219,9 +245,11 @@ function importFromExcel(file) {
       }
 
       let added = 0;
+      let deliveryTotal = null;
 
       if (picked) {
         const { sheetData, headerRow, cols } = picked;
+        deliveryTotal = findDeliveryTotal(sheetData);
         for (let ri = headerRow + 1; ri < sheetData.length; ri++) {
           const row = sheetData[ri];
           if (!row) continue;
@@ -232,8 +260,13 @@ function importFromExcel(file) {
           const qty = parseFloat(String(qtyRaw).replace(',', '.')) || 1;
           const unit = cols.unit !== undefined && row[cols.unit] ? String(row[cols.unit]).trim() : 'шт';
           const priceRaw = cols.price !== undefined ? row[cols.price] : '';
-          const price = parseFloat(String(priceRaw).replace(',', '.')) || 0;
-          addRow(rawName, qty, unit, price);
+          // Округляем до копеек — в исходниках цена нередко хранится с
+          // длинным хвостом дробей после расчёта доли доставки.
+          const priceParsed = parseFloat(String(priceRaw).replace(',', '.')) || 0;
+          const price = Math.round(priceParsed * 100) / 100;
+          const comment = cols.comment !== undefined ? String(row[cols.comment] || '').trim() : '';
+          const link = cols.link !== undefined ? String(row[cols.link] || '').trim() : '';
+          addRow(rawName, qty, unit, price, link, price, comment);
           added++;
         }
       } else {
@@ -257,9 +290,22 @@ function importFromExcel(file) {
       }
 
       document.getElementById('import-hint').textContent = added > 0
-        ? `✅ Добавлено ${added} позиций`
+        ? `✅ Добавлено ${added} позиций` + (deliveryTotal !== null ? ` · доставка ${deliveryTotal} ₽` : '')
         : '⚠️ Позиции не найдены. Формат: Наименование | Кол-во | Ед. | Цена';
       document.getElementById('import-hint').style.color = added > 0 ? 'var(--success)' : 'var(--warning)';
+
+      // Подставляем общую стоимость доставки, если нашли её в файле —
+      // включаем чекбокс и заполняем поле, дальше приложение само
+      // распределит её долю по позициям.
+      if (deliveryTotal !== null && deliveryTotal > 0) {
+        const onCb = document.getElementById('f-delivery-on');
+        const costInp = document.getElementById('f-delivery-cost');
+        if (onCb && costInp) {
+          onCb.checked = true;
+          costInp.value = deliveryTotal;
+          updateDelivery();
+        }
+      }
     } catch(err) {
       document.getElementById('import-hint').textContent = '❌ Ошибка чтения файла';
       document.getElementById('import-hint').style.color = 'var(--danger)';

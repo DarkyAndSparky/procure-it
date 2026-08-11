@@ -103,6 +103,7 @@ function renderRegistryRows(reqs) {
         <div class="detail-grid">
           <div class="detail-item"><span>Поставщик</span>${esc(r.supplier||'—')}</div>
           <div class="detail-item"><span>Номер счёта</span>${r.invoiceNum ? `<span style="font-family:monospace;color:var(--accent)">${esc(r.invoiceNum)}</span>` : '—'}</div>
+          <div class="detail-item"><span>Контрагент</span>${r.counterparty ? esc(r.counterparty) : '—'}</div>
           <div class="detail-item"><span>Договор</span>${esc(r.contract||'—')}</div>
           <div class="detail-item"><span>Битрикс</span>${r.bitrix?'#'+esc(r.bitrix):'—'}</div>
           <div class="detail-item"><span>Адрес</span>${esc(r.address||'—')}</div>
@@ -122,7 +123,7 @@ function renderRegistryRows(reqs) {
             ${(r.signedSpecPdf&&r.signedSpecPdf!=='')?'✅ Спецификация подписана':'📎 Прикрепить подпись'}
             <input type="file" accept=".pdf" style="display:none" onchange="uploadSignedSpec('${escJsAttr(r.id)}',this)">
           </label>
-          ${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}
+          ${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}','${escJsAttr(r.orgShort)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}
           <label class="btn btn-sm" style="cursor:pointer;background:${r.invoiceFile?'var(--success)':'var(--surface-2)'};border-color:${r.invoiceFile?'var(--success)':'var(--border)'};color:${r.invoiceFile?'#fff':'var(--text)'}" title="${r.invoiceFile?'Счёт прикреплён. Нажмите чтобы заменить':'Прикрепить счёт (PDF/фото)'}">
             ${(r.invoiceFile&&r.invoiceFile!=='')?'✅ Счёт прикреплён':'🧾 Прикрепить счёт'}
             <input type="file" accept=".pdf,image/*" style="display:none" onchange="uploadInvoiceFile('${escJsAttr(r.id)}',this)">
@@ -130,7 +131,7 @@ function renderRegistryRows(reqs) {
           ${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}
           ${appConfig.networkFolder?`<button class="btn btn-sm" id="layout-btn-${esc(r.id)}" onclick="forceLayoutFiles('${escJsAttr(r.id)}',this)" title="Разложить файлы в сетевую папку" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">📁 Разложить файлы</button>`:''}
           <button class="btn btn-sm" style="margin-left:auto;color:var(--danger);border-color:var(--danger)" onclick="deleteRequest('${escJsAttr(r.id)}')">Удалить</button>
-          ` : `${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}`}
+          ` : `${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}','${escJsAttr(r.orgShort)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}`}
         </div>
         <div id="audit-${esc(r.id)}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;font-size:12px"></div>
       </div>
@@ -323,7 +324,7 @@ const pageTitles = {
   registry: 'Реестр заявок',
   spec: 'Спецификация',
   orgs: 'Организации',
-  config: 'Конфиг'
+  config: 'Настройки'
 };
 
 function showPage(name) {
@@ -376,6 +377,7 @@ function clearForm() {
   document.getElementById('f-supplier').value = appConfig.supplierName || '';
   document.getElementById('f-contract').value = '';
   document.getElementById('f-invoice-num').value = '';
+  const cpEl0 = document.getElementById('f-counterparty'); if (cpEl0) cpEl0.value = '';
   document.getElementById('f-status').value = 'new';
   document.getElementById('f-comment').value = '';
   document.getElementById('f-markup').value = '5';

@@ -55,6 +55,7 @@ function rowToRequest(row) {
     docType: row.doc_type || 'goods',
     bitrix: row.bitrix, name: row.name, mol: row.mol, date: row.date,
     address: row.address, supplier: row.supplier, invoiceNum: row.invoice_num, contract: row.contract,
+    counterparty: row.counterparty || '',
     status: row.status, comment: row.comment,
     isRealization: !!row.is_realization,
     deliveryCost: row.delivery_cost, markup: row.markup,

@@ -16,7 +16,7 @@ async function uploadSignedSpec(id, input) {
   reader.readAsDataURL(file);
 }
 
-async function downloadSignedSpec(id, specNum) {
+async function downloadSignedSpec(id, specNum, orgShort) {
   try {
     const res = await fetch(`/api/requests/${id}/signed-spec`, {
       headers: authToken ? { 'X-Auth-Token': authToken } : {}
@@ -25,7 +25,8 @@ async function downloadSignedSpec(id, specNum) {
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `${specNum}_подписано.pdf`;
+    const safeOrg = (orgShort || '').replace(/[\\/:\*?"<>|]/g, '_').slice(0, 20);
+    a.href = url; a.download = safeOrg ? `${safeOrg}_Спецификация_${specNum}_подписано.pdf` : `${specNum}_подписано.pdf`;
     document.body.appendChild(a); a.click();
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
   } catch(e) { toast('Ошибка скачивания: ' + e.message); }

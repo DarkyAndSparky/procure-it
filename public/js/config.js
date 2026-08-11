@@ -282,15 +282,42 @@ function populateConfigPage() {
   const st = document.getElementById('cfg-supplier-stamp');
   if (st) st.checked = appConfig.supplierStamp === '1';
 
-  // Fetch actual version from server
-  api('GET', '/api/version').then(d => {
-    const el = document.getElementById('about-version');
-    if (el && d.version) el.textContent = d.version;
-  }).catch(() => {});
-
   // Highlight active theme btn
   const curTheme = localStorage.getItem('zakupki_theme') || 'auto';
   saveThemePref(curTheme);
 
   updateConfigPreview();
+}
+
+// ── MIT-лицензия — скачивание текста по клику ───────────────────────────────
+function downloadLicense() {
+  const year = new Date().getFullYear();
+  const text = `MIT License
+
+Copyright (c) ${year} DarkyAndSparky
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+`;
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'LICENSE.txt';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
 }

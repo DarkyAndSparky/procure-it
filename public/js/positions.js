@@ -206,7 +206,10 @@ function calcTotal() {
     if (sumEl)  sumEl.textContent  = fmtRub(sellSum);
   }
 
-  const profit = totalSell - totalPurchase - deliveryCost;
+  // Доставка без позиций в закупе не должна уходить в убыток —
+  // делить её долю пока не на что, поэтому просто не учитываем её,
+  // пока не появится хотя бы одна позиция.
+  const profit = totalPurchase > 0 ? (totalSell - totalPurchase - deliveryCost) : 0;
 
   // Update summary
   document.getElementById('total-display').textContent = fmtRub(totalSell);

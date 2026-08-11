@@ -66,9 +66,26 @@ if (typeof XLSX === 'undefined') {
     </button>
     <button class="nav-item" id="nav-config" onclick="showPage('config')" data-role-min="admin">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      Конфиг
+      Настройки
     </button>
   </nav>
+
+  <!-- О системе — компактный блок внизу сайдбара -->
+  <div class="sidebar-about" style="margin-top:auto;padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);line-height:1.7">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span>Версия <span id="about-version" style="font-family:monospace;color:var(--text-secondary)">…</span></span>
+      <a href="https://github.com/DarkyAndSparky/procure-it" target="_blank" rel="noopener"
+         title="Открыть репозиторий на GitHub"
+         style="display:inline-flex;align-items:center;gap:4px;color:var(--text-secondary);text-decoration:none;padding:2px 8px;border:1px solid var(--border);border-radius:12px">
+        <svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+    <div style="margin-top:4px">
+      <a href="#" onclick="downloadLicense();return false;" style="color:var(--text-secondary);text-decoration:underline dotted">Лицензия MIT</a>
+      &nbsp;·&nbsp; DarkyAndSparky
+    </div>
+  </div>
 </aside>
 
 <!-- Main -->
@@ -180,9 +197,9 @@ if (typeof XLSX === 'undefined') {
             <input type="text" id="f-supplier" placeholder="Название поставщика">
           </div>
           <div class="field">
-            <label>Номер счёта поставщика</label>
-            <input type="text" id="f-invoice-num" placeholder="напр. V051302203">
-            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Вручную — просто для справки в реестре. Сам файл счёта прикладывается ниже, в «Счёт и комментарий».</div>
+            <label>Контрагент</label>
+            <input type="text" id="f-counterparty" placeholder="напр. Ситилинк, DNS">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Магазин/поставщик, у которого закупали — пригодится для фильтров в реестре по магазинам.</div>
           </div>
           <div class="field">
             <label>Договор поставки</label>
@@ -291,6 +308,11 @@ if (typeof XLSX === 'undefined') {
             <label>Импорт позиций из Excel</label>
             <input type="file" id="f-import-excel" accept=".xlsx,.xls" style="padding:6px">
             <div id="import-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px">Формат: Наименование | Кол-во | Ед. | Цена</div>
+          </div>
+          <div class="field">
+            <label>Номер счёта поставщика</label>
+            <input type="text" id="f-invoice-num" placeholder="напр. V051302203">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Вручную — просто для справки в реестре.</div>
           </div>
           <div class="field form-full">
             <label>Комментарий / Заметки</label>
@@ -552,27 +574,6 @@ if (typeof XLSX === 'undefined') {
         </div>
       </div>
 
-      <!-- Bitrix24 -->
-      <div class="card" style="max-width:680px;margin-top:16px">
-        <div class="card-header">🔗 Интеграция Bitrix24</div>
-        <div class="card-body">
-          <div class="field">
-            <label>Webhook URL</label>
-            <input type="url" id="cfg-bitrix-webhook" placeholder="https://your.bitrix24.ru/rest/1/ключ/" style="width:100%">
-            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
-              Настройки → Разработчикам → Входящий webhook. Метод: <code>crm.deal.add</code>
-            </div>
-          </div>
-          <div class="field" style="margin-top:12px">
-            <label>Webhook при смене статуса</label>
-            <input type="url" id="cfg-status-webhook" placeholder="https://hooks.example.com/procure-it" style="width:100%">
-            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
-              POST JSON: <code>{"event","specNum","oldStatus","newStatus","total",...}</code>. Совместим с n8n, Make, Zapier.
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Поставщик -->
       <div class="card" style="max-width:680px;margin-top:16px">
         <div class="card-header">🏢 Поставщик по умолчанию</div>
@@ -593,33 +594,6 @@ if (typeof XLSX === 'undefined') {
               </label>
               <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Если включено — в строке подписи поставщика добавляется «М.П.»</div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- О системе -->
-      <div class="card" style="max-width:680px;margin-top:16px">
-        <div class="card-header">ℹ️ О системе</div>
-        <div class="card-body" style="font-size:13px;line-height:1.8;color:var(--text-secondary)">
-          <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 16px;align-items:baseline">
-            <span style="color:var(--text-muted);font-size:12px">Версия</span>
-            <span style="font-weight:600;color:var(--text);font-family:monospace" id="about-version">…</span>
-            <span style="color:var(--text-muted);font-size:12px">Порты</span>
-            <span>HTTPS :9111 &nbsp;·&nbsp; HTTP редирект :9112</span>
-            <span style="color:var(--text-muted);font-size:12px">Стек</span>
-            <span>Node.js · Express · SQLite (sql.js)</span>
-            <span style="color:var(--text-muted);font-size:12px">Автор</span>
-            <span>
-              <a href="https://github.com/DarkyAndSparky" target="_blank"
-                 style="color:var(--accent);text-decoration:none">DarkyAndSparky</a>
-            </span>
-            <span style="color:var(--text-muted);font-size:12px">Репозиторий</span>
-            <span>
-              <a href="https://github.com/DarkyAndSparky/procure-it" target="_blank"
-                 style="color:var(--accent);text-decoration:none;font-family:monospace;font-size:12px">
-                github.com/DarkyAndSparky/procure-it
-              </a>
-            </span>
           </div>
         </div>
       </div>
@@ -668,8 +642,30 @@ if (typeof XLSX === 'undefined') {
         </div>
       </div>
 
+      <!-- Bitrix24 — интеграция опущена в самый низ, это не то, что нужно
+           настраивать в первую очередь большинству пользователей -->
+      <div class="card" style="max-width:680px;margin-top:16px">
+        <div class="card-header">🔗 Интеграция Bitrix24</div>
+        <div class="card-body">
+          <div class="field">
+            <label>Webhook URL</label>
+            <input type="url" id="cfg-bitrix-webhook" placeholder="https://your.bitrix24.ru/rest/1/ключ/" style="width:100%">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+              Настройки → Разработчикам → Входящий webhook. Метод: <code>crm.deal.add</code>
+            </div>
+          </div>
+          <div class="field" style="margin-top:12px">
+            <label>Webhook при смене статуса</label>
+            <input type="url" id="cfg-status-webhook" placeholder="https://hooks.example.com/procure-it" style="width:100%">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+              POST JSON: <code>{"event","specNum","oldStatus","newStatus","total",...}</code>. Совместим с n8n, Make, Zapier.
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Save -->
-      <div class="btn-group" style="max-width:680px">
+      <div class="btn-group config-save-bar" style="max-width:680px">
         <button class="btn btn-primary" onclick="saveConfig()" style="background:var(--success);border-color:var(--success);color:#fff">💾 Сохранить настройки</button>
         <button class="btn" onclick="resetConfig()" style="color:var(--danger);border-color:var(--danger)">↺ Сбросить к умолчаниям</button>
       </div>

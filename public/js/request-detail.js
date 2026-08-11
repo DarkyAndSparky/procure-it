@@ -15,6 +15,7 @@ async function loadToForm(id, copy=false) {
   document.getElementById('f-address').value = req.address || '';
   document.getElementById('f-supplier').value = req.supplier || '';
   document.getElementById('f-invoice-num').value = req.invoiceNum || '';
+  const cpEl = document.getElementById('f-counterparty'); if (cpEl) cpEl.value = req.counterparty || '';
   document.getElementById('f-contract').value = req.contract || '';
   // Migrate legacy status values
   const statusMigration = { inwork: 'ordered', paid: 'delivered' };

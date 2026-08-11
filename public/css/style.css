@@ -315,6 +315,18 @@
 
   .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
 
+  /* Настройки — прилипающая панель Сохранить/Сбросить внизу окна, чтобы
+     не приходилось скроллить длинную страницу настроек до самого конца. */
+  .config-save-bar {
+    position: sticky;
+    bottom: 0;
+    background: var(--bg);
+    padding: 12px 0;
+    margin-top: 16px !important;
+    border-top: 1px solid var(--border);
+    z-index: 5;
+  }
+
   /* Table */
   .table-wrap { overflow-x: auto; }
   table {
@@ -486,6 +498,17 @@
     font-size: 11px;
     margin-bottom: 16px;
     color: var(--text-secondary);
+  }
+  /* Красная строка — первая строка каждого абзаца спецификации отступает
+     от общего левого края (который совпадает с левым краем таблицы, т.к.
+     оба — прямые потомки .spec-preview с одним и тем же padding). Держим
+     это значение синхронизированным с PARA_FIRST_LINE_INDENT в
+     src/services/docxService.js (709 dxa ≈ 1.25см), чтобы предпросмотр в
+     браузере не расходился с реальным .docx. */
+  .spec-preview p {
+    text-indent: 1.25cm;
+    text-align: justify;
+    margin: 0;
   }
 
   /* Stats row */

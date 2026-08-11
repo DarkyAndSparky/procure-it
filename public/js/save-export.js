@@ -1,7 +1,7 @@
 // ─── Bitrix24 ─────────────────────────────────────────────────────────────────
 async function sendToBitrix() {
   if (!appConfig.bitrixWebhook) {
-    toast('⚠️ Webhook не настроен — укажите URL в Конфиге');
+    toast('⚠️ Webhook не настроен — укажите URL в Настройках');
     return;
   }
   const req = collectForm();
@@ -302,7 +302,9 @@ function buildAndDownloadExcel(req, existingWb) {
     }
   }
 
-  const fname = `${req.specNum}_расчёты.xlsx`;
+  const fnOrgShort = (req.orgShort || '').replace(/[\\/:\*?"<>|]/g, '_').slice(0, 20);
+  const fnSpecNum  = (req.specNum  || 'spec').replace(/[\\/:\*?"<>|]/g, '_');
+  const fname = fnOrgShort ? `${fnOrgShort}_Расчеты_${fnSpecNum}.xlsx` : `${fnSpecNum}_расчёты.xlsx`;
   // If existingWb was passed — caller handles the workbook, skip download
   if (existingWb) return;
   try {

@@ -81,12 +81,12 @@ router.post('/requests', operatorOrAdmin, (req, res) => {
     const dup = query('SELECT id FROM requests WHERE spec_num=?', [r.specNum])[0];
     if (dup) return res.status(409).json({ error: `Спецификация с номером «${r.specNum}» уже существует. Обновите страницу и попробуйте снова.` });
   }
-  const ok = run(`INSERT INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  const ok = run(`INSERT INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type,counterparty) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
      r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
      r.status||'new', r.comment||'', r.isRealization?1:0,
      r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,
-     JSON.stringify(r.positions||[]), r.docType || 'goods']);
+     JSON.stringify(r.positions||[]), r.docType || 'goods', r.counterparty||'']);
   if (!ok) return res.status(500).json({ error: 'Не удалось сохранить заявку. Возможно, номер спецификации уже занят — обновите страницу и попробуйте снова.' });
   auditLog('CREATE', id, null, null, r.specNum, { name: r.name, org: r.orgShort });
   res.json(rowToRequest(query('SELECT * FROM requests WHERE id=?', [id])[0]));
@@ -110,6 +110,7 @@ router.put('/requests/:id', operatorOrAdmin, (req, res) => {
       supplier:      [prev.supplier,      r.supplier],
       contract:      [prev.contract,      r.contract],
       invoice_num:   [prev.invoice_num,   r.invoiceNum],
+      counterparty:  [prev.counterparty,  r.counterparty],
       delivery_cost: [prev.delivery_cost, r.deliveryCost],
       markup:        [prev.markup,        r.markup],
       comment:       [prev.comment,       r.comment],
@@ -158,12 +159,12 @@ router.put('/requests/:id', operatorOrAdmin, (req, res) => {
     if (dup) return res.status(409).json({ error: `Спецификация с номером «${r.specNum}» уже существует. Обновите страницу и попробуйте снова.` });
   }
 
-  const ok = run(`UPDATE requests SET spec_num=?,org_id=?,org_full=?,org_short=?,org_signatory=?,org_stamp=?,bitrix=?,name=?,mol=?,date=?,address=?,supplier=?,invoice_num=?,contract=?,status=?,comment=?,is_realization=?,delivery_cost=?,markup=?,total_purchase=?,total=?,positions=?,doc_type=?,updated_at=datetime('now') WHERE id=?`,
+  const ok = run(`UPDATE requests SET spec_num=?,org_id=?,org_full=?,org_short=?,org_signatory=?,org_stamp=?,bitrix=?,name=?,mol=?,date=?,address=?,supplier=?,invoice_num=?,contract=?,status=?,comment=?,is_realization=?,delivery_cost=?,markup=?,total_purchase=?,total=?,positions=?,doc_type=?,counterparty=?,updated_at=datetime('now') WHERE id=?`,
     [r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
      r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
      r.status||'new', r.comment||'', r.isRealization?1:0,
      r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,
-     JSON.stringify(r.positions||[]), r.docType || 'goods', req.params.id]);
+     JSON.stringify(r.positions||[]), r.docType || 'goods', r.counterparty||'', req.params.id]);
   if (!ok) return res.status(500).json({ error: 'Не удалось сохранить заявку. Возможно, номер спецификации уже занят — обновите страницу и попробуйте снова.' });
   auditLog('UPDATE', req.params.id, 'request', null, r.specNum, { name: r.name, diff: diffFields });
   res.json(rowToRequest(query('SELECT * FROM requests WHERE id=?', [req.params.id])[0]));

@@ -77,9 +77,12 @@ router.post('/requests', operatorOrAdmin, (req, res) => {
   if (r.status && !ALLOWED_STATUSES.includes(r.status)) r.status = 'new';
   // Guard against spec_num collisions — e.g. a stale client-side registry cache
   // suggesting a number that was already taken by another request in the meantime.
+  // Область уникальности — организация + номер (не глобально по всей системе):
+  // у разных организаций один и тот же номер («П202608-01») — это нормально,
+  // конфликт только если он повторяется у ОДНОЙ и той же организации.
   if (r.specNum) {
-    const dup = query('SELECT id FROM requests WHERE spec_num=?', [r.specNum])[0];
-    if (dup) return res.status(409).json({ error: `Спецификация с номером «${r.specNum}» уже существует. Обновите страницу и попробуйте снова.` });
+    const dup = query('SELECT id FROM requests WHERE spec_num=? AND org_id=?', [r.specNum, r.orgId||''])[0];
+    if (dup) return res.status(409).json({ error: `Спецификация с номером «${r.specNum}» уже существует у этой организации. Обновите страницу и попробуйте снова.` });
   }
   const ok = run(`INSERT INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type,counterparty) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
@@ -153,10 +156,10 @@ router.put('/requests/:id', operatorOrAdmin, (req, res) => {
     }
   }
 
-  // Guard against spec_num collisions with a DIFFERENT request
+  // Guard against spec_num collisions with a DIFFERENT request (same org only)
   if (r.specNum && r.specNum !== prev.spec_num) {
-    const dup = query('SELECT id FROM requests WHERE spec_num=? AND id!=?', [r.specNum, req.params.id])[0];
-    if (dup) return res.status(409).json({ error: `Спецификация с номером «${r.specNum}» уже существует. Обновите страницу и попробуйте снова.` });
+    const dup = query('SELECT id FROM requests WHERE spec_num=? AND org_id=? AND id!=?', [r.specNum, r.orgId||prev.org_id||'', req.params.id])[0];
+    if (dup) return res.status(409).json({ error: `Спецификация с номером «${r.specNum}» уже существует у этой организации. Обновите страницу и попробуйте снова.` });
   }
 
   const ok = run(`UPDATE requests SET spec_num=?,org_id=?,org_full=?,org_short=?,org_signatory=?,org_stamp=?,bitrix=?,name=?,mol=?,date=?,address=?,supplier=?,invoice_num=?,contract=?,status=?,comment=?,is_realization=?,delivery_cost=?,markup=?,total_purchase=?,total=?,positions=?,doc_type=?,counterparty=?,updated_at=datetime('now') WHERE id=?`,

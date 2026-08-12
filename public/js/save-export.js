@@ -1,3 +1,13 @@
+// ─── Округление рублёвых значений — 2 знака после запятой везде ────────────
+// Валютные значения в «Расчётах» считаются через деление (доля доставки на
+// единицу и т.д.), из-за чего плавающая точка даёт длинные хвосты вроде
+// 56639.8048645469. Округляем и сами вычисленные значения, и Excel-формулы
+// (ROUND(...,2)) — иначе Excel при открытии файла пересчитает формулы и
+// хвосты вернутся, даже если JS-значение было округлено.
+function round2(n) {
+  return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+}
+
 // ─── Bitrix24 ─────────────────────────────────────────────────────────────────
 async function sendToBitrix() {
   if (!appConfig.bitrixWebhook) {
@@ -128,12 +138,12 @@ function buildAndDownloadExcel(req, existingWb) {
 
     // Для простоты считаем значения как раньше (fallback для книги без XLSX formula support)
     // и параллельно пишем формулы — SheetJS запишет формулы в ячейки
-    const purchaseSum  = p.purchasePrice * p.qty;
+    const purchaseSum  = round2(p.purchasePrice * p.qty);
     const pctOfOrder   = totalPurchase > 0 ? purchaseSum / totalPurchase : 0;
-    const deliveryShare = pctOfOrder * deliveryCost;
-    const ppWithDel    = p.qty > 0 ? p.purchasePrice + deliveryShare / p.qty : p.purchasePrice;
-    const sellPerUnit  = p.sellPerUnit || ppWithDel * (1 + markup / 100);
-    const sellSum      = p.sellSum || sellPerUnit * p.qty;
+    const deliveryShare = round2(pctOfOrder * deliveryCost);
+    const ppWithDel    = round2(p.qty > 0 ? p.purchasePrice + deliveryShare / p.qty : p.purchasePrice);
+    const sellPerUnit  = round2(p.sellPerUnit || ppWithDel * (1 + markup / 100));
+    const sellSum      = round2(p.sellSum || sellPerUnit * p.qty);
 
     const r = dataStartRow + i + 1; // Excel row (1-based)
 
@@ -144,15 +154,15 @@ function buildAndDownloadExcel(req, existingWb) {
       { v: p.name, t: 's' },                         // D: Наименование
       { v: p.qty, t: 'n' },                          // E: Кол-во
       { v: p.link || '', t: 's' },                   // F: Где закуп
-      { v: p.purchasePrice, t: 'n' },                // G: Цена ед.
-      { f: `G${r}*E${r}`, v: purchaseSum, t: 'n' },  // H: Цена закупа
+      { v: round2(p.purchasePrice), t: 'n' },        // G: Цена ед.
+      { f: `ROUND(G${r}*E${r},2)`, v: purchaseSum, t: 'n' },  // H: Цена закупа
       { f: `IF(H${itogExcelRow}=0,0,H${r}/H${itogExcelRow})`, v: pctOfOrder, t: 'n' },        // I: % от заказа
-      { f: `I${r}*I2`, v: deliveryShare, t: 'n' },   // J: Доля доставки (I2 = deliveryCost)
-      { f: `IF(E${r}=0,G${r},G${r}+J${r}/E${r})`, v: ppWithDel, t: 'n' },  // K: Цена с дост за ед
-      { f: `K${r}*E${r}`, v: ppWithDel * p.qty, t: 'n' },          // L: Итого с доставкой
+      { f: `ROUND(I${r}*I2,2)`, v: deliveryShare, t: 'n' },   // J: Доля доставки (I2 = deliveryCost)
+      { f: `ROUND(IF(E${r}=0,G${r},G${r}+J${r}/E${r}),2)`, v: ppWithDel, t: 'n' },  // K: Цена с дост за ед
+      { f: `ROUND(K${r}*E${r},2)`, v: round2(ppWithDel * p.qty), t: 'n' },          // L: Итого с доставкой
       { v: '', t: 's' },                             // M: пусто
-      { f: `K${r}*(1+R2/100)`, v: sellPerUnit, t: 'n' },           // N: Цена продажи за ед (R2=markup)
-      { f: `N${r}*E${r}`, v: sellSum, t: 'n' },      // O: Стоимость продажи
+      { f: `ROUND(K${r}*(1+R2/100),2)`, v: sellPerUnit, t: 'n' },           // N: Цена продажи за ед (R2=markup)
+      { f: `ROUND(N${r}*E${r},2)`, v: sellSum, t: 'n' },      // O: Стоимость продажи
     ]);
   });
 
@@ -167,21 +177,21 @@ function buildAndDownloadExcel(req, existingWb) {
     { v: '', t: 's' },
     { v: '', t: 's' },
     { v: '', t: 's' },
-    { f: `SUM(H${firstDataExcel}:H${lastDataExcel})`, v: totalPurchase, t: 'n' },
+    { f: `ROUND(SUM(H${firstDataExcel}:H${lastDataExcel}),2)`, v: round2(totalPurchase), t: 'n' },
     { v: '', t: 's' },
-    { f: `SUM(J${firstDataExcel}:J${lastDataExcel})`, v: deliveryCost, t: 'n' },
+    { f: `ROUND(SUM(J${firstDataExcel}:J${lastDataExcel}),2)`, v: round2(deliveryCost), t: 'n' },
     { v: '', t: 's' },
-    { f: `H${itogExcelRow}+J${itogExcelRow}`, v: totalPurchase + deliveryCost, t: 'n' },
+    { f: `ROUND(H${itogExcelRow}+J${itogExcelRow},2)`, v: round2(totalPurchase + deliveryCost), t: 'n' },
     { v: '', t: 's' },
     { v: '', t: 's' },
-    { f: `SUM(O${firstDataExcel}:O${lastDataExcel})`, v: req.total, t: 'n' },
+    { f: `ROUND(SUM(O${firstDataExcel}:O${lastDataExcel}),2)`, v: round2(req.total), t: 'n' },
   ]);
 
   // Прибыль
   calcRows.push([]);
   const profitRow = Array.from({ length: 15 }, () => ({ v: '', t: 's' }));
   profitRow[13] = { v: 'прибыль', t: 's' };
-  profitRow[14] = { f: `O${itogExcelRow}-H${itogExcelRow}-J${itogExcelRow}`, v: req.total - totalPurchase - deliveryCost, t: 'n' };
+  profitRow[14] = { f: `ROUND(O${itogExcelRow}-H${itogExcelRow}-J${itogExcelRow},2)`, v: round2(req.total - totalPurchase - deliveryCost), t: 'n' };
   calcRows.push(profitRow);
 
   const ws1 = XLSX.utils.aoa_to_sheet(calcRows);
@@ -189,7 +199,7 @@ function buildAndDownloadExcel(req, existingWb) {
   // Записываем deliveryCost и markup в именованные ячейки для ссылок в формулах
   // I2 = deliveryCost (строка 1, col 8 = I)
   // R2 = markup (строка 1, col 17 = R)
-  ws1['I2'] = { t: 'n', v: deliveryCost };
+  ws1['I2'] = { t: 'n', v: round2(deliveryCost) };
   ws1['R2'] = { t: 'n', v: markup };
 
   // ВАЖНО: aoa_to_sheet построил '!ref' только по 15 колонкам (A:O), т.к. все
@@ -246,15 +256,15 @@ function buildAndDownloadExcel(req, existingWb) {
       let specTotal = 0;
       specPositions.forEach((p, i) => {
         const sr = i + 2; // Excel row (1-based, header=1)
-        const sellUnit = p.sellPerUnit || p.purchasePrice * (1 + markup / 100);
-        const sellSum  = p.sellSum    || sellUnit * p.qty;
+        const sellUnit = round2(p.sellPerUnit || p.purchasePrice * (1 + markup / 100));
+        const sellSum  = round2(p.sellSum    || sellUnit * p.qty);
         specTotal += sellSum;
         specRows.push([
           { v: i + 1, t: 'n' },
           { v: p.name, t: 's' },
           { v: p.qty, t: 'n' },
           { v: sellUnit, t: 'n' },
-          { f: `C${sr}*D${sr}`, v: sellSum, t: 'n' },
+          { f: `ROUND(C${sr}*D${sr},2)`, v: sellSum, t: 'n' },
         ]);
       });
 
@@ -265,7 +275,7 @@ function buildAndDownloadExcel(req, existingWb) {
         { v: '', t: 's' },
         { v: '', t: 's' },
         { v: 'Итого:', t: 's' },
-        { f: `SUM(E2:E${specCount + 1})`, v: specTotal, t: 'n' },
+        { f: `ROUND(SUM(E2:E${specCount + 1}),2)`, v: round2(specTotal), t: 'n' },
       ]);
       specRows.push(['', '', '', '', '']);
       specRows.push(['НДС: не облагается', '', '', '', '']);

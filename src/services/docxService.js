@@ -22,7 +22,7 @@ async function buildSpecDocx(r) {
       colHeader: 'Наименование работ / услуг',
       contractWord: 'к договору подряда',
       termLine: 'Срок выполнения работ: 14 дней.',
-      paymentLine: '— Аванс (предварительная оплата) в размере 100 % от стоимости работ, подлежащих выполнению по настоящей Спецификации.',
+      paymentLine: 'Аванс (предварительная оплата) в размере 100 % от стоимости работ, подлежащих выполнению по настоящей Спецификации.',
       qualityLine: 'Работы должны быть выполнены в соответствии с действующими нормами и правилами, а также требованиями технической документации, и приняты Покупателем по акту выполненных работ.',
       finalLine: 'Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон и является неотъемлемой частью Договора подряда.',
     },
@@ -31,7 +31,7 @@ async function buildSpecDocx(r) {
       colHeader: 'Наименование услуги',
       contractWord: 'к договору',
       termLine: '⚠ Формат документа «Сопровождение» ещё не согласован и будет уточнён отдельно.',
-      paymentLine: '— Порядок оплаты будет определён после согласования формата документа.',
+      paymentLine: 'Порядок оплаты будет определён после согласования формата документа.',
       qualityLine: 'Данный раздел является заглушкой и будет заменён после уточнения формата документа «Сопровождение».',
       finalLine: 'Настоящий документ — временная заглушка и не является итоговой формой.',
     },
@@ -40,7 +40,7 @@ async function buildSpecDocx(r) {
       colHeader: 'Наименование Товара',
       contractWord: 'к договору поставки',
       termLine: 'Срок поставки Товара: 14 дней.',
-      paymentLine: '— Аванс (предварительная оплата) в размере 100 % от стоимости Товара, подлежащего поставке по настоящей Спецификации. Цена указана с доставкой до Покупателя.',
+      paymentLine: 'Аванс (предварительная оплата) в размере 100 % от стоимости Товара, подлежащего поставке по настоящей Спецификации. Цена указана с доставкой до Покупателя.',
       qualityLine: 'Качество Товара должно соответствовать установленным требованиям государственных стандартов качества в соответствии с действующим законодательством Российской Федерации. При поставке необходимо наличие всех необходимых сертификатов, удостоверений качества, протоколов лабораторных испытаний и т.д. на поставляемый Товар.',
       finalLine: 'Настоящая Спецификация составлена в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон и является неотъемлемой частью Договора.',
     },
@@ -71,9 +71,11 @@ async function buildSpecDocx(r) {
     });
   }
 
-  // Table width in DXA (A4 minus margins: ~170mm = 9639 DXA)
-  const TW = 9639;
-  const colWidths = [545, 5449, 900, 1372, 1373]; // sum = 9639
+  // Table width in DXA — должна точно совпадать с печатной областью
+  // страницы (A4 минус поля секции: left 1701 + right 850), иначе таблица
+  // на ~5мм вылезает за правое поле. A4 = 11906 DXA; 11906-1701-850=9355.
+  const TW = 9355;
+  const colWidths = [529, 5289, 874, 1331, 1332]; // sum = 9355
 
   // Header row
   const headerRow = new TableRow({ tableHeader: true, cantSplit: true, children: [
@@ -157,7 +159,7 @@ async function buildSpecDocx(r) {
           return [new Table({
             width: { size: TW, type: WidthType.DXA },
             columnWidths: [leftW, rightW],
-            borders: { top: nb, bottom: nb, left: nb, right: nb, insideH: nb, insideV: nb },
+            borders: { top: nb, bottom: nb, left: nb, right: nb, insideHorizontal: nb, insideVertical: nb },
             rows: [new TableRow({ children: [
               new TableCell({ borders: noBorders, children: [new Paragraph({ children: [] })] }),
               new TableCell({ borders: noBorders, children: lines.map((line, i) => new Paragraph({
@@ -181,7 +183,7 @@ async function buildSpecDocx(r) {
           return new Table({
             width: { size: TW, type: WidthType.DXA },
             columnWidths: [TW/2, TW/2],
-            borders: { top: nb2, bottom: nb2, left: nb2, right: nb2, insideH: nb2, insideV: nb2 },
+            borders: { top: nb2, bottom: nb2, left: nb2, right: nb2, insideHorizontal: nb2, insideVertical: nb2 },
             rows: [new TableRow({ children: [
               new TableCell({ borders: noBorders2, children: [new Paragraph({ children: [new TextRun({ text: 'г. Екатеринбург', size: 22, font: 'Times New Roman' })] })] }),
               new TableCell({ borders: noBorders2, children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: dateStr, size: 22, font: 'Times New Roman' })] })] }),

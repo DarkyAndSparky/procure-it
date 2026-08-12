@@ -14,7 +14,7 @@ function runMigrations(db) {
   // every save with "table requests has no column named ...". Create the
   // core tables first, then run the column migrations against them.
   db.run(`CREATE TABLE IF NOT EXISTS requests (
-    id TEXT PRIMARY KEY, spec_num TEXT NOT NULL UNIQUE,
+    id TEXT PRIMARY KEY, spec_num TEXT NOT NULL,
     org_id TEXT, org_full TEXT, org_short TEXT, org_signatory TEXT,
     bitrix TEXT DEFAULT '', name TEXT NOT NULL, mol TEXT DEFAULT '',
     date TEXT DEFAULT '', address TEXT DEFAULT '', supplier TEXT DEFAULT '', invoice_num TEXT DEFAULT '',
@@ -23,7 +23,8 @@ function runMigrations(db) {
     markup REAL DEFAULT 5, total_purchase REAL DEFAULT 0, total REAL DEFAULT 0,
     positions TEXT DEFAULT '[]',
     created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(org_id, spec_num)
   )`);
 
   // Migrations — add new columns to existing DBs
@@ -45,6 +46,55 @@ function runMigrations(db) {
   ];
   for (const m of migrations) {
     try { db.run(m); } catch(e) { /* column already exists */ }
+  }
+
+  // Миграция: spec_num раньше был уникален ГЛОБАЛЬНО по всей таблице —
+  // с переходом на нумерацию по типу документа (П/Р/М/С без привязки к
+  // организации) это стало давать ложные конфликты между РАЗНЫМИ
+  // организациями (напр. «Лето» и «Ясно» в одном месяце оба получают
+  // П202608-01 — второй сохранить уже нельзя). Правильная область
+  // уникальности — (org_id, spec_num), а не просто spec_num. SQLite не
+  // умеет менять UNIQUE-ограничение через ALTER TABLE, поэтому при
+  // обнаружении старой схемы пересобираем таблицу.
+  try {
+    const oldSchema = db.exec(`SELECT sql FROM sqlite_master WHERE type='table' AND name='requests'`);
+    const sql = oldSchema[0]?.values?.[0]?.[0] || '';
+    if (/spec_num\s+TEXT\s+NOT\s+NULL\s+UNIQUE/i.test(sql)) {
+      db.run(`ALTER TABLE requests RENAME TO requests_old_unique_migration`);
+      db.run(`CREATE TABLE requests (
+        id TEXT PRIMARY KEY, spec_num TEXT NOT NULL,
+        org_id TEXT, org_full TEXT, org_short TEXT, org_signatory TEXT,
+        bitrix TEXT DEFAULT '', name TEXT NOT NULL, mol TEXT DEFAULT '',
+        date TEXT DEFAULT '', address TEXT DEFAULT '', supplier TEXT DEFAULT '', invoice_num TEXT DEFAULT '',
+        contract TEXT DEFAULT '', status TEXT DEFAULT 'new', comment TEXT DEFAULT '',
+        is_realization INTEGER DEFAULT 0, delivery_cost REAL DEFAULT 0,
+        markup REAL DEFAULT 5, total_purchase REAL DEFAULT 0, total REAL DEFAULT 0,
+        positions TEXT DEFAULT '[]',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        signed_spec_pdf TEXT DEFAULT '',
+        invoice_file TEXT DEFAULT '',
+        invoice_file_original_name TEXT DEFAULT '',
+        org_stamp TEXT DEFAULT '1',
+        doc_type TEXT DEFAULT 'goods',
+        counterparty TEXT DEFAULT '',
+        UNIQUE(org_id, spec_num)
+      )`);
+      db.run(`INSERT INTO requests (
+        id, spec_num, org_id, org_full, org_short, org_signatory, bitrix, name, mol,
+        date, address, supplier, invoice_num, contract, status, comment, is_realization,
+        delivery_cost, markup, total_purchase, total, positions, created_at, updated_at,
+        signed_spec_pdf, invoice_file, invoice_file_original_name, org_stamp, doc_type, counterparty
+      ) SELECT
+        id, spec_num, org_id, org_full, org_short, org_signatory, bitrix, name, mol,
+        date, address, supplier, invoice_num, contract, status, comment, is_realization,
+        delivery_cost, markup, total_purchase, total, positions, created_at, updated_at,
+        signed_spec_pdf, invoice_file, invoice_file_original_name, org_stamp, doc_type, counterparty
+      FROM requests_old_unique_migration`);
+      db.run(`DROP TABLE requests_old_unique_migration`);
+    }
+  } catch(e) {
+    console.error('[migration] spec_num unique-scope rebuild failed:', e.message);
   }
 
   // Migrate legacy status values: inwork→ordered, paid→delivered
@@ -86,7 +136,7 @@ function runMigrations(db) {
   try { db.run(`ALTER TABLE orgs ADD COLUMN folder TEXT DEFAULT ''`); } catch(e) {}
 
   db.run(`CREATE TABLE IF NOT EXISTS requests (
-    id TEXT PRIMARY KEY, spec_num TEXT NOT NULL UNIQUE,
+    id TEXT PRIMARY KEY, spec_num TEXT NOT NULL,
     org_id TEXT, org_full TEXT, org_short TEXT, org_signatory TEXT,
     bitrix TEXT DEFAULT '', name TEXT NOT NULL, mol TEXT DEFAULT '',
     date TEXT DEFAULT '', address TEXT DEFAULT '', supplier TEXT DEFAULT '', invoice_num TEXT DEFAULT '',
@@ -95,7 +145,8 @@ function runMigrations(db) {
     markup REAL DEFAULT 5, total_purchase REAL DEFAULT 0, total REAL DEFAULT 0,
     positions TEXT DEFAULT '[]',
     created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(org_id, spec_num)
   )`);
 
   db.run(`CREATE TABLE IF NOT EXISTS addresses (

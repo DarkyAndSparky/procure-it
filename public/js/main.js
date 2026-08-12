@@ -59,13 +59,22 @@ document.getElementById('f-import-excel').addEventListener('change', function() 
   await populateAddressList();
   addRow('', 1, 'шт', 0);
   initDragDrop();
-  // Версия теперь в сайдбаре и видна всегда, а не только на странице
-  // «Настройки» — подтягиваем её сразу при старте приложения.
-  api('GET', '/api/version').then(d => {
-    const el = document.getElementById('about-version');
-    if (el && d.version) el.textContent = d.version;
-  }).catch(() => {});
   // Re-apply today's date in case it was reset
   const el = document.getElementById('f-date');
   if (el && !el.value && window._today) el.value = window._today;
+})();
+
+// Версия в сайдбаре — полностью независимый вызов, вне общей цепочки
+// инициализации выше. Не завязан ни на checkAuth()/authed (который может
+// рано вернуть false, например пока не сменён пароль по умолчанию —
+// тогда весь блок над этим комментарием обрывается на `return` и до
+// версии очередь просто не доходит), ни на успех load()/loadConfig() и
+// остального init. Если токена ещё нет или прав не хватает — молча
+// остаётся «…», не мешая работе приложения.
+(async () => {
+  try {
+    const d = await api('GET', '/api/version');
+    const el = document.getElementById('about-version');
+    if (el && d.version) el.textContent = d.version;
+  } catch(e) { /* тихо — версия необязательна для работы приложения */ }
 })();

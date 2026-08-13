@@ -76,6 +76,7 @@ async function doChangePassword(forced = false) {
     await api('POST', '/api/auth/change-password', payload);
     document.getElementById('change-pw-modal').style.display = 'none';
     toast('✓ Пароль успешно изменён');
+    refreshVersionBadge();
     if (forced) {
       // Now proceed with full init
       await load();

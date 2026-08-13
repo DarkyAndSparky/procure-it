@@ -27,7 +27,7 @@ router.get('/settings', operatorOrAdmin, (req, res) => {
     // Operators need branding + supplier defaults to create requests/specs,
     // but shouldn't see infra credentials/webhooks — only admins get those.
     if (req.userRole !== 'admin') {
-      const { networkFolder, networkUser, networkPass, bitrixWebhook, statusWebhook, ...safe } = result;
+      const { networkFolder, networkUser, networkPass, bitrixWebhook, statusWebhook, backupFolder, ...safe } = result;
       return res.json(safe);
     }
     res.json(result);
@@ -63,6 +63,71 @@ router.put('/settings', adminOnly, (req, res) => {
 
 router.get('/version', operatorOrAdmin, (req, res) => {
   res.json({ version: PKG_VERSION });
+});
+
+// ── Полная информация «О системе» — динамический список зависимостей и
+// окружения, для отдельной страницы (не путать с мини-виджетом в сайдбаре,
+// у которого только версия+GitHub+лицензия и трогать его не нужно).
+router.get('/system-info', operatorOrAdmin, (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const pkg = require('../../package.json');
+
+    // Резолвим фактически установленные версии зависимостей из их
+    // собственных package.json в node_modules — надёжнее, чем диапазон
+    // версий (^x.y.z) из package.json самого приложения, который не
+    // говорит, что реально стоит после npm install.
+    const resolveInstalledVersion = (name) => {
+      try {
+        const p = require.resolve(path.join(name, 'package.json'), { paths: [path.join(__dirname, '../..')] });
+        return require(p).version;
+      } catch(e) {
+        // Фолбэк на обычную Node-резолюцию (NODE_PATH/глобальные пакеты) —
+        // на случай нестандартной установки, где не все пакеты лежат в
+        // локальном node_modules проекта.
+        try { return require(path.join(name, 'package.json')).version; } catch(e2) { return null; }
+      }
+    };
+
+    const deps = Object.entries(pkg.dependencies || {}).map(([name, range]) => ({
+      name, range, installed: resolveInstalledVersion(name),
+    }));
+    const devDeps = Object.entries(pkg.devDependencies || {}).map(([name, range]) => ({
+      name, range, installed: resolveInstalledVersion(name),
+    }));
+
+    const dbRows = getDb().exec(`SELECT
+      (SELECT COUNT(*) FROM requests) as requests,
+      (SELECT COUNT(*) FROM orgs) as orgs,
+      (SELECT COUNT(*) FROM users) as users`);
+    const counts = dbRows.length ? { requests: dbRows[0].values[0][0], orgs: dbRows[0].values[0][1], users: dbRows[0].values[0][2] } : {};
+
+    let dbSizeBytes = 0;
+    try { dbSizeBytes = fs.statSync(require('../config').DB_FILE).size; } catch(e) {}
+
+    res.json({
+      version: PKG_VERSION,
+      name: pkg.name,
+      description: pkg.description || '',
+      license: pkg.license || 'MIT',
+      author: pkg.author || 'DarkyAndSparky',
+      repository: (pkg.repository && (pkg.repository.url || pkg.repository)) || 'https://github.com/DarkyAndSparky/procure-it',
+      node: process.version,
+      platform: process.platform,
+      arch: process.arch,
+      uptimeSec: Math.floor(process.uptime()),
+      memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
+      pid: process.pid,
+      dependencies: deps,
+      devDependencies: devDeps,
+      counts,
+      dbSizeBytes,
+      env: process.env.NODE_ENV || 'production',
+    });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 module.exports = { router, PKG_VERSION };

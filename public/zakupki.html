@@ -68,6 +68,10 @@ if (typeof XLSX === 'undefined') {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       Настройки
     </button>
+    <button class="nav-item" id="nav-about" onclick="showPage('about')" data-role-min="admin">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      О системе
+    </button>
   </nav>
 
   <!-- О системе — компактный блок внизу сайдбара -->
@@ -640,6 +644,18 @@ if (typeof XLSX === 'undefined') {
             <input type="file" accept=".json" style="display:none" onchange="restoreBackup(this)">
           </label>
         </div>
+
+        <hr class="divider" style="margin:16px 0">
+        <div class="field">
+          <label>Папка для автобэкапов (необязательно)</label>
+          <input type="text" id="cfg-backup-folder" placeholder="по умолчанию: data/backups (внутри проекта)" style="width:100%">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+            Автобэкап (каждые 6 часов) и прикреплённые файлы (подписанные спецификации, счета) копируются сюда.
+            Смысл бэкапа — не хранить его там же, где рабочие данные: если сломается тот же диск, пропадёт и бэкап.
+            Укажи путь на другом диске или сетевой ресурс (например <code>D:\Backups\zakupki</code> или <code>\\nas\backups\zakupki</code>).
+            Оставь пустым — поведение как раньше (внутри проекта).
+          </div>
+        </div>
       </div>
 
       <!-- Bitrix24 — интеграция опущена в самый низ, это не то, что нужно
@@ -668,6 +684,13 @@ if (typeof XLSX === 'undefined') {
       <div class="btn-group config-save-bar" style="max-width:680px">
         <button class="btn btn-primary" onclick="saveConfig()" style="background:var(--success);border-color:var(--success);color:#fff">💾 Сохранить настройки</button>
         <button class="btn" onclick="resetConfig()" style="color:var(--danger);border-color:var(--danger)">↺ Сбросить к умолчаниям</button>
+      </div>
+    </div>
+
+    <!-- PAGE: About system (полная версия — мини-виджет в сайдбаре отдельно, не трогаем) -->
+    <div id="page-about" class="page" style="display:none">
+      <div id="about-page-content" style="max-width:900px">
+        <div style="color:var(--text-muted);font-size:13px">Загрузка…</div>
       </div>
     </div>
 

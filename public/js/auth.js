@@ -124,6 +124,22 @@ function showLoginModal() {
   setTimeout(() => document.getElementById('login-username')?.focus(), 100);
 }
 
+// ── Версия в сайдбаре ────────────────────────────────────────────────────────
+// Общая функция, вызывается из НЕСКОЛЬКИХ мест: сразу при загрузке страницы
+// (main.js — на случай гостя/уже валидного токена) и, что важно, ПОВТОРНО
+// после успешного логина и после принудительной смены пароля. Раньше версия
+// запрашивалась только один раз при старте страницы — если в этот момент
+// пользователь ещё не залогинен (403 без токена), запрос тихо проваливался
+// и БОЛЬШЕ НИКОГДА не повторялся, даже после успешного входа — версия так и
+// оставалась «…» до жёсткого обновления страницы.
+async function refreshVersionBadge() {
+  try {
+    const d = await api('GET', '/api/version');
+    const el = document.getElementById('about-version');
+    if (el && d.version) el.textContent = d.version;
+  } catch(e) { /* тихо — версия необязательна для работы приложения */ }
+}
+
 async function doLogin() {
   const username = document.getElementById('login-username')?.value.trim();
   const pwd      = document.getElementById('login-password')?.value;
@@ -146,6 +162,7 @@ async function doLogin() {
       if (authToken) localStorage.setItem('procure_token', authToken);
       document.getElementById('login-modal').style.display = 'none';
       updateRoleUI();
+      refreshVersionBadge();
       if (data.mustChangePassword) {
         showChangePasswordModal(true); // forced
         return;

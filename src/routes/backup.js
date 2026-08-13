@@ -6,7 +6,7 @@ const path = require('path');
 const { getDb, query, run, saveDb, rowToRequest } = require('../db/connection');
 const { adminOnly, operatorOrAdmin } = require('../auth/middleware');
 const { DATA_DIR, BACKUP_DIR, SIGNED_DIR, INVOICE_DIR, DEFAULT_SETTINGS } = require('../config');
-const { doBackup } = require('../services/backupService');
+const { doBackup, resolveBackupDir } = require('../services/backupService');
 
 module.exports = (strictLimiter) => {
   router.get('/backup', adminOnly, (req, res) => {
@@ -69,7 +69,14 @@ module.exports = (strictLimiter) => {
       if (requests.length) {
         run('DELETE FROM requests');
         const SENTINELS = new Set(['__has_pdf__', '__has_file__']);
-        const FILES_MIRROR = path.join(DATA_DIR, 'backups', 'files_mirror');
+        // Ищем в зеркале ТЕКУЩЕЙ настроенной папки бэкапа, а если там нет —
+        // в старом дефолтном месте (на случай если папку бэкапа сменили
+        // ПОСЛЕ того, как файлы туда уже были сохранены).
+        const currentBackupDir = resolveBackupDir();
+        const FILES_MIRROR_CANDIDATES = [
+          path.join(currentBackupDir, 'files_mirror'),
+          path.join(BACKUP_DIR, 'files_mirror'),
+        ];
         for (const r of requests) {
           // Бэкапы, снятые до этого фикса, могли содержать заглушки
           // '__has_pdf__'/'__has_file__' вместо реальных имён файлов —
@@ -97,8 +104,12 @@ module.exports = (strictLimiter) => {
             if (!fname) continue;
             const destPath = path.join(destDir, path.basename(fname));
             if (fs.existsSync(destPath)) continue;
-            const mirrorPath = path.join(FILES_MIRROR, mirrorSub, path.basename(fname));
-            if (fs.existsSync(mirrorPath)) {
+            let mirrorPath = null;
+            for (const mirrorRoot of FILES_MIRROR_CANDIDATES) {
+              const candidate = path.join(mirrorRoot, mirrorSub, path.basename(fname));
+              if (fs.existsSync(candidate)) { mirrorPath = candidate; break; }
+            }
+            if (mirrorPath) {
               fs.mkdirSync(destDir, { recursive: true });
               fs.copyFileSync(mirrorPath, destPath);
               filesRestored++;
@@ -150,9 +161,10 @@ module.exports = (strictLimiter) => {
   router.get('/backup/db', adminOnly, strictLimiter, (req, res) => {
     try {
       doBackup();
-      const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.db')).sort().reverse();
+      const dir = resolveBackupDir();
+      const files = fs.readdirSync(dir).filter(f => f.endsWith('.db')).sort().reverse();
       if (files.length === 0) return res.status(500).json({ error: 'Нет бэкапов' });
-      const latest = path.join(BACKUP_DIR, files[0]);
+      const latest = path.join(dir, files[0]);
       res.download(latest, files[0]);
     } catch(e) {
       res.status(500).json({ error: e.message });

@@ -7,7 +7,7 @@ const { query, run, saveDb, rowToRequest } = require('../db/connection');
 const { auditLog } = require('../db/audit');
 const { operatorOrAdmin } = require('../auth/middleware');
 const { SIGNED_DIR, INVOICE_DIR, DEFAULT_SETTINGS } = require('../config');
-const { layoutFiles, openFolder, testFolder } = require('../services/fileLayoutService');
+const { layoutFiles, openFolder, testFolder, checkLayoutStatus } = require('../services/fileLayoutService');
 
 function readSettings() {
   const rows = query('SELECT key, value FROM settings');
@@ -151,6 +151,22 @@ router.post('/requests/:id/layout-files', operatorOrAdmin, requireSafeId, expres
     res.json(result);
   } catch(e) {
     console.error('[layout-files]', e);
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+
+// ── Проверка статуса раскладки (read-only) — для бейджа в реестре ──────────
+router.get('/requests/:id/layout-status', operatorOrAdmin, requireSafeId, async (req, res) => {
+  try {
+    const reqId = req.params.id;
+    const row = query('SELECT * FROM requests WHERE id=?', [reqId])[0];
+    if (!row) return res.status(404).json({ error: 'Заявка не найдена' });
+    const r = rowToRequest(row);
+    const cfg = readSettings();
+    const result = await checkLayoutStatus(reqId, r, cfg);
+    res.json(result);
+  } catch(e) {
+    console.error('[layout-status]', e);
     res.status(e.status || 500).json({ error: e.message });
   }
 });

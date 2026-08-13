@@ -70,11 +70,7 @@ document.getElementById('f-import-excel').addEventListener('change', function() 
 // тогда весь блок над этим комментарием обрывается на `return` и до
 // версии очередь просто не доходит), ни на успех load()/loadConfig() и
 // остального init. Если токена ещё нет или прав не хватает — молча
-// остаётся «…», не мешая работе приложения.
-(async () => {
-  try {
-    const d = await api('GET', '/api/version');
-    const el = document.getElementById('about-version');
-    if (el && d.version) el.textContent = d.version;
-  } catch(e) { /* тихо — версия необязательна для работы приложения */ }
-})();
+// остаётся «…»; повторный вызов после логина/смены пароля — см.
+// refreshVersionBadge() в auth.js/users.js, который эту же попытку
+// переигрывает уже с валидным токеном.
+refreshVersionBadge();

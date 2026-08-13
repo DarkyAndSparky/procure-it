@@ -120,15 +120,21 @@ async function buildSpecDocx(r) {
 
   const PARA_FIRST_LINE_INDENT = 709; // ~1.25cm — стандартная «красная строка»
 
+  // Красная строка — через явный символ табуляции + табстоп, а не через
+  // свойство `w:ind firstLine`. С ind-свойством были случаи, когда реальный
+  // Word при печати игнорировал отступ (хотя XML был корректен и корректно
+  // рендерился в LibreOffice/PDF) — а таб-символ с табстопом работает
+  // предсказуемо во вообще любой версии Word, это классический способ
+  // делать «красную строку» в старых шаблонах документов.
   function para(text, opts = {}) {
     return new Paragraph({
       alignment: opts.align || AlignmentType.BOTH,
       spacing: { before: opts.before || 120, after: opts.after || 0 },
-      indent: { firstLine: PARA_FIRST_LINE_INDENT, hanging: 0, left: 0 },
+      tabStops: [{ type: TabStopType.LEFT, position: PARA_FIRST_LINE_INDENT }],
       keepNext: !!opts.keepNext,
       keepLines: !!opts.keepLines,
       children: [new TextRun({
-        text, size: opts.size || 22, font: 'Times New Roman',
+        text: '\t' + text, size: opts.size || 22, font: 'Times New Roman',
         bold: !!opts.bold, italics: !!opts.italic
       })]
     });
@@ -198,13 +204,13 @@ async function buildSpecDocx(r) {
         new Paragraph({
           alignment: AlignmentType.BOTH,
           spacing: { before: 80, after: 0 },
-          indent: { firstLine: PARA_FIRST_LINE_INDENT, hanging: 0, left: 0 },
-          children: [new TextRun({ text: `${numToWords(total)}, НДС не облагается.`, size: 22, font: 'Times New Roman', italics: true })]
+          tabStops: [{ type: TabStopType.LEFT, position: PARA_FIRST_LINE_INDENT }],
+          children: [new TextRun({ text: `\t${numToWords(total)}, НДС не облагается.`, size: 22, font: 'Times New Roman', italics: true })]
         }),
         para(L.termLine, { before: 160 }),
         // «Порядок оплаты» не актуален для «Реализации» (товар для себя).
         ...(docType === 'realization' ? [] : [
-          new Paragraph({ spacing: { before: 120, after: 0 }, indent: { firstLine: PARA_FIRST_LINE_INDENT, hanging: 0, left: 0 }, children: [new TextRun({ text: 'Порядок оплаты:', size: 22, font: 'Times New Roman', bold: true })] }),
+          new Paragraph({ alignment: AlignmentType.BOTH, spacing: { before: 120, after: 0 }, tabStops: [{ type: TabStopType.LEFT, position: PARA_FIRST_LINE_INDENT }], children: [new TextRun({ text: '\tПорядок оплаты:', size: 22, font: 'Times New Roman', bold: true })] }),
           para(L.paymentLine, { before: 80 }),
         ]),
         ...(r.address ? [para(`${docType==='install' ? 'Адрес выполнения работ' : 'Адрес доставки/выборки'}: ${r.address}`, { before: 80 })] : []),

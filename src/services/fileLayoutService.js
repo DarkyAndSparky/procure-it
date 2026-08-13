@@ -319,6 +319,71 @@ async function layoutFiles(reqId, r, cfg, body) {
   return isWebDav ? layoutFilesWebDav(reqId, r, cfg, body) : layoutFilesLocal(reqId, r, { ...cfg, networkFolder: rootPath }, body);
 }
 
+// ── Проверка статуса раскладки (read-only, ничего не создаёт) ──────────────
+// После перезапуска сервера реестр не «помнит», что файлы уже разложены —
+// это никогда нигде не сохранялось как флаг, факт раскладки виден только
+// по факту наличия файлов в сетевой папке. Проверяем это по требованию:
+// ищем папку заявки по тому же маркер-файлу, что использует раскладка, и
+// смотрим, что внутри уже лежит — НЕ создавая ничего (в отличие от
+// findOrCreateRequestFolderLocal/layoutFilesWebDav).
+function findRequestFolderLocalReadOnly(orgPath, reqId) {
+  try {
+    for (const e of fs.readdirSync(orgPath, { withFileTypes: true })) {
+      if (!e.isDirectory() || !/^\d+_/.test(e.name)) continue;
+      const markerPath = path.join(orgPath, e.name, REQUEST_MARKER_FILE);
+      if (fs.existsSync(markerPath) && fs.readFileSync(markerPath, 'utf8').trim() === String(reqId)) {
+        return path.join(orgPath, e.name);
+      }
+    }
+  } catch(e) { /* orgPath doesn't exist yet — not laid out */ }
+  return null;
+}
+
+async function checkLayoutStatus(reqId, r, cfg) {
+  const rootPath = (cfg.networkFolder || '').trim();
+  if (!rootPath) return { laidOut: false, reason: 'no_network_folder' };
+  const { year, monthFolder, orgFolder, safeOrgShort, safeSpecNum } = resolveFolderNames(r);
+  const isWebDav = /^https?:\/\//i.test(rootPath);
+
+  let requestFolderPath = null; // локальный путь ИЛИ WebDAV-сегмент (для отображения)
+  let entries = [];
+
+  if (isWebDav) {
+    const { davList, davGetIfExists, seg } = buildDavClient(rootPath, cfg.networkUser, cfg.networkPass);
+    try {
+      const children = await davList(seg(year, monthFolder, orgFolder));
+      for (const name of children) {
+        if (!/^\d+_/.test(name)) continue;
+        const marker = await davGetIfExists(seg(year, monthFolder, orgFolder, name, REQUEST_MARKER_FILE));
+        if (marker && marker.trim() === String(reqId)) {
+          requestFolderPath = seg(year, monthFolder, orgFolder, name);
+          entries = await davList(requestFolderPath);
+          break;
+        }
+      }
+    } catch(e) {
+      return { laidOut: false, error: e.message };
+    }
+  } else {
+    const orgPath = path.join(rootPath, year, monthFolder, orgFolder);
+    const found = findRequestFolderLocalReadOnly(orgPath, reqId);
+    if (found) {
+      requestFolderPath = found;
+      try { entries = fs.readdirSync(found); } catch(e) { entries = []; }
+      // Расчёты (xlsx/счета) лежат в подпапке — заглядываем и туда тоже,
+      // чтобы «Расчёты» тоже засчитывались как разложенные.
+      try { entries = entries.concat(fs.readdirSync(path.join(found, 'Расчеты')).map(f => `Расчеты/${f}`)); } catch(e) {}
+    }
+  }
+
+  if (!requestFolderPath) return { laidOut: false, folderPath: null };
+
+  const hasSpec  = entries.some(f => f.includes('Спецификация') && f.endsWith('.docx'));
+  const hasCalc  = entries.some(f => f.includes('Расчеты') && f.endsWith('.xlsx'));
+  const hasFiles = entries.filter(f => f !== REQUEST_MARKER_FILE).length > 0;
+  return { laidOut: hasFiles, hasSpec, hasCalc, folderPath: requestFolderPath, fileCount: entries.filter(f => f !== REQUEST_MARKER_FILE).length };
+}
+
 // Создаёт (если нужно) и открывает папку заявки в файловом менеджере ОС —
 // best-effort, работает когда сервер и браузер на одной машине.
 function openFolder(r, cfg, opts = {}) {
@@ -384,4 +449,4 @@ async function testFolder(folderPath, user, pass) {
   }
 }
 
-module.exports = { layoutFiles, openFolder, testFolder };
+module.exports = { layoutFiles, openFolder, testFolder, checkLayoutStatus };

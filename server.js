@@ -113,10 +113,18 @@ app.use('/api', express.json({ limit: '15mb' }));
 // Suppress favicon 404
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
-// Static with cache headers
+// Static with cache headers.
+// ВАЖНО: maxAge:'1h' означает, что браузер целый час НЕ ходит на сервер
+// вообще — даже проверить, изменился ли файл. После любого обновления
+// public/js/*.js или .html пользователь видит старую версию до жёсткого
+// обновления страницы (Ctrl+F5) или истечения часа — источник целой
+// серии «я же исправил, а всё равно не работает» на практике. Меняем на
+// no-cache: браузер каждый раз спрашивает сервер «не изменилось ли?»
+// (дешёвый 304, если файл тот же) вместо слепого доверия кэшу.
 app.use(express.static(path.join(__dirname, 'public'), {
-  maxAge: '1h',
+  maxAge: 0,
   etag: true,
+  setHeaders: (res) => { res.setHeader('Cache-Control', 'no-cache'); },
 }));
 
 app.get('/', (req, res) => {

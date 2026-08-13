@@ -160,7 +160,15 @@ async function forceLayoutFiles(id, btn) {
   } catch(e) {
     toast('Ошибка раскладки: ' + e.message);
   } finally {
-    if (btn) { btn.textContent = orig; btn.disabled = false; }
+    if (btn) btn.disabled = false;
+    // Не просто возвращаем старый текст кнопки — перепроверяем статус,
+    // иначе после успешной раскладки кнопка откатится на «Разложить
+    // файлы», даже если файлы уже реально там.
+    if (typeof checkLayoutStatus === 'function') {
+      checkLayoutStatus(id);
+    } else if (btn) {
+      btn.textContent = orig;
+    }
   }
 }
 

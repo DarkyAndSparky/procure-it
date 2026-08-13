@@ -151,6 +151,7 @@ async function saveConfig() {
     supplierName:      document.getElementById('cfg-supplier-name')?.value.trim() || '',
     supplierSignatory: document.getElementById('cfg-supplier-signatory')?.value.trim() || '',
     supplierStamp:     document.getElementById('cfg-supplier-stamp')?.checked ? '1' : '0',
+    backupFolder:      document.getElementById('cfg-backup-folder')?.value.trim() || '',
   };
 
   await api('PUT', '/api/settings', payload);
@@ -281,6 +282,8 @@ function populateConfigPage() {
   if (ss) ss.value = appConfig.supplierSignatory || '';
   const st = document.getElementById('cfg-supplier-stamp');
   if (st) st.checked = appConfig.supplierStamp === '1';
+  const bf = document.getElementById('cfg-backup-folder');
+  if (bf) bf.value = appConfig.backupFolder || '';
 
   // Highlight active theme btn
   const curTheme = localStorage.getItem('zakupki_theme') || 'auto';
@@ -320,4 +323,170 @@ SOFTWARE.
   a.href = url; a.download = 'LICENSE.txt';
   document.body.appendChild(a); a.click();
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+}
+
+// ── Полная страница «О системе» — динамический список зависимостей ─────────
+async function loadSystemInfoPage() {
+  const el = document.getElementById('about-page-content');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Загрузка…</div>';
+  let info;
+  try {
+    info = await api('GET', '/api/system-info');
+  } catch(e) {
+    el.innerHTML = `<div class="card"><div style="color:var(--danger)">Не удалось загрузить: ${esc(e.message)}</div></div>`;
+    return;
+  }
+
+  const fmtUptime = fmtUptimeShared;
+  const fmtBytes = fmtBytesShared;
+
+  const depRow = (d) => `
+    <tr>
+      <td style="padding:6px 10px;font-family:monospace;font-size:12px">${esc(d.name)}</td>
+      <td style="padding:6px 10px;font-family:monospace;font-size:12px;color:${d.installed ? 'var(--success)' : 'var(--danger)'}">${esc(d.installed || '— не установлен')}</td>
+      <td style="padding:6px 10px;font-family:monospace;font-size:11px;color:var(--text-muted)">${esc(d.range)}</td>
+    </tr>`;
+
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><span class="card-title">ℹ️ ${esc(info.name)}</span></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:13px;align-items:baseline">
+          <span style="color:var(--text-muted)">Версия</span><span style="font-family:monospace;font-weight:600">${esc(info.version)}</span>
+          <span style="color:var(--text-muted)">Описание</span><span>${esc(info.description || '—')}</span>
+          <span style="color:var(--text-muted)">Лицензия</span><span><a href="#" onclick="downloadLicense();return false;" style="color:var(--accent);text-decoration:underline dotted" title="Скачать текст лицензии">${esc(info.license)} — скачать</a></span>
+          <span style="color:var(--text-muted)">Автор</span><span>${esc(info.author)}</span>
+          <span style="color:var(--text-muted)">Репозиторий</span><span><a href="${esc(info.repository)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(info.repository)}</a></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px" id="about-env-card">
+      <div class="card-header"><span class="card-title">🖥️ Окружение</span><span style="font-size:10px;color:var(--text-muted);font-weight:400">обновляется каждые 10 сек</span></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:13px;align-items:baseline">
+          <span style="color:var(--text-muted)">Node.js</span><span style="font-family:monospace">${esc(info.node)}</span>
+          <span style="color:var(--text-muted)">Платформа</span><span style="font-family:monospace">${esc(info.platform)} / ${esc(info.arch)}</span>
+          <span style="color:var(--text-muted)">Время работы</span><span id="about-env-uptime">${fmtUptime(info.uptimeSec)}</span>
+          <span style="color:var(--text-muted)">Память процесса</span><span id="about-env-memory">${info.memoryMB} МБ</span>
+          <span style="color:var(--text-muted)">PID</span><span style="font-family:monospace">${info.pid}</span>
+          <span style="color:var(--text-muted)">Размер БД</span><span id="about-env-dbsize">${fmtBytes(info.dbSizeBytes)}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><span class="card-title">🧰 Технологии</span></div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;font-size:13px">
+          ${buildTechStackHtml(info)}
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><span class="card-title">📊 Данные</span></div>
+      <div class="card-body">
+        <div style="display:flex;gap:24px;flex-wrap:wrap">
+          <div><div style="font-size:22px;font-weight:700">${info.counts?.requests ?? '—'}</div><div style="font-size:11px;color:var(--text-muted)">заявок</div></div>
+          <div><div style="font-size:22px;font-weight:700">${info.counts?.orgs ?? '—'}</div><div style="font-size:11px;color:var(--text-muted)">организаций</div></div>
+          <div><div style="font-size:22px;font-weight:700">${info.counts?.users ?? '—'}</div><div style="font-size:11px;color:var(--text-muted)">пользователей</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header"><span class="card-title">📦 Зависимости (${info.dependencies.length})</span></div>
+      <div class="table-wrap">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border)">Пакет</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border)">Установлено</th>
+            <th style="padding:6px 10px;text-align:left;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border)">Диапазон в package.json</th>
+          </tr></thead>
+          <tbody>${info.dependencies.map(depRow).join('')}</tbody>
+        </table>
+      </div>
+    </div>
+
+    ${info.devDependencies.length ? `
+    <div class="card">
+      <div class="card-header"><span class="card-title">🛠️ Dev-зависимости (${info.devDependencies.length})</span></div>
+      <div class="table-wrap">
+        <table style="width:100%;border-collapse:collapse">
+          <tbody>${info.devDependencies.map(depRow).join('')}</tbody>
+        </table>
+      </div>
+    </div>` : ''}
+  `;
+  startAboutEnvPolling();
+}
+
+// ── Технологии — курируемое описание стека поверх сырого списка зависимостей.
+// Показываем только те пункты, чей пакет реально присутствует в
+// dependencies (плюс несколько фактов о самой платформе, которые не npm-
+// пакеты — Vanilla JS на фронтенде, HTTPS, SQLite-движок), чтобы список не
+// был статичным враньём, если стек поменяется.
+function buildTechStackHtml(info) {
+  const installedNames = new Set([...(info.dependencies||[]), ...(info.devDependencies||[])].map(d => d.name));
+  const has = (name) => installedNames.has(name);
+
+  const items = [
+    { cond: true,                    icon: '🟢', title: 'Node.js + Express', desc: 'Backend-сервер и REST API' },
+    { cond: has('sql.js'),           icon: '🗄️', title: 'SQLite (sql.js)', desc: 'Файловая БД, без отдельного сервера СУБД' },
+    { cond: has('docx'),             icon: '📄', title: 'docx', desc: 'Генерация .docx спецификаций на сервере' },
+    { cond: true,                    icon: '📊', title: 'SheetJS (xlsx)', desc: 'Генерация Excel-расчётов и импорт прайсов' },
+    { cond: has('helmet'),           icon: '🛡️', title: 'Helmet', desc: 'HTTP security headers' },
+    { cond: has('express-rate-limit'), icon: '⏱️', title: 'express-rate-limit', desc: 'Rate limiting (защита от перебора/спама запросов)' },
+    { cond: has('compression'),      icon: '🗜️', title: 'compression', desc: 'Gzip-сжатие ответов' },
+    { cond: has('cors'),             icon: '🌐', title: 'CORS', desc: 'Ограничение доступа к API локальной сетью' },
+    { cond: has('morgan'),           icon: '📝', title: 'morgan', desc: 'Логирование HTTP-запросов' },
+    { cond: has('selfsigned'),       icon: '🔒', title: 'selfsigned / openssl', desc: 'Автогенерация self-signed TLS-сертификата (HTTPS)' },
+    { cond: has('playwright'),       icon: '🎭', title: 'Playwright', desc: 'Скриншоты/рендер (используется точечно)' },
+    { cond: true,                    icon: '🍦', title: 'Vanilla JS + HTML/CSS', desc: 'Фронтенд без фреймворков и сборщиков' },
+    { cond: true,                    icon: '📁', title: 'WebDAV / SMB', desc: 'Раскладка файлов в сетевую папку (Nextcloud, шары Windows)' },
+    { cond: true,                    icon: '🔗', title: 'Bitrix24 REST (webhook)', desc: 'Интеграция создания сделок' },
+  ];
+
+  return items.filter(i => i.cond).map(i => `
+    <div style="display:flex;gap:8px;align-items:flex-start">
+      <span style="font-size:16px;line-height:1.3">${i.icon}</span>
+      <div>
+        <div style="font-weight:600">${esc(i.title)}</div>
+        <div style="font-size:11px;color:var(--text-muted)">${esc(i.desc)}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ── Автообновление карточки «Окружение» — время работы и память процесса
+// живые и меняются постоянно; без обновления они выглядели бы застывшими
+// сразу после открытия страницы.
+let aboutEnvPollTimer = null;
+function startAboutEnvPolling() {
+  if (aboutEnvPollTimer) clearInterval(aboutEnvPollTimer);
+  aboutEnvPollTimer = setInterval(async () => {
+    const card = document.getElementById('about-env-card');
+    if (!card) { clearInterval(aboutEnvPollTimer); aboutEnvPollTimer = null; return; } // ушли со страницы
+    try {
+      const info = await api('GET', '/api/system-info');
+      const up = document.getElementById('about-env-uptime');
+      const mem = document.getElementById('about-env-memory');
+      const dbs = document.getElementById('about-env-dbsize');
+      if (up)  up.textContent  = fmtUptimeShared(info.uptimeSec);
+      if (mem) mem.textContent = info.memoryMB + ' МБ';
+      if (dbs) dbs.textContent = fmtBytesShared(info.dbSizeBytes);
+    } catch(e) { /* тихо — просто пропускаем один тик обновления */ }
+  }, 10000);
+}
+function fmtUptimeShared(sec) {
+  const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
+  const parts = [];
+  if (d) parts.push(`${d} д`);
+  if (h) parts.push(`${h} ч`);
+  parts.push(`${m} мин`);
+  return parts.join(' ');
+}
+function fmtBytesShared(b) {
+  return b > 1024*1024 ? `${(b/1024/1024).toFixed(1)} МБ` : `${(b/1024).toFixed(0)} КБ`;
 }

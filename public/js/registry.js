@@ -129,7 +129,7 @@ function renderRegistryRows(reqs) {
             <input type="file" accept=".pdf,image/*" style="display:none" onchange="uploadInvoiceFile('${escJsAttr(r.id)}',this)">
           </label>
           ${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}
-          ${appConfig.networkFolder?`<button class="btn btn-sm" id="layout-btn-${esc(r.id)}" onclick="forceLayoutFiles('${escJsAttr(r.id)}',this)" title="Разложить файлы в сетевую папку" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">📁 Разложить файлы</button>`:''}
+          ${appConfig.networkFolder?`<button class="btn btn-sm" id="layout-btn-${esc(r.id)}" onclick="event.stopPropagation();forceLayoutFiles('${escJsAttr(r.id)}',this)" title="Разложить файлы в сетевую папку" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">📁 Разложить файлы</button><span id="layout-status-${esc(r.id)}" style="font-size:11px;color:var(--text-muted)"></span>`:''}
           <button class="btn btn-sm" style="margin-left:auto;color:var(--danger);border-color:var(--danger)" onclick="deleteRequest('${escJsAttr(r.id)}')">Удалить</button>
           ` : `${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}','${escJsAttr(r.orgShort)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}`}
         </div>
@@ -174,6 +174,7 @@ async function renderRegistry() {
   allReqs = reqs;
   currentPage = 1;
   renderRegistryRows(reqs);
+  startLayoutStatusPolling();
 
     // Stats from API
   try {
@@ -243,7 +244,68 @@ function toggleDetail(id) {
   const isOpen = el.classList.contains('open');
   document.querySelectorAll('.registry-detail').forEach(e => e.classList.remove('open'));
   document.querySelectorAll('.chevron').forEach(c => c.classList.remove('open'));
-  if (!isOpen) { el.classList.add('open'); ch.classList.add('open'); }
+  if (!isOpen) {
+    el.classList.add('open');
+    ch.classList.add('open');
+    // Форс-проверка статуса раскладки при открытии строки — раньше это
+    // нигде не проверялось после перезапуска сервера, кнопка всегда
+    // выглядела одинаково независимо от того, лежат файлы в сетевой папке
+    // или нет.
+    checkLayoutStatus(id);
+  }
+}
+
+// ─── Статус раскладки файлов в сетевую папку ────────────────────────────────
+// Не хранится как флаг в БД (раскладка идёт напрямую в сетевую папку/WebDAV,
+// это единственный источник истины) — проверяем по требованию: при открытии
+// строки реестра и периодически, пока строка остаётся раскрытой.
+const LAYOUT_STATUS_CACHE = {};
+let layoutStatusPollTimer = null;
+
+async function checkLayoutStatus(id) {
+  const btn = document.getElementById('layout-btn-' + id);
+  const badge = document.getElementById('layout-status-' + id);
+  if (!btn || !appConfig.networkFolder) return;
+  try {
+    const status = await api('GET', `/api/requests/${id}/layout-status`);
+    LAYOUT_STATUS_CACHE[id] = status;
+    applyLayoutStatusUI(id, status);
+  } catch(e) {
+    if (badge) { badge.textContent = ''; }
+  }
+}
+
+function applyLayoutStatusUI(id, status) {
+  const btn = document.getElementById('layout-btn-' + id);
+  const badge = document.getElementById('layout-status-' + id);
+  if (!btn) return;
+  if (status.laidOut) {
+    btn.textContent = '✅ Разложено';
+    btn.title = 'Файлы уже в сетевой папке. Нажать, чтобы разложить заново';
+    btn.style.background = 'var(--success-bg)';
+    btn.style.borderColor = 'var(--success)';
+    btn.style.color = 'var(--success)';
+    if (badge) badge.textContent = status.fileCount ? `(${status.fileCount})` : '';
+  } else {
+    btn.textContent = '📁 Разложить файлы';
+    btn.title = 'Разложить файлы в сетевую папку';
+    btn.style.background = 'var(--warning-bg)';
+    btn.style.borderColor = 'var(--warning)';
+    btn.style.color = 'var(--warning)';
+    if (badge) badge.textContent = '';
+  }
+}
+
+// Периодическая перепроверка — только для реально раскрытых строк (не
+// долбим сетевую папку/WebDAV статусами по всем заявкам сразу).
+function startLayoutStatusPolling() {
+  if (layoutStatusPollTimer) clearInterval(layoutStatusPollTimer);
+  layoutStatusPollTimer = setInterval(() => {
+    document.querySelectorAll('.registry-detail.open').forEach(el => {
+      const id = el.id.replace('detail-', '');
+      checkLayoutStatus(id);
+    });
+  }, 5 * 60 * 1000); // раз в 5 минут
 }
 
 async function deleteRequest(id) {
@@ -324,12 +386,13 @@ const pageTitles = {
   registry: 'Реестр заявок',
   spec: 'Спецификация',
   orgs: 'Организации',
-  config: 'Настройки'
+  config: 'Настройки',
+  about: 'О системе'
 };
 
 function showPage(name) {
   // Role guard — enforce server-side roles client-side too
-  const pageRoles = { new: 'operator', orgs: 'operator', config: 'admin' };
+  const pageRoles = { new: 'operator', orgs: 'operator', config: 'admin', about: 'admin' };
   const required  = pageRoles[name];
   if (required) {
     const isOp    = userRole === 'operator' || userRole === 'admin';
@@ -352,6 +415,7 @@ function showPage(name) {
     populateConfigPage();
     if (userRole === 'admin') loadUsers();
   }
+  if (name === 'about') loadSystemInfoPage();
   if (name === 'new') {
     initDragDrop();
     const supplierField = document.getElementById('f-supplier');

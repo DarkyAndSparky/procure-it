@@ -190,15 +190,14 @@ function calcTotal() {
     rowData.push({ tr, qty, pp, purchaseSum });
   }
 
-  // Step 2: per-row delivery share + sell price
+  // Step 2: per-row delivery share + sell price (общая формула — см.
+  // pricing-core.js, единственный источник истины для этого расчёта)
   let totalSell = 0;
   for (const { tr, qty, pp, purchaseSum } of rowData) {
     const id = tr.id;
-    // доля доставки для этой строки пропорционально её весу в закупе
-    const deliveryShare = totalPurchase > 0 ? (purchaseSum / totalPurchase) * deliveryCost : 0;
-    const ppWithDelivery = qty > 0 ? pp + deliveryShare / qty : pp;
-    const sellPerUnit = ppWithDelivery * (1 + markup);
-    const sellSum = sellPerUnit * qty;
+    const { deliveryShare, ppWithDelivery, sellPerUnit, sellSum } = calcRowPricing({
+      purchasePrice: pp, qty, totalPurchase, deliveryCost, markup,
+    });
     totalSell += sellSum;
     const sellEl = tr.querySelector(`#${id}-sell`);
     const sumEl  = tr.querySelector(`#${id}-sum`);
@@ -209,7 +208,7 @@ function calcTotal() {
   // Доставка без позиций в закупе не должна уходить в убыток —
   // делить её долю пока не на что, поэтому просто не учитываем её,
   // пока не появится хотя бы одна позиция.
-  const profit = totalPurchase > 0 ? (totalSell - totalPurchase - deliveryCost) : 0;
+  const profit = calcProfit({ totalPurchase, totalSell, deliveryCost });
 
   // Update summary
   document.getElementById('total-display').textContent = fmtRub(totalSell);

@@ -372,6 +372,7 @@ async function loadSystemInfoPage() {
           <span style="color:var(--text-muted)">Память процесса</span><span id="about-env-memory">${info.memoryMB} МБ</span>
           <span style="color:var(--text-muted)">PID</span><span style="font-family:monospace">${info.pid}</span>
           <span style="color:var(--text-muted)">Размер БД</span><span id="about-env-dbsize">${fmtBytes(info.dbSizeBytes)}</span>
+          <span style="color:var(--text-muted)">Последний бэкап</span><span id="about-env-lastbackup">${fmtLastBackup(info.lastBackupAt)}</span>
         </div>
       </div>
     </div>
@@ -384,6 +385,24 @@ async function loadSystemInfoPage() {
         </div>
       </div>
     </div>
+
+    ${(info.recentChanges && info.recentChanges.length) ? `
+    <details class="card" style="margin-bottom:16px;padding:0">
+      <summary style="cursor:pointer;padding:14px 16px;font-weight:600;list-style:none;display:flex;align-items:center;gap:8px">
+        <span style="font-size:15px">📋</span> Последние изменения
+        <span style="font-size:11px;color:var(--text-muted);font-weight:400;margin-left:auto">полного CHANGELOG нет — короткая курируемая сводка</span>
+      </summary>
+      <div style="padding:0 16px 14px">
+        ${info.recentChanges.map(rel => `
+          <div style="margin-top:8px">
+            <div style="font-family:monospace;font-weight:600;font-size:12px;color:var(--accent)">${esc(rel.version)} <span style="color:var(--text-muted);font-weight:400">— ${esc(rel.date)}</span></div>
+            <ul style="margin:6px 0 0;padding-left:18px;font-size:12px;color:var(--text-secondary);line-height:1.7">
+              ${rel.items.map(i => `<li>${esc(i)}</li>`).join('')}
+            </ul>
+          </div>
+        `).join('')}
+      </div>
+    </details>` : ''}
 
     <div class="card" style="margin-bottom:16px">
       <div class="card-header"><span class="card-title">📊 Данные</span></div>
@@ -473,9 +492,11 @@ function startAboutEnvPolling() {
       const up = document.getElementById('about-env-uptime');
       const mem = document.getElementById('about-env-memory');
       const dbs = document.getElementById('about-env-dbsize');
+      const lb = document.getElementById('about-env-lastbackup');
       if (up)  up.textContent  = fmtUptimeShared(info.uptimeSec);
       if (mem) mem.textContent = info.memoryMB + ' МБ';
       if (dbs) dbs.textContent = fmtBytesShared(info.dbSizeBytes);
+      if (lb)  lb.textContent  = fmtLastBackup(info.lastBackupAt);
     } catch(e) { /* тихо — просто пропускаем один тик обновления */ }
   }, 10000);
 }
@@ -489,4 +510,15 @@ function fmtUptimeShared(sec) {
 }
 function fmtBytesShared(b) {
   return b > 1024*1024 ? `${(b/1024/1024).toFixed(1)} МБ` : `${(b/1024).toFixed(0)} КБ`;
+}
+function fmtLastBackup(iso) {
+  if (!iso) return 'ещё не было';
+  const d = new Date(iso);
+  const diffMin = Math.floor((Date.now() - d.getTime()) / 60000);
+  const rel = diffMin < 1 ? 'только что'
+    : diffMin < 60 ? `${diffMin} мин назад`
+    : diffMin < 1440 ? `${Math.floor(diffMin/60)} ч назад`
+    : `${Math.floor(diffMin/1440)} дн назад`;
+  const abs = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  return `${abs} (${rel})`;
 }

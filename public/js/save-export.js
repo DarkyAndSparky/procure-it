@@ -137,13 +137,18 @@ function buildAndDownloadExcel(req, existingWb) {
     // O (col 14) = N * E           → =N{row}*E{row}
 
     // Для простоты считаем значения как раньше (fallback для книги без XLSX formula support)
-    // и параллельно пишем формулы — SheetJS запишет формулы в ячейки
-    const purchaseSum  = round2(p.purchasePrice * p.qty);
-    const pctOfOrder   = totalPurchase > 0 ? purchaseSum / totalPurchase : 0;
-    const deliveryShare = round2(pctOfOrder * deliveryCost);
-    const ppWithDel    = round2(p.qty > 0 ? p.purchasePrice + deliveryShare / p.qty : p.purchasePrice);
-    const sellPerUnit  = round2(p.sellPerUnit || ppWithDel * (1 + markup / 100));
-    const sellSum      = round2(p.sellSum || sellPerUnit * p.qty);
+    // и параллельно пишем формулы — SheetJS запишет формулы в ячейки.
+    // Общая арифметика — из pricing-core.js (тот же расчёт, что и в форме
+    // заявки), с сохранением старого поведения: если у позиции уже есть
+    // зафиксированная цена продажи (sellPerUnit/sellSum — сохранённая
+    // заявка), используем её, а не пересчитываем заново при экспорте.
+    const pricing = calcRowPricing({ purchasePrice: p.purchasePrice, qty: p.qty, totalPurchase, deliveryCost, markup: markup / 100 });
+    const purchaseSum   = pricing.purchaseSum;
+    const pctOfOrder    = pricing.pctOfOrder;
+    const deliveryShare = pricing.deliveryShare;
+    const ppWithDel     = pricing.ppWithDelivery;
+    const sellPerUnit   = round2(p.sellPerUnit || pricing.sellPerUnit);
+    const sellSum       = round2(p.sellSum || sellPerUnit * p.qty);
 
     const r = dataStartRow + i + 1; // Excel row (1-based)
 

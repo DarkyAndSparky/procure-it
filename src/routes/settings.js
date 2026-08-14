@@ -73,6 +73,7 @@ router.get('/system-info', operatorOrAdmin, (req, res) => {
     const fs = require('fs');
     const path = require('path');
     const pkg = require('../../package.json');
+    const { resolveBackupDir } = require('../services/backupService');
 
     // Резолвим фактически установленные версии зависимостей из их
     // собственных package.json в node_modules — надёжнее, чем диапазон
@@ -106,6 +107,27 @@ router.get('/system-info', operatorOrAdmin, (req, res) => {
     let dbSizeBytes = 0;
     try { dbSizeBytes = fs.statSync(require('../config').DB_FILE).size; } catch(e) {}
 
+    // Время последнего автобэкапа — самый свежий .db-снапшот в текущей
+    // (настроенной или дефолтной) папке бэкапа.
+    let lastBackupAt = null;
+    try {
+      const backupDir = resolveBackupDir();
+      const dbFiles = fs.readdirSync(backupDir).filter(f => f.endsWith('.db'));
+      if (dbFiles.length) {
+        const latest = dbFiles
+          .map(f => ({ f, mtime: fs.statSync(path.join(backupDir, f)).mtime }))
+          .sort((a, b) => b.mtime - a.mtime)[0];
+        lastBackupAt = latest.mtime.toISOString();
+      }
+    } catch(e) {}
+
+    // Мини-changelog — полноценный CHANGELOG.md в проекте не ведётся,
+    // поэтому раздел «Последние изменения» на странице «О системе»
+    // читает короткий курируемый список отсюда. Обновлять вручную при
+    // значимых изменениях (см. src/changelog.js).
+    let recentChanges = [];
+    try { recentChanges = require('../changelog'); } catch(e) {}
+
     res.json({
       version: PKG_VERSION,
       name: pkg.name,
@@ -123,6 +145,8 @@ router.get('/system-info', operatorOrAdmin, (req, res) => {
       devDependencies: devDeps,
       counts,
       dbSizeBytes,
+      lastBackupAt,
+      recentChanges,
       env: process.env.NODE_ENV || 'production',
     });
   } catch(e) {

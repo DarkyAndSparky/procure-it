@@ -86,6 +86,21 @@ test('buildSpecDocx — для типа "реализация" нет ссылк
   assert.match(xml, /СПЕЦИФИКАЦИЯ НА РЕАЛИЗАЦИЮ/, 'заголовок реализации не найден');
 });
 
+test('buildSpecDocx — тип "сопровождение": гарантийный акт, без порядка оплаты, срок подставляется', async () => {
+  const buf = await buildSpecDocx({ ...SAMPLE_REQ, docType: 'support', warrantyPeriod: '24 месяца' });
+  const xml = extractDocumentXml(buf);
+
+  assert.match(xml, /АКТ ГАРАНТИЙНОГО ОБСЛУЖИВАНИЯ/, 'заголовок акта гарантийного обслуживания не найден');
+  assert.match(xml, /24 месяца/, 'гарантийный срок не подставился в текст');
+  assert.doesNotMatch(xml, /Порядок оплаты/, 'у гарантийного обслуживания не должно быть порядка оплаты');
+  assert.doesNotMatch(xml, /\{\{WARRANTY\}\}/, 'плейсхолдер гарантийного срока не должен остаться в тексте');
+});
+
+test('buildSpecDocx — тип "сопровождение": срок по умолчанию, если не указан', async () => {
+  const buf = await buildSpecDocx({ ...SAMPLE_REQ, docType: 'support', warrantyPeriod: '' });
+  const xml = extractDocumentXml(buf);
+  assert.match(xml, /12 месяцев/, 'должен подставляться срок по умолчанию (12 месяцев), если явно не указан');
+});
 test('buildSpecDocx — таблица не шире печатной области страницы', async () => {
   const buf = await buildSpecDocx(SAMPLE_REQ);
   const xml = extractDocumentXml(buf);

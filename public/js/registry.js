@@ -54,6 +54,54 @@ function renderPaginationBar(total) {
   document.getElementById('pg-last').disabled  = currentPage === totalPages;
 }
 
+// Кэш полных данных заявки по id — нужен для ленивого построения детальной
+// строки реестра (см. buildDetailHtml/toggleDetail ниже): при первом
+// рендере таблицы строим только видимую свёрнутую строку, а тяжёлую
+// детальную разметку (позиции, кнопки, статус раскладки и т.д.) — только
+// когда пользователь реально разворачивает конкретную заявку. При росте
+// реестра до многих сотен строк это ощутимо экономит время первого рендера
+// страницы, которое раньше тратилось на построение HTML для ВСЕХ строк
+// текущей страницы разом, даже свёрнутых.
+const registryRowData = {};
+
+function buildDetailHtml(r) {
+  return `
+        <div class="detail-grid">
+          <div class="detail-item"><span>Поставщик</span>${esc(r.supplier||'—')}</div>
+          <div class="detail-item"><span>Номер счёта</span>${r.invoiceNum ? `<span style="font-family:monospace;color:var(--accent)">${esc(r.invoiceNum)}</span>` : '—'}</div>
+          <div class="detail-item"><span>Контрагент</span>${r.counterparty ? esc(r.counterparty) : '—'}</div>
+          <div class="detail-item"><span>Договор</span>${esc(r.contract||'—')}</div>
+          <div class="detail-item"><span>Битрикс</span>${r.bitrix?'#'+esc(r.bitrix):'—'}</div>
+          <div class="detail-item"><span>Адрес</span>${esc(r.address||'—')}</div>
+          ${r.comment?`<div class="detail-item" style="grid-column:1/-1"><span>Комментарий</span>${esc(r.comment)}</div>`:''}
+          <div class="detail-item" style="grid-column:1/-1"><span>Путь папки</span><span style="font-family:monospace;font-size:11px;color:var(--accent);cursor:pointer" onclick="openRequestFolder('${escJsAttr(r.id)}')" title="Нажать, чтобы открыть папку заявки">📁 ${esc(buildFolderPath(r))}</span></div>
+        </div>
+        <table style="font-size:12px;width:100%;border-collapse:collapse">
+          <tr><th style="padding:4px 8px;background:none;border-bottom:1px solid var(--border);font-size:11px">Наименование</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:120px">${r.isRealization?'ЮЛ / Кому':'Комментарий'}</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:60px">Кол-во</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:90px">Закуп</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:90px">Продажа</th></tr>
+          ${r.positions.map(p=>`<tr><td style="padding:3px 8px;border:none">${esc(p.name)}</td><td style="padding:3px 4px;border:none;font-size:11px;color:var(--text-secondary)">${esc(p.comment||p.rowOrgName||'—')}</td><td style="padding:3px 4px;border:none">${p.qty} ${p.unit||'шт'}</td><td style="padding:3px 4px;border:none;text-align:right">${fmtRub(p.purchasePrice)}</td><td style="padding:3px 4px;border:none;text-align:right;color:var(--accent)">${fmtRub(p.sellPerUnit||0)}</td></tr>`).join('')}
+        </table>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-sm btn-success" onclick="exportExcelById('${escJsAttr(r.id)}')">📊 Excel</button>
+          ${!r.isRealization?`<button class="btn btn-sm" onclick="loadSpec('${escJsAttr(r.id)}')">${r.docType==='install'?'🔧 Смета на работы':r.docType==='support'?'🛠️ Сопровождение':r.docType==='realization'?'🏪 Спецификация на реализацию':'📄 Спецификация'}</button>`:''}
+          ${userRole !== 'viewer' ? `
+          <button class="btn btn-sm" onclick="loadToForm('${escJsAttr(r.id)}',true)">📋 Копировать</button>
+          <label class="btn btn-sm" style="cursor:pointer;background:${r.signedSpecPdf?'var(--success)':'var(--surface-2)'};border-color:${r.signedSpecPdf?'var(--success)':'var(--border)'};color:${r.signedSpecPdf?'#fff':'var(--text)'}" title="${r.signedSpecPdf?'Подписанная спецификация прикреплена. Нажмите чтобы заменить':'Прикрепить подписанную спецификацию PDF'}">
+            ${(r.signedSpecPdf&&r.signedSpecPdf!=='')?'✅ Спецификация подписана':'📎 Прикрепить подпись'}
+            <input type="file" accept=".pdf" style="display:none" onchange="uploadSignedSpec('${escJsAttr(r.id)}',this)">
+          </label>
+          ${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}','${escJsAttr(r.orgShort)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}
+          <label class="btn btn-sm" style="cursor:pointer;background:${r.invoiceFile?'var(--success)':'var(--surface-2)'};border-color:${r.invoiceFile?'var(--success)':'var(--border)'};color:${r.invoiceFile?'#fff':'var(--text)'}" title="${r.invoiceFile?'Счёт прикреплён. Нажмите чтобы заменить':'Прикрепить счёт (PDF/фото)'}">
+            ${(r.invoiceFile&&r.invoiceFile!=='')?'✅ Счёт прикреплён':'🧾 Прикрепить счёт'}
+            <input type="file" accept=".pdf,image/*" style="display:none" onchange="uploadInvoiceFile('${escJsAttr(r.id)}',this)">
+          </label>
+          ${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}
+          ${appConfig.networkFolder?`<button class="btn btn-sm" id="layout-btn-${esc(r.id)}" onclick="event.stopPropagation();forceLayoutFiles('${escJsAttr(r.id)}',this)" title="Разложить файлы в сетевую папку" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">📁 Разложить файлы</button><span id="layout-status-${esc(r.id)}" style="font-size:11px;color:var(--text-muted)"></span>`:''}
+          <button class="btn btn-sm" style="margin-left:auto;color:var(--danger);border-color:var(--danger)" onclick="deleteRequest('${escJsAttr(r.id)}')">Удалить</button>
+          ` : `${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}','${escJsAttr(r.orgShort)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}`}
+        </div>
+        <div id="audit-${esc(r.id)}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;font-size:12px"></div>`;
+}
+
 function renderRegistryRows(reqs) {
   const body = document.getElementById('registry-body');
   const empty = document.getElementById('registry-empty');
@@ -96,46 +144,13 @@ function renderRegistryRows(reqs) {
         </select>
       </td>`;
     body.appendChild(tr);
+    registryRowData[r.id] = r;
 
     const detail = document.createElement('tr');
-    detail.innerHTML = `<td colspan="10" style="padding:0">
-      <div id="detail-${esc(r.id)}" class="registry-detail">
-        <div class="detail-grid">
-          <div class="detail-item"><span>Поставщик</span>${esc(r.supplier||'—')}</div>
-          <div class="detail-item"><span>Номер счёта</span>${r.invoiceNum ? `<span style="font-family:monospace;color:var(--accent)">${esc(r.invoiceNum)}</span>` : '—'}</div>
-          <div class="detail-item"><span>Контрагент</span>${r.counterparty ? esc(r.counterparty) : '—'}</div>
-          <div class="detail-item"><span>Договор</span>${esc(r.contract||'—')}</div>
-          <div class="detail-item"><span>Битрикс</span>${r.bitrix?'#'+esc(r.bitrix):'—'}</div>
-          <div class="detail-item"><span>Адрес</span>${esc(r.address||'—')}</div>
-          ${r.comment?`<div class="detail-item" style="grid-column:1/-1"><span>Комментарий</span>${esc(r.comment)}</div>`:''}
-          <div class="detail-item" style="grid-column:1/-1"><span>Путь папки</span><span style="font-family:monospace;font-size:11px;color:var(--accent);cursor:pointer" onclick="openRequestFolder('${escJsAttr(r.id)}')" title="Нажать, чтобы открыть папку заявки">📁 ${esc(buildFolderPath(r))}</span></div>
-        </div>
-        <table style="font-size:12px;width:100%;border-collapse:collapse">
-          <tr><th style="padding:4px 8px;background:none;border-bottom:1px solid var(--border);font-size:11px">Наименование</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:120px">${r.isRealization?'ЮЛ / Кому':'Комментарий'}</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:60px">Кол-во</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:90px">Закуп</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:90px">Продажа</th></tr>
-          ${r.positions.map(p=>`<tr><td style="padding:3px 8px;border:none">${esc(p.name)}</td><td style="padding:3px 4px;border:none;font-size:11px;color:var(--text-secondary)">${esc(p.comment||p.rowOrgName||'—')}</td><td style="padding:3px 4px;border:none">${p.qty} ${p.unit||'шт'}</td><td style="padding:3px 4px;border:none;text-align:right">${fmtRub(p.purchasePrice)}</td><td style="padding:3px 4px;border:none;text-align:right;color:var(--accent)">${fmtRub(p.sellPerUnit||0)}</td></tr>`).join('')}
-        </table>
-        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
-          <button class="btn btn-sm btn-success" onclick="exportExcelById('${escJsAttr(r.id)}')">📊 Excel</button>
-          ${!r.isRealization?`<button class="btn btn-sm" onclick="loadSpec('${escJsAttr(r.id)}')">${r.docType==='install'?'🔧 Смета на работы':r.docType==='support'?'🛠️ Сопровождение':r.docType==='realization'?'🏪 Спецификация на реализацию':'📄 Спецификация'}</button>`:''}
-          ${userRole !== 'viewer' ? `
-          <button class="btn btn-sm" onclick="loadToForm('${escJsAttr(r.id)}',true)">📋 Копировать</button>
-          <label class="btn btn-sm" style="cursor:pointer;background:${r.signedSpecPdf?'var(--success)':'var(--surface-2)'};border-color:${r.signedSpecPdf?'var(--success)':'var(--border)'};color:${r.signedSpecPdf?'#fff':'var(--text)'}" title="${r.signedSpecPdf?'Подписанная спецификация прикреплена. Нажмите чтобы заменить':'Прикрепить подписанную спецификацию PDF'}">
-            ${(r.signedSpecPdf&&r.signedSpecPdf!=='')?'✅ Спецификация подписана':'📎 Прикрепить подпись'}
-            <input type="file" accept=".pdf" style="display:none" onchange="uploadSignedSpec('${escJsAttr(r.id)}',this)">
-          </label>
-          ${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}','${escJsAttr(r.orgShort)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}
-          <label class="btn btn-sm" style="cursor:pointer;background:${r.invoiceFile?'var(--success)':'var(--surface-2)'};border-color:${r.invoiceFile?'var(--success)':'var(--border)'};color:${r.invoiceFile?'#fff':'var(--text)'}" title="${r.invoiceFile?'Счёт прикреплён. Нажмите чтобы заменить':'Прикрепить счёт (PDF/фото)'}">
-            ${(r.invoiceFile&&r.invoiceFile!=='')?'✅ Счёт прикреплён':'🧾 Прикрепить счёт'}
-            <input type="file" accept=".pdf,image/*" style="display:none" onchange="uploadInvoiceFile('${escJsAttr(r.id)}',this)">
-          </label>
-          ${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}
-          ${appConfig.networkFolder?`<button class="btn btn-sm" id="layout-btn-${esc(r.id)}" onclick="event.stopPropagation();forceLayoutFiles('${escJsAttr(r.id)}',this)" title="Разложить файлы в сетевую папку" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">📁 Разложить файлы</button><span id="layout-status-${esc(r.id)}" style="font-size:11px;color:var(--text-muted)"></span>`:''}
-          <button class="btn btn-sm" style="margin-left:auto;color:var(--danger);border-color:var(--danger)" onclick="deleteRequest('${escJsAttr(r.id)}')">Удалить</button>
-          ` : `${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}','${escJsAttr(r.orgShort)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}`}
-        </div>
-        <div id="audit-${esc(r.id)}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;font-size:12px"></div>
-      </div>
-    </td>`;
+    // Ленивая деталь: сам контейнер есть сразу (нужен для CSS-переходов и
+    // toggleDetail), а содержимое строится по требованию — см.
+    // buildDetailHtml() и toggleDetail() ниже.
+    detail.innerHTML = `<td colspan="10" style="padding:0"><div id="detail-${esc(r.id)}" class="registry-detail"></div></td>`;
     body.appendChild(detail);
   });
 
@@ -156,6 +171,8 @@ async function renderRegistry() {
   if (filterStatus)   params.set('status', filterStatus);
   const filterSupplier = document.getElementById('reg-filter-supplier')?.value || '';
   if (filterSupplier) params.set('supplier', filterSupplier);
+  const filterCounterparty = document.getElementById('reg-filter-counterparty')?.value || '';
+  if (filterCounterparty) params.set('counterparty', filterCounterparty);
 
   let reqs = [];
   let totalCount = 0;
@@ -179,7 +196,7 @@ async function renderRegistry() {
     // Stats from API
   try {
     const stats = await api('GET', '/api/stats');
-    const isFiltered = !!(search || filterOrg || filterMonth || filterStatus);
+    const isFiltered = !!(search || filterOrg || filterMonth || filterStatus || filterSupplier || filterCounterparty);
     const filteredTotal = reqs.reduce((s,r)=>s+r.total,0);
     document.getElementById('stats-row').innerHTML = `
       <div class="stat-card">
@@ -226,6 +243,18 @@ async function renderRegistry() {
       });
     }
 
+    // Counterparty filter (магазин/поставщик закупки — отдельное поле от
+    // «Поставщика» в шапке документа, см. request-form.js)
+    const counterpartySel = document.getElementById('reg-filter-counterparty');
+    if (counterpartySel) {
+      const curCounterparty = counterpartySel.value;
+      const counterparties = [...new Set(db.requests.map(r=>r.counterparty).filter(Boolean))].sort();
+      counterpartySel.innerHTML = '<option value="">Все контрагенты</option>';
+      counterparties.forEach(c => {
+        counterpartySel.innerHTML += `<option value="${esc(c)}" ${curCounterparty===c?'selected':''}>${esc(c)}</option>`;
+      });
+    }
+
     // Month filter
     const monthSel = document.getElementById('reg-filter-month');
     const curM = monthSel.value;
@@ -245,6 +274,16 @@ function toggleDetail(id) {
   document.querySelectorAll('.registry-detail').forEach(e => e.classList.remove('open'));
   document.querySelectorAll('.chevron').forEach(c => c.classList.remove('open'));
   if (!isOpen) {
+    // Ленивая генерация содержимого — строим HTML детали только при первом
+    // реальном разворачивании этой строки, не заранее для всех строк
+    // страницы (см. registryRowData/buildDetailHtml выше).
+    if (!el.dataset.rendered) {
+      const r = registryRowData[id];
+      if (r) {
+        el.innerHTML = buildDetailHtml(r);
+        el.dataset.rendered = '1';
+      }
+    }
     el.classList.add('open');
     ch.classList.add('open');
     // Форс-проверка статуса раскладки при открытии строки — раньше это
@@ -442,6 +481,7 @@ function clearForm() {
   document.getElementById('f-contract').value = '';
   document.getElementById('f-invoice-num').value = '';
   const cpEl0 = document.getElementById('f-counterparty'); if (cpEl0) cpEl0.value = '';
+  const wpEl0 = document.getElementById('f-warranty-period'); if (wpEl0) wpEl0.value = '';
   document.getElementById('f-status').value = 'new';
   document.getElementById('f-comment').value = '';
   document.getElementById('f-markup').value = '5';

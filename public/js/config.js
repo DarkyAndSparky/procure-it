@@ -342,10 +342,11 @@ async function loadSystemInfoPage() {
   const fmtBytes = fmtBytesShared;
 
   const depRow = (d) => `
-    <tr>
+    <tr data-pkg="${esc(d.name)}">
       <td style="padding:6px 10px;font-family:monospace;font-size:12px">${esc(d.name)}</td>
       <td style="padding:6px 10px;font-family:monospace;font-size:12px;color:${d.installed ? 'var(--success)' : 'var(--danger)'}">${esc(d.installed || '— не установлен')}</td>
       <td style="padding:6px 10px;font-family:monospace;font-size:11px;color:var(--text-muted)">${esc(d.range)}</td>
+      <td class="outdated-cell" style="padding:6px 10px;font-family:monospace;font-size:12px;display:none"></td>
     </tr>`;
 
   el.innerHTML = `
@@ -416,15 +417,20 @@ async function loadSystemInfoPage() {
     </div>
 
     <div class="card" style="margin-bottom:16px">
-      <div class="card-header"><span class="card-title">📦 Зависимости (${info.dependencies.length})</span></div>
+      <div class="card-header">
+        <span class="card-title">📦 Зависимости (${info.dependencies.length})</span>
+        <button class="btn btn-sm" id="btn-check-outdated" onclick="checkOutdatedPackages()" style="margin-left:auto">🔄 Проверить обновления</button>
+      </div>
+      <div id="outdated-summary" style="padding:0 16px;font-size:11px;color:var(--text-muted)"></div>
       <div class="table-wrap">
         <table style="width:100%;border-collapse:collapse">
           <thead><tr>
             <th style="padding:6px 10px;text-align:left;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border)">Пакет</th>
             <th style="padding:6px 10px;text-align:left;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border)">Установлено</th>
             <th style="padding:6px 10px;text-align:left;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border)">Диапазон в package.json</th>
+            <th id="outdated-col-header" style="padding:6px 10px;text-align:left;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border);display:none">Последняя на npm</th>
           </tr></thead>
-          <tbody>${info.dependencies.map(depRow).join('')}</tbody>
+          <tbody id="deps-tbody">${info.dependencies.map(depRow).join('')}</tbody>
         </table>
       </div>
     </div>
@@ -521,4 +527,51 @@ function fmtLastBackup(iso) {
     : `${Math.floor(diffMin/1440)} дн назад`;
   const abs = `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   return `${abs} (${rel})`;
+}
+
+// ── Проверка устаревших пакетов — по клику (не автоматически: требует
+// интернет и обращение к npm registry, что может быть медленным/недоступным
+// в изолированной сети развёртывания).
+async function checkOutdatedPackages() {
+  const btn = document.getElementById('btn-check-outdated');
+  const summary = document.getElementById('outdated-summary');
+  const colHeader = document.getElementById('outdated-col-header');
+  if (!btn) return;
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ Проверка…';
+  summary.textContent = '';
+
+  try {
+    const result = await api('GET', '/api/system-info/outdated');
+    colHeader.style.display = '';
+    document.querySelectorAll('.outdated-cell').forEach(td => td.style.display = '');
+
+    const outdatedMap = {};
+    (result.outdated || []).forEach(o => { outdatedMap[o.name] = o; });
+
+    document.querySelectorAll('#deps-tbody tr[data-pkg]').forEach(tr => {
+      const pkg = tr.getAttribute('data-pkg');
+      const cell = tr.querySelector('.outdated-cell');
+      const o = outdatedMap[pkg];
+      if (o) {
+        cell.innerHTML = `<span style="color:var(--warning)">${esc(o.latest)}</span>`;
+        cell.title = 'Доступна более новая версия';
+      } else {
+        cell.innerHTML = `<span style="color:var(--success)">актуально</span>`;
+      }
+    });
+
+    const n = (result.outdated || []).length;
+    summary.textContent = n > 0
+      ? `⚠️ Устаревших пакетов: ${n} — проверено ${new Date(result.checkedAt).toLocaleString('ru-RU')}`
+      : `✅ Все пакеты актуальны — проверено ${new Date(result.checkedAt).toLocaleString('ru-RU')}`;
+    summary.style.color = n > 0 ? 'var(--warning)' : 'var(--success)';
+  } catch(e) {
+    summary.textContent = '❌ ' + e.message;
+    summary.style.color = 'var(--danger)';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
 }

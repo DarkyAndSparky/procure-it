@@ -122,23 +122,74 @@ async function downloadBackup(type) {
 async function restoreBackup(input) {
   const file = input.files[0];
   if (!file) return;
-  if (!confirm('Восстановить данные из резервной копии? Текущие данные будут перезаписаны.')) {
-    input.value = ''; return;
-  }
   const text = await file.text();
   let data;
-  try { data = JSON.parse(text); } catch(e) { toast('Ошибка: файл повреждён'); return; }
-  const result = await api('POST', '/api/restore', data);
-  // Server invalidated all sessions after restore — clear local token and reload
-  localStorage.removeItem('procure_token');
-  const f = result?.files;
-  let msg = '✓ Данные восстановлены.';
-  if (f && (f.restored || f.missing)) {
-    msg += ` Файлов возвращено из зеркала бэкапов: ${f.restored}.`;
-    if (f.missing) msg += ` Не найдено: ${f.missing} (проверьте лог сервера).`;
+  try { data = JSON.parse(text); } catch(e) { toast('Ошибка: файл повреждён'); input.value = ''; return; }
+
+  // Показываем реальные цифры «сейчас / будет» вместо голого confirm() —
+  // легко было щёлкнуть не глядя и потерять данные одним кликом мимо.
+  const incoming = {
+    requests: (data.requests || []).length,
+    orgs: (data.orgs || []).length,
+    users: (data.users || []).length,
+    addresses: (data.addresses || []).length,
+    templates: (data.templates || []).length,
+  };
+
+  let current = { requests: '?', orgs: '?', users: '?' };
+  try {
+    const info = await api('GET', '/api/system-info');
+    current = { requests: info.counts?.requests ?? '?', orgs: info.counts?.orgs ?? '?', users: info.counts?.users ?? '?' };
+  } catch(e) { /* не критично — покажем «?», не блокируем восстановление из-за этого */ }
+
+  document.getElementById('restore-current-stats').innerHTML =
+    `${current.requests} заявок<br>${current.orgs} организаций<br>${current.users} пользователей`;
+  document.getElementById('restore-incoming-stats').innerHTML =
+    `${incoming.requests} заявок<br>${incoming.orgs} организаций<br>${incoming.users} пользователей`;
+  const bd = data.exported || data.exportedAt || data.backupDate || data.date;
+  document.getElementById('restore-backup-date').textContent = bd
+    ? `Файл сформирован: ${new Date(bd).toLocaleString('ru-RU')}`
+    : `Дата формирования файла не найдена в бэкапе — проверь, что это тот файл.`;
+
+  window._pendingRestoreData = data;
+  window._pendingRestoreInput = input;
+  document.getElementById('restore-confirm-modal').style.display = 'flex';
+}
+
+function cancelRestoreConfirm() {
+  document.getElementById('restore-confirm-modal').style.display = 'none';
+  if (window._pendingRestoreInput) window._pendingRestoreInput.value = '';
+  window._pendingRestoreData = null;
+  window._pendingRestoreInput = null;
+}
+
+async function proceedRestoreConfirm() {
+  const data = window._pendingRestoreData;
+  const input = window._pendingRestoreInput;
+  document.getElementById('restore-confirm-modal').style.display = 'none';
+  if (!data) return;
+
+  const btn = document.getElementById('restore-confirm-btn');
+  btn.disabled = true; btn.textContent = '⏳ Восстанавливаю…';
+  try {
+    const result = await api('POST', '/api/restore', data);
+    // Server invalidated all sessions after restore — clear local token and reload
+    localStorage.removeItem('procure_token');
+    const f = result?.files;
+    let msg = '✓ Данные восстановлены.';
+    if (f && (f.restored || f.missing)) {
+      msg += ` Файлов возвращено из зеркала бэкапов: ${f.restored}.`;
+      if (f.missing) msg += ` Не найдено: ${f.missing} (проверьте лог сервера).`;
+    }
+    toast(msg + ' Страница перезагрузится...');
+    setTimeout(() => location.reload(), f?.missing ? 3500 : 1200);
+  } catch(e) {
+    toast('Ошибка восстановления: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Заменить всё';
+  } finally {
+    if (input) input.value = '';
+    window._pendingRestoreData = null;
+    window._pendingRestoreInput = null;
   }
-  toast(msg + ' Страница перезагрузится...');
-  setTimeout(() => location.reload(), f?.missing ? 3500 : 1200);
-  input.value = '';
 }
 

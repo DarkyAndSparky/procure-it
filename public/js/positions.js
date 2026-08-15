@@ -138,9 +138,8 @@ function onDocTypeChange() {
   const dt = document.getElementById('f-doc-type').value;
   const th = document.getElementById('th-item-name');
   if (th) th.textContent = dt === 'install' ? 'Наименование работ / услуг' : 'Наименование товара';
-  if (dt === 'support') {
-    toast('🛠️ Документ «Сопровождение» — заглушка, формат будет уточнён позже');
-  }
+  const warrantyWrap = document.getElementById('f-warranty-wrap');
+  if (warrantyWrap) warrantyWrap.style.display = dt === 'support' ? '' : 'none';
   if (dt === 'realization') {
     // Реализация — товар для себя: без наценки, поставщик и организация — по умолчанию
     const noMarkupCb = document.getElementById('f-no-markup');

@@ -16,6 +16,7 @@ async function loadToForm(id, copy=false) {
   document.getElementById('f-supplier').value = req.supplier || '';
   document.getElementById('f-invoice-num').value = req.invoiceNum || '';
   const cpEl = document.getElementById('f-counterparty'); if (cpEl) cpEl.value = req.counterparty || '';
+  const wpEl = document.getElementById('f-warranty-period'); if (wpEl) wpEl.value = req.warrantyPeriod || '';
   document.getElementById('f-contract').value = req.contract || '';
   // Migrate legacy status values
   const statusMigration = { inwork: 'ordered', paid: 'delivered' };
@@ -188,14 +189,14 @@ function buildSpecHtml(req) {
       addressLabel: 'Адрес выполнения работ',
     },
     support: {
-      title: 'ДОКУМЕНТ ПО СОПРОВОЖДЕНИЮ (ЗАГЛУШКА)',
-      colHeader: 'Наименование услуги',
-      contractWord: 'к договору',
-      termLine: '⚠ Формат документа «Сопровождение» ещё не согласован и будет уточнён отдельно.',
-      paymentLine: 'Порядок оплаты будет определён после согласования формата документа.',
-      qualityLine: 'Данный раздел является заглушкой и будет заменён после уточнения формата документа «Сопровождение».',
-      finalLine: 'Настоящий документ — временная заглушка и не является итоговой формой.',
-      addressLabel: 'Адрес',
+      title: 'АКТ ГАРАНТИЙНОГО ОБСЛУЖИВАНИЯ',
+      colHeader: 'Наименование Товара',
+      contractWord: 'к договору поставки',
+      termLine: `Гарантийный срок обслуживания: ${'{{WARRANTY}}'} с даты поставки Товара, указанного в настоящем Акте.`,
+      qualityLine: 'В течение гарантийного срока Исполнитель обязуется за свой счёт устранять недостатки Товара, возникшие не по вине Покупателя. Гарантия не распространяется на повреждения, возникшие вследствие нарушения правил эксплуатации, механических повреждений, а также естественного износа комплектующих.',
+      finalLine: 'Настоящий Акт составлен в двух экземплярах, имеющих равную юридическую силу, по одному для каждой из Сторон.',
+      addressLabel: 'Адрес доставки/выборки',
+      noPayment: true,
     },
     goods: {
       title: 'СПЕЦИФИКАЦИЯ',
@@ -270,8 +271,8 @@ function buildSpecHtml(req) {
     </table>
     <p style="margin-top:16px">Всего наименований ${req.positions.length}, на сумму ${totalStr} рублей, без НДС</p>
     <p style="margin-top:4px;font-style:italic">${totalWords}, НДС не облагается.</p>
-    <p style="margin-top:12px">${L.termLine}</p>
-    ${isRealizationDoc ? '' : `<p style="margin-top:8px"><strong>Порядок оплаты:</strong><br>
+    <p style="margin-top:12px">${esc(L.termLine).replace('{{WARRANTY}}', esc(req.warrantyPeriod || '12 месяцев'))}</p>
+    ${(isRealizationDoc || L.noPayment) ? '' : `<p style="margin-top:8px"><strong>Порядок оплаты:</strong><br>
     ${L.paymentLine}</p>`}
     ${req.address ? `<p style="margin-top:8px">${L.addressLabel}: ${esc(req.address)}</p>` : ''}
     <p style="margin-top:8px">${L.qualityLine}</p>

@@ -36,6 +36,7 @@ function runMigrations(db) {
     `ALTER TABLE requests ADD COLUMN org_stamp TEXT DEFAULT '1'`,       // печать покупателя: '1' с печатью (М.П.), '0' без (Б.П.)
     `ALTER TABLE requests ADD COLUMN doc_type TEXT DEFAULT 'goods'`,    // тип документа: goods | install | support
     `ALTER TABLE requests ADD COLUMN counterparty TEXT DEFAULT ''`,    // контрагент/магазин закупки (для фильтров в реестре)
+    `ALTER TABLE requests ADD COLUMN warranty_period TEXT DEFAULT ''`, // гарантийный срок — только для docType='support' (Акт гарантийного обслуживания)
     `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')`,
     `CREATE TABLE IF NOT EXISTS audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

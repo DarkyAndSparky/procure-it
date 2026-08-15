@@ -8,9 +8,35 @@ router.get('/orgs', (req, res) => {
   res.json(query('SELECT * FROM orgs ORDER BY short'));
 });
 
+// SQLite's built-in NOCASE collation only folds ASCII A-Z — кириллица «ЛД»
+// и «лд» для него РАЗНЫЕ строки, так что полагаться на COLLATE NOCASE в
+// UNIQUE-индексе для проверки дублей нельзя (короткие названия чаще всего
+// как раз кириллица). Поэтому сравнение регистронезависимо — на уровне
+// приложения через JS toLowerCase(), который Unicode понимает корректно.
+//
+// Проверяем не только короткое название, но и ФАКТИЧЕСКУЮ папку раскладки
+// файлов (folder || short — см. fileLayoutService.js) — у двух организаций
+// может быть разный short, но одинаковый folder, и тогда они физически
+// разложатся в одну и ту же папку на диске.
+function findDuplicateOrg(short, folder, excludeId) {
+  const normShort  = String(short || '').trim().toLowerCase();
+  const normFolder = String(folder || short || '').trim().toLowerCase();
+  if (!normShort && !normFolder) return null;
+  return query('SELECT id, full, short, folder FROM orgs').find(o => {
+    if (o.id === excludeId) return false;
+    const oShort  = String(o.short || '').trim().toLowerCase();
+    const oFolder = String(o.folder || o.short || '').trim().toLowerCase();
+    return (normShort && oShort === normShort) || (normFolder && oFolder === normFolder);
+  }) || null;
+}
+
 router.post('/orgs', operatorOrAdmin, (req, res) => {
   const { full, short, prefix='', signatory='', contract='', address='', supplier='', stamp='1', folder='' } = req.body;
   if (!full || !short) return res.status(400).json({ error: 'Обязательные поля: full, short' });
+  // Дубли короткого названия/папки путают и нумерацию, и раскладку файлов —
+  // организации попадали бы в одну и ту же папку на диске.
+  const dup = findDuplicateOrg(short, folder, null);
+  if (dup) return res.status(409).json({ error: `Конфликт с существующей организацией «${dup.full}» — совпадает короткое название или папка для файлов` });
   // Префикс больше не участвует в номере спецификации (тот теперь берётся из
   // типа документа — П/Р/М/С), поле оставлено в схеме БД для обратной
   // совместимости, но в UI не запрашивается.
@@ -25,6 +51,8 @@ router.put('/orgs/:id', operatorOrAdmin, (req, res) => {
   if (!full || !short) return res.status(400).json({ error: 'Обязательные поля: full, short' });
   const exists = query('SELECT id FROM orgs WHERE id=?', [req.params.id])[0];
   if (!exists) return res.status(404).json({ error: 'Организация не найдена' });
+  const dup = findDuplicateOrg(short, folder, req.params.id);
+  if (dup) return res.status(409).json({ error: `Конфликт с существующей организацией «${dup.full}» — совпадает короткое название или папка для файлов` });
   run('UPDATE orgs SET full=?,short=?,prefix=?,signatory=?,contract=?,address=?,supplier=?,stamp=?,folder=? WHERE id=?',
     [full, short, prefix, signatory, contract, address, supplier, stamp, folder, req.params.id]);
   res.json(query('SELECT * FROM orgs WHERE id=?', [req.params.id])[0]);

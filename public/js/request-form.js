@@ -115,6 +115,7 @@ function collectForm() {
     supplierStamp: appConfig.supplierStamp === '1',
     invoiceNum: document.getElementById('f-invoice-num').value,
     counterparty: document.getElementById('f-counterparty')?.value || '',
+    warrantyPeriod: document.getElementById('f-warranty-period')?.value || '',
     contract: document.getElementById('f-contract').value,
     status: document.getElementById('f-status').value,
     comment: document.getElementById('f-comment').value,

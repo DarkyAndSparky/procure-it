@@ -210,6 +210,11 @@ if (typeof XLSX === 'undefined') {
             <input type="text" id="f-contract" placeholder="П-202604-02 от «01» апреля 2026 г.">
             <div id="contract-hint" style="font-size:11px;color:var(--text-muted);margin-top:2px"></div>
           </div>
+          <div class="field" id="f-warranty-wrap" style="display:none">
+            <label>Гарантийный срок</label>
+            <input type="text" id="f-warranty-period" placeholder="напр. 12 месяцев">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Считается с даты поставки, указанной выше. Используется в тексте «Акта гарантийного обслуживания».</div>
+          </div>
           <div class="field">
             <label>Статус</label>
             <select id="f-status">
@@ -367,10 +372,12 @@ if (typeof XLSX === 'undefined') {
             <option value="partial">🔄 Частично</option>
             <option value="delivered">✅ Получено</option>
             <option value="cancelled">❌ Отменена</option>
-            <option value="cancelled">Отменена</option>
           </select>
           <select id="reg-filter-supplier" onchange="renderRegistry()">
             <option value="">Все поставщики</option>
+          </select>
+          <select id="reg-filter-counterparty" onchange="renderRegistry()">
+            <option value="">Все контрагенты</option>
           </select>
         </div>
       </div>
@@ -765,6 +772,38 @@ if (typeof XLSX === 'undefined') {
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn" onclick="closeOrgModal()">Отмена</button>
       <button class="btn" onclick="saveOrgModal()" style="background:var(--success);border-color:var(--success);color:#fff">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Подтверждение восстановления из бэкапа — показывает, сколько данных
+     сейчас в системе и что придёт из файла, ПЕРЕД тем как всё перезаписать.
+     Обычный confirm() не показывал никаких цифр — легко было щёлкнуть не
+     глядя и потерять данные одним кликом. -->
+<div id="restore-confirm-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;width:480px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,0.4)">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+      <span style="font-size:20px">⚠️</span>
+      <span style="font-size:15px;font-weight:600">Восстановление данных</span>
+    </div>
+    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+      Текущие данные будут <strong style="color:var(--danger)">полностью заменены</strong> содержимым файла бэкапа. Это необратимо.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;margin-bottom:18px">
+      <div style="text-align:center">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">СЕЙЧАС В СИСТЕМЕ</div>
+        <div id="restore-current-stats" style="font-size:13px;line-height:1.8"></div>
+      </div>
+      <div style="font-size:20px;color:var(--text-muted)">→</div>
+      <div style="text-align:center">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">БУДЕТ ИЗ ФАЙЛА</div>
+        <div id="restore-incoming-stats" style="font-size:13px;line-height:1.8;color:var(--accent)"></div>
+      </div>
+    </div>
+    <div id="restore-backup-date" style="font-size:11px;color:var(--text-muted);margin-bottom:18px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="cancelRestoreConfirm()">Отмена</button>
+      <button class="btn" id="restore-confirm-btn" onclick="proceedRestoreConfirm()" style="background:var(--danger);border-color:var(--danger);color:#fff">Заменить всё</button>
     </div>
   </div>
 </div>

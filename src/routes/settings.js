@@ -154,4 +154,26 @@ router.get('/system-info', operatorOrAdmin, (req, res) => {
   }
 });
 
+// ── Проверка устаревших пакетов — по требованию (кнопка), не автоматически:
+// бьёт в npm registry, требует интернет и может быть медленной/недоступной
+// в изолированной сети, поэтому не встроена в обычный /system-info.
+router.get('/system-info/outdated', operatorOrAdmin, (req, res) => {
+  const { execFile } = require('child_process');
+  const path = require('path');
+  execFile('npm', ['outdated', '--json'], { cwd: path.join(__dirname, '../..'), timeout: 20000 }, (err, stdout) => {
+    // npm outdated возвращает КОД 1, если нашёл устаревшие пакеты — это не
+    // ошибка выполнения, а нормальный результат; реальная ошибка (нет
+    // интернета/npm недоступен) — когда stdout вообще не распарсился.
+    try {
+      const data = JSON.parse(stdout || '{}');
+      const outdated = Object.entries(data).map(([name, info]) => ({
+        name, current: info.current || null, wanted: info.wanted, latest: info.latest,
+      }));
+      res.json({ outdated, checkedAt: new Date().toISOString() });
+    } catch(parseErr) {
+      res.status(503).json({ error: 'Не удалось проверить обновления (нет интернета или npm недоступен)' });
+    }
+  });
+});
+
 module.exports = { router, PKG_VERSION };

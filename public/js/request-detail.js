@@ -2,6 +2,7 @@ async function loadToForm(id, copy=false) {
   let req = await api('GET', '/api/requests/' + id).catch(() => null);
   if (!req) return;
   document.getElementById('f-org').value = req.orgId;
+  syncOrgSearchDisplay();
   // Always use current org signatory from card (not stale saved value)
   const orgCard = db.orgs.find(o => o.id === req.orgId);
   if (orgCard) {

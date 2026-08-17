@@ -127,7 +127,16 @@ if (typeof XLSX === 'undefined') {
         <div class="form-grid cols-3">
           <div class="field field-required">
             <label>Организация <span style="color:var(--danger)">*</span></label>
-            <select id="f-org" onchange="updateSpecNum(); fillOrgDefaults()">
+            <input type="text" id="f-org-search" list="f-org-datalist" autocomplete="off"
+                   placeholder="Начните вводить название..."
+                   oninput="onOrgSearchInput()" onchange="onOrgSearchInput()">
+            <datalist id="f-org-datalist"></datalist>
+            <!-- Настоящее значение (org id) — скрытый select, чтобы весь
+                 остальной код (updateSpecNum/fillOrgDefaults/collectForm/
+                 редактирование заявки и т.д.) продолжал работать через
+                 привычный document.getElementById('f-org').value без
+                 переписывания. #f-org-search — просто UI поверх него. -->
+            <select id="f-org" style="display:none">
               <option value="">— выбрать —</option>
             </select>
           </div>

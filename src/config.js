@@ -3,7 +3,11 @@ const fs   = require('fs');
 
 const PORT       = parseInt(process.env.PORT || '9111');
 const ROOT_DIR   = path.join(__dirname, '..');
-const DATA_DIR   = path.join(ROOT_DIR, 'data');
+// PROCURE_DATA_DIR — позволяет указать свою папку данных (например, изолированную
+// временную папку для интеграционных тестов, см. test/helpers/testServer.js).
+// По умолчанию — прежнее поведение (data/ внутри проекта), ничего не меняется
+// для обычного запуска.
+const DATA_DIR   = process.env.PROCURE_DATA_DIR ? path.resolve(process.env.PROCURE_DATA_DIR) : path.join(ROOT_DIR, 'data');
 const DB_FILE    = path.join(DATA_DIR, 'zakupki.db');
 const CERT_DIR   = path.join(DATA_DIR, 'certs');
 const SIGNED_DIR = path.join(DATA_DIR, 'signed_specs');

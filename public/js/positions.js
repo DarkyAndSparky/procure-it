@@ -151,7 +151,7 @@ function onDocTypeChange() {
     const orgSel = document.getElementById('f-org');
     if (orgSel && !orgSel.value) {
       const ipOrg = selfOrg || db.orgs.find(o => (o.short||'').toUpperCase().startsWith('ИП') || (o.full||'').toUpperCase().startsWith('ИП')) || db.orgs[0];
-      if (ipOrg) { orgSel.value = ipOrg.id; updateSpecNum(); fillOrgDefaults(); }
+      if (ipOrg) { orgSel.value = ipOrg.id; syncOrgSearchDisplay(); updateSpecNum(); fillOrgDefaults(); }
     }
     toast('🏪 Реализация: цена без наценки, организация по умолчанию');
   }

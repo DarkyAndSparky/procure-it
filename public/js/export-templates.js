@@ -1,13 +1,15 @@
 // ─── Registry export ──────────────────────────────────────────────────────────
-function exportRegistryExcel() {
+// Общий сбор строк для реестра — используется и Excel-, и CSV-экспортом,
+// чтобы не дублировать логику фильтров/итогов между ними.
+function buildRegistryExportData() {
   const list = allReqs.length ? allReqs : db.requests;
-  if (!list || list.length === 0) { toast('Нет заявок для экспорта'); return; }
+  if (!list || list.length === 0) return null;
 
-  // Collect active filters for filename and header
   const filterOrg      = document.getElementById('reg-filter-org')?.value || '';
   const filterMonth    = document.getElementById('reg-filter-month')?.value || '';
   const filterStatus   = document.getElementById('reg-filter-status')?.value || '';
   const filterSupplier = document.getElementById('reg-filter-supplier')?.value || '';
+  const filterCounterparty = document.getElementById('reg-filter-counterparty')?.value || '';
   const search         = document.getElementById('reg-search')?.value || '';
 
   const filterParts = [];
@@ -15,45 +17,42 @@ function exportRegistryExcel() {
   if (filterMonth)    filterParts.push(filterMonth);
   if (filterStatus)   filterParts.push(STATUS_MAP[filterStatus]?.label || filterStatus);
   if (filterSupplier) filterParts.push(filterSupplier);
+  if (filterCounterparty) filterParts.push(filterCounterparty);
   if (search)         filterParts.push(`поиск:${search}`);
 
   const filterLabel = filterParts.length ? ` [${filterParts.join(', ')}]` : '';
-  const dateStr     = new Date().toISOString().slice(0, 10);
-  const fname       = `Реестр_заявок${filterLabel}_${dateStr}.xlsx`.replace(/[\\/:*?"<>|]/g, '_');
+  const dateStr      = new Date().toISOString().slice(0, 10);
+  const baseFname    = `Реестр_заявок${filterLabel}_${dateStr}`.replace(/[\\/:*?"<>|]/g, '_');
 
-  // Header row
   const rows = [['№', 'Спецификация', 'Дата', 'Организация', 'Заявка', 'МОЛ',
     'Поставщик', 'Договор', 'Битрикс', 'Позиций', 'Сумма (₽)', 'Статус', 'Путь папки']];
 
-  // Info row if filtered
   if (filterParts.length) {
     rows.push([`Фильтр: ${filterParts.join(' · ')} — ${list.length} из всего`]);
   }
 
   list.forEach((r, i) => {
     rows.push([
-      i + 1,
-      r.specNum,
-      r.date,
-      r.orgShort,
-      r.name,
-      r.mol || '',
-      r.supplier || '',
-      r.contract || '',
-      r.bitrix || '',
-      r.positions.length,
-      r.total,
-      STATUS_MAP[r.status || 'new']?.label || '',
-      buildFolderPath(r),
+      i + 1, r.specNum, r.date, r.orgShort, r.name, r.mol || '',
+      r.supplier || '', r.contract || '', r.bitrix || '',
+      r.positions.length, r.total, STATUS_MAP[r.status || 'new']?.label || '', buildFolderPath(r),
     ]);
   });
 
-  // Totals row
   const sumRow = Array(13).fill('');
   sumRow[0]  = 'Итого:';
   sumRow[9]  = list.reduce((s, r) => s + r.positions.length, 0);
   sumRow[10] = list.reduce((s, r) => s + (r.total || 0), 0);
   rows.push(sumRow);
+
+  return { rows, baseFname, count: list.length };
+}
+
+function exportRegistryExcel() {
+  const data = buildRegistryExportData();
+  if (!data) { toast('Нет заявок для экспорта'); return; }
+  const { rows, baseFname, count } = data;
+  const fname = baseFname + '.xlsx';
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws['!cols'] = [
@@ -77,7 +76,35 @@ function exportRegistryExcel() {
   a.href = url; a.download = fname;
   document.body.appendChild(a); a.click();
   setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
-  toast(`Экспортировано ${list.length} заявок`);
+  toast(`Экспортировано ${count} заявок`);
+}
+
+// CSV — для внешних систем/BI, которым проще парсить его, чем .xlsx.
+// Разделитель — точка с запятой (стандарт для CSV, который русскоязычный
+// Excel открывает с правильной разбивкой по колонкам без доп. настроек;
+// обычная запятая в RU-локали Excel трактуется как десятичный разделитель).
+// UTF-8 BOM в начале — иначе Excel показывает кириллицу кракозябрами.
+function exportRegistryCsv() {
+  const data = buildRegistryExportData();
+  if (!data) { toast('Нет заявок для экспорта'); return; }
+  const { rows, baseFname, count } = data;
+
+  const escapeCsvCell = (v) => {
+    const s = String(v ?? '');
+    // Экранируем, если есть разделитель, кавычки или перенос строки —
+    // стандартное правило CSV (RFC 4180).
+    if (/[;"\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  };
+
+  const csv = rows.map(row => row.map(escapeCsvCell).join(';')).join('\r\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = baseFname + '.csv';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  toast(`Экспортировано ${count} заявок (CSV)`);
 }
 
 // ─── Templates ────────────────────────────────────────────────────────────────

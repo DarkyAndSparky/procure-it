@@ -218,6 +218,7 @@ async function renderRegistry() {
         <div class="stat-label">Действия</div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
           <button class="btn btn-sm" onclick="exportRegistryExcel()" style="background:var(--accent);border-color:var(--accent);color:#fff">📊 Экспорт реестра</button>
+          <button class="btn btn-sm" onclick="exportRegistryCsv()" title="Экспорт в CSV — для внешних систем/BI">📄 CSV</button>
           <button class="btn btn-sm" onclick="toggleBreakdown()" id="breakdown-btn">📈 Разбивка по орг.</button>
         </div>
       </div>`;
@@ -411,12 +412,62 @@ function populateOrgSelect() {
     sel.innerHTML += `<option value="${esc(o.id)}" ${cur===o.id?'selected':''}>${o.short}</option>`;
   });
 
+  // Datalist для автокомплита #f-org-search — метка «Короткое (Полное)»,
+  // чтобы можно было найти организацию и по краткому названию, и по части
+  // полного, не листая длинный select руками.
+  const datalist = document.getElementById('f-org-datalist');
+  if (datalist) {
+    datalist.innerHTML = db.orgs.map(o => `<option value="${esc(orgSearchLabel(o))}">`).join('');
+  }
+  syncOrgSearchDisplay();
+
   const specSel = document.getElementById('spec-select');
   const pool = allReqs.length ? allReqs : db.requests;
   specSel.innerHTML = '<option value="">— Выбрать сохранённую заявку —</option>';
   pool.forEach(r => {
     specSel.innerHTML += `<option value="${esc(r.id)}">${esc(r.specNum)} — ${esc(r.name)}</option>`;
   });
+}
+
+// ─── Автокомплит выбора организации (#f-org-search + #f-org-datalist) ──────
+// select #f-org остаётся единственным источником истины для org id — этот
+// слой только переводит удобный текстовый поиск в его value и обратно.
+function orgSearchLabel(o) {
+  return `${o.short} (${o.full})`;
+}
+
+function syncOrgSearchDisplay() {
+  const search = document.getElementById('f-org-search');
+  const sel = document.getElementById('f-org');
+  if (!search || !sel) return;
+  const org = db.orgs.find(o => o.id === sel.value);
+  search.value = org ? orgSearchLabel(org) : '';
+}
+
+function onOrgSearchInput() {
+  const search = document.getElementById('f-org-search');
+  const sel = document.getElementById('f-org');
+  if (!search || !sel) return;
+  const typed = search.value.trim();
+  // Ищем точное совпадение с меткой даталиста, а как фолбэк — точное
+  // совпадение с коротким или полным названием (на случай если пользователь
+  // допечатал вручную, не выбирая из подсказки мышью/стрелками).
+  const org = db.orgs.find(o => orgSearchLabel(o) === typed)
+    || db.orgs.find(o => o.short === typed)
+    || db.orgs.find(o => o.full === typed);
+  if (org) {
+    if (sel.value !== org.id) {
+      sel.value = org.id;
+      updateSpecNum();
+      fillOrgDefaults();
+    }
+  } else if (!typed) {
+    sel.value = '';
+    updateSpecNum();
+  }
+  // Если введённый текст не совпадает ни с одной организацией — оставляем
+  // предыдущее выбранное значение в #f-org (не сбрасываем на полпути ввода),
+  // пока пользователь не допечатает точное совпадение или не выберет явно.
 }
 
 // ─── Pages ───────────────────────────────────────────────────────────────────
@@ -472,6 +523,7 @@ function clearForm() {
   const th = document.querySelector('#page-new table thead th:nth-child(4)');
   if (th) { th.textContent = 'Комментарий / ФИО'; th.style.color = ''; }
   document.getElementById('f-org').value = '';
+  syncOrgSearchDisplay();
   document.getElementById('f-bitrix').value = '';
   document.getElementById('f-name').value = '';
   document.getElementById('f-mol').value = '';

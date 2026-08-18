@@ -724,9 +724,10 @@ POST /api/restore    → восстановить из JSON</pre>
       <tr><td><span class="method POST">POST</span>/api/orgs</td><td>Создать организацию <em>(operator)</em></td></tr>
       <tr><td><span class="method PUT">PUT</span>/api/orgs/:id</td><td>Обновить организацию <em>(operator)</em></td></tr>
       <tr><td><span class="method DELETE">DELETE</span>/api/orgs/:id</td><td>Удалить (если нет заявок) <em>(operator)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/orgs/bulk</td><td>Импорт списком — <code>{ rows: [{full,short,signatory,contract,address,folder}, ...] }</code>, построчный отчёт <em>(operator)</em></td></tr>
     </table></div>
     <div class="alert alert-info">
-      <code>POST</code>/<code>PUT</code> отклоняют дубли (<code>409</code>) — по короткому названию и по фактической папке раскладки файлов, регистронезависимо (включая кириллицу). Две организации с одинаковым коротким названием иначе физически раскладывались бы в одну и ту же папку на диске.
+      <code>POST</code>/<code>PUT</code> отклоняют дубли (<code>409</code>) — по короткому названию и по фактической папке раскладки файлов, регистронезависимо (включая кириллицу). Две организации с одинаковым коротким названием иначе физически раскладывались бы в одну и ту же папку на диске. <code>POST /orgs/bulk</code> не откатывает всю пачку из-за одной проблемной строки — каждая строка обрабатывается независимо (дубль с БД, дубль внутри самого списка или незаполненные обязательные поля отмечаются как <code>skipped</code>/<code>error</code>, остальные добавляются).
     </div>
 
     <h3>Заявки</h3>

@@ -40,7 +40,12 @@ router.post('/orgs', operatorOrAdmin, (req, res) => {
   // Префикс больше не участвует в номере спецификации (тот теперь берётся из
   // типа документа — П/Р/М/С), поле оставлено в схеме БД для обратной
   // совместимости, но в UI не запрашивается.
-  const id = Date.now().toString();
+  // Уязвимость (найдена при аудите): id раньше был Date.now() — при двух
+  // запросах на создание в одну и ту же миллисекунду (например, два bulk-
+  // импорта параллельно, или просто быстрый двойной клик) получались
+  // одинаковые id и INSERT падал на PRIMARY KEY. randomUUID() эту гонку
+  // исключает структурно, а не понижением вероятности.
+  const id = require('crypto').randomUUID();
   run('INSERT INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp,folder) VALUES (?,?,?,?,?,?,?,?,?,?)',
     [id, full, short, prefix, signatory, contract, address, supplier, stamp, folder]);
   res.json(query('SELECT * FROM orgs WHERE id=?', [id])[0]);
@@ -56,6 +61,63 @@ router.put('/orgs/:id', operatorOrAdmin, (req, res) => {
   run('UPDATE orgs SET full=?,short=?,prefix=?,signatory=?,contract=?,address=?,supplier=?,stamp=?,folder=? WHERE id=?',
     [full, short, prefix, signatory, contract, address, supplier, stamp, folder, req.params.id]);
   res.json(query('SELECT * FROM orgs WHERE id=?', [req.params.id])[0]);
+});
+
+// Импорт организаций списком — каждая строка результат парсинга на клиенте
+// (см. public/js/registry.js parseOrgImportText). Сервер здесь — источник
+// истины по дублям (переиспользует findDuplicateOrg), поэтому построчно
+// вставляет валидные записи и построчно же отчитывается об ошибках, а не
+// падает всей пачкой при первом же конфликте.
+router.post('/orgs/bulk', operatorOrAdmin, (req, res) => {
+  const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+  if (!rows.length) return res.status(400).json({ error: 'Пустой список' });
+
+  const results = [];
+  // Дубли внутри самого импортируемого списка (не только против БД) —
+  // накапливаем short/folder уже принятых строк по ходу обработки.
+  const seenShort = new Map();
+  const seenFolder = new Map();
+
+  rows.forEach((row, i) => {
+    const full = String(row.full || '').trim();
+    const short = String(row.short || '').trim();
+    const signatory = String(row.signatory || '').trim();
+    const contract = String(row.contract || '').trim();
+    const address = String(row.address || '').trim();
+    const folder = String(row.folder || '').trim();
+
+    if (!full || !short) {
+      results.push({ i, status: 'error', full, short, error: 'Не заполнены обязательные поля (полное/короткое название)' });
+      return;
+    }
+
+    const normShort = short.toLowerCase();
+    const normFolder = (folder || short).toLowerCase();
+
+    const dup = findDuplicateOrg(short, folder, null);
+    if (dup) {
+      results.push({ i, status: 'skipped', full, short, error: `Уже есть в системе: «${dup.full}»` });
+      return;
+    }
+    if (seenShort.has(normShort) || seenFolder.has(normFolder)) {
+      const clash = seenShort.get(normShort) || seenFolder.get(normFolder);
+      results.push({ i, status: 'skipped', full, short, error: `Дубль внутри списка (строка ${clash + 1})` });
+      return;
+    }
+
+    const id = require('crypto').randomUUID();
+    run('INSERT INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp,folder) VALUES (?,?,?,?,?,?,?,?,?,?)',
+      [id, full, short, '', signatory, contract, address, '', '1', folder]);
+    seenShort.set(normShort, i);
+    seenFolder.set(normFolder, i);
+    results.push({ i, status: 'added', full, short, org: query('SELECT * FROM orgs WHERE id=?', [id])[0] });
+  });
+
+  res.json({
+    added: results.filter(r => r.status === 'added').length,
+    skipped: results.filter(r => r.status !== 'added').length,
+    results,
+  });
 });
 
 router.delete('/orgs/:id', operatorOrAdmin, (req, res) => {

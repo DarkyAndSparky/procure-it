@@ -4,7 +4,7 @@ const router = express.Router();
 const { getDb, saveDb, run } = require('../db/connection');
 const { getUsers, findUserByCredentials } = require('../auth/users');
 const { sessionCreate, sessionDelete, sessionGetUser } = require('../auth/sessions');
-const { generateToken, hashPassword } = require('../auth/crypto');
+const { generateToken, generateSalt, hashPassword } = require('../auth/crypto');
 const { adminOnly } = require('../auth/middleware');
 const { LEGACY_PASSWORD } = require('../config');
 
@@ -55,11 +55,17 @@ module.exports = (strictLimiter) => {
     // и проверяется как раньше.
     if (!user.mustChangePassword) {
       if (!currentPassword) return res.status(400).json({ error: 'Укажите текущий пароль' });
-      const currentHash = hashPassword(currentPassword);
-      const check = getDb().exec('SELECT id FROM users WHERE id=? AND password=?', [user.id, currentHash]);
-      if (!check[0]?.values?.length) return res.status(401).json({ error: 'Текущий пароль неверен' });
+      // Соль-на-пользователя (см. auth/crypto.js) — читаем текущую соль
+      // записи, а не хэшируем константой; findUserByCredentials() уже
+      // догнал строку до этого формата при входе (или это новый пользователь,
+      // у которого он был с самого начала).
+      const row = getDb().exec('SELECT password, salt FROM users WHERE id=?', [user.id])[0]?.values?.[0];
+      if (!row || hashPassword(currentPassword, row[1]) !== row[0]) {
+        return res.status(401).json({ error: 'Текущий пароль неверен' });
+      }
     }
-    run('UPDATE users SET password=?, must_change_password=0 WHERE id=?', [hashPassword(newPassword), user.id]);
+    const newSalt = generateSalt();
+    run('UPDATE users SET password=?, salt=?, must_change_password=0 WHERE id=?', [hashPassword(newPassword, newSalt), newSalt, user.id]);
     saveDb();
     res.json({ ok: true });
   });
@@ -75,8 +81,9 @@ module.exports = (strictLimiter) => {
     const ROLES = ['viewer', 'operator', 'admin'];
     if (!ROLES.includes(role)) return res.status(400).json({ error: `Роль должна быть: ${ROLES.join(', ')}` });
     try {
-      const hash = hashPassword(password);
-      run('INSERT INTO users (username, password, role) VALUES (?,?,?)', [username, hash, role]);
+      const salt = generateSalt();
+      const hash = hashPassword(password, salt);
+      run('INSERT INTO users (username, password, salt, role) VALUES (?,?,?,?)', [username, hash, salt, role]);
       saveDb();
       res.json({ ok: true });
     } catch(e) {
@@ -98,8 +105,9 @@ module.exports = (strictLimiter) => {
     }
 
     if (password) {
-      const hash = hashPassword(password);
-      run('UPDATE users SET password=?, must_change_password=0 WHERE id=?', [hash, req.params.id]);
+      const salt = generateSalt();
+      const hash = hashPassword(password, salt);
+      run('UPDATE users SET password=?, salt=?, must_change_password=0 WHERE id=?', [hash, salt, req.params.id]);
     }
     if (role) run('UPDATE users SET role=? WHERE id=?', [role, req.params.id]);
     saveDb();

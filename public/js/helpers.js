@@ -137,7 +137,7 @@ function startRealization() {
     ? db.orgs.find(o => (o.full||'').toLowerCase().includes(supplierName) || (o.short||'').toLowerCase().includes(supplierName) || supplierName.includes((o.short||'').toLowerCase()))
     : null;
   const ipOrg = supplierOrg || db.orgs.find(o => (o.short||'').toUpperCase().startsWith('ИП') || (o.full||'').toUpperCase().startsWith('ИП')) || db.orgs[0];
-  if (ipOrg) { document.getElementById('f-org').value = ipOrg.id; syncOrgSearchDisplay(); }
+  if (ipOrg) document.getElementById('f-org').value = ipOrg.id;
   updateSpecNum();
 
   // Show badge

@@ -1,5 +1,5 @@
 const { getDb, saveDb } = require('../db/connection');
-const { hashPassword, hashPasswordLegacy } = require('./crypto');
+const { hashPassword, generateSalt, hashPasswordLegacy, hashPasswordSharedSaltPbkdf2 } = require('./crypto');
 const { LEGACY_PASSWORD } = require('../config');
 
 function getUsers() {
@@ -10,27 +10,45 @@ function getUsers() {
   } catch(e) { return []; }
 }
 
+// Переводит найденную запись на текущий формат (PBKDF2 + соль-на-
+// пользователя) после успешной проверки пароля по одному из старых
+// форматов — тот же приём, что уже применялся при переходе с голого
+// SHA-256 на общую соль PBKDF2, теперь ещё на один шаг: с общей соли на
+// соль-на-пользователя.
+function upgradeToPerUserSalt(id, password) {
+  const salt = generateSalt();
+  const hash = hashPassword(password, salt);
+  getDb().run('UPDATE users SET password=?, salt=? WHERE id=?', [hash, salt, id]);
+  saveDb();
+  console.log(`[users] Upgraded password hash for user id=${id} to per-user-salt PBKDF2`);
+}
+
 function findUserByCredentials(username, password) {
   const db = getDb();
   try {
-    const hash       = hashPassword(password);
-    const legacyHash = hashPasswordLegacy(password);
-    // Try PBKDF2 first
-    let rows = db.exec('SELECT id, username, role, must_change_password FROM users WHERE username=? AND password=?', [username, hash]);
-    if (!rows[0]?.values?.length) {
-      // Try legacy SHA-256 — migrate on the fly
-      rows = db.exec('SELECT id, username, role, must_change_password FROM users WHERE username=? AND password=?', [username, legacyHash]);
-      if (rows[0]?.values?.length) {
-        const [id] = rows[0].values[0];
-        // Upgrade to PBKDF2
-        db.run('UPDATE users SET password=? WHERE id=?', [hash, id]);
-        saveDb();
-        console.log(`[users] Upgraded password hash for user id=${id} to PBKDF2`);
-      }
-    }
+    const rows = db.exec('SELECT id, username, role, must_change_password, password, salt FROM users WHERE username=?', [username]);
     if (rows[0]?.values?.length) {
-      const [id, uname, role, mcp] = rows[0].values[0];
-      return { id, username: uname, role, mustChangePassword: !!mcp };
+      const [id, uname, role, mcp, storedHash, salt] = rows[0].values[0];
+
+      if (salt) {
+        // Текущий формат — соль-на-пользователя.
+        if (hashPassword(password, salt) === storedHash) {
+          return { id, username: uname, role, mustChangePassword: !!mcp };
+        }
+        return null;
+      }
+
+      // salt='' — запись в одном из двух старых форматов, доиграть при
+      // успешном входе (см. upgradeToPerUserSalt).
+      if (hashPasswordSharedSaltPbkdf2(password) === storedHash) {
+        upgradeToPerUserSalt(id, password);
+        return { id, username: uname, role, mustChangePassword: !!mcp };
+      }
+      if (hashPasswordLegacy(password) === storedHash) {
+        upgradeToPerUserSalt(id, password);
+        return { id, username: uname, role, mustChangePassword: !!mcp };
+      }
+      return null;
     }
     // Legacy fallback: if no users in DB, accept LEGACY_PASSWORD as admin
     const userCount = db.exec('SELECT COUNT(*) FROM users')[0]?.values[0][0] || 0;

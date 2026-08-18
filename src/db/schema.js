@@ -1,4 +1,4 @@
-const { hashPassword } = require('../auth/crypto');
+const { hashPassword, generateSalt } = require('../auth/crypto');
 const { LEGACY_PASSWORD } = require('../config');
 
 // Применяет схему и миграции к переданному sql.js Database-инстансу.
@@ -180,22 +180,29 @@ function runMigrations(db) {
     id                   INTEGER PRIMARY KEY AUTOINCREMENT,
     username             TEXT NOT NULL UNIQUE,
     password             TEXT NOT NULL,
+    salt                 TEXT NOT NULL DEFAULT '',
     role                 TEXT NOT NULL DEFAULT 'operator',
     must_change_password INTEGER NOT NULL DEFAULT 0,
     created_at           TEXT DEFAULT (datetime('now'))
   )`);
   // Migrations for existing DBs
   try { db.run(`ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0`); } catch(e) {}
+  // Соль-на-пользователя (см. auth/crypto.js) — у строк, заведённых до этой
+  // миграции, salt='' по умолчанию; findUserByCredentials() распознаёт это
+  // как «старый формат» и доиграет соль при следующем успешном входе, не
+  // требуя принудительного сброса пароля всем сразу.
+  try { db.run(`ALTER TABLE users ADD COLUMN salt TEXT NOT NULL DEFAULT ''`); } catch(e) {}
 
   // Seed default admin on first run (no users in DB, no LEGACY_PASSWORD in env)
   const userCount = (() => {
     try { return db.exec('SELECT COUNT(*) FROM users')[0]?.values[0][0] || 0; } catch(e) { return 0; }
   })();
   if (userCount === 0 && !LEGACY_PASSWORD) {
-    const defaultHash = hashPassword('admin0000');
+    const defaultSalt = generateSalt();
+    const defaultHash = hashPassword('admin0000', defaultSalt);
     try {
-      db.run('INSERT INTO users (username, password, role, must_change_password) VALUES (?,?,?,?)',
-        ['admin', defaultHash, 'admin', 1]);
+      db.run('INSERT INTO users (username, password, salt, role, must_change_password) VALUES (?,?,?,?,?)',
+        ['admin', defaultHash, defaultSalt, 'admin', 1]);
       console.log('[users] ✓ Default admin created — login: admin / password: admin0000');
       console.log('[users] ⚠ Change the password on first login!');
     } catch(e) { console.error('[users] seed error:', e.message); }

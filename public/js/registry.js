@@ -218,7 +218,6 @@ async function renderRegistry() {
         <div class="stat-label">Действия</div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
           <button class="btn btn-sm" onclick="exportRegistryExcel()" style="background:var(--accent);border-color:var(--accent);color:#fff">📊 Экспорт реестра</button>
-          <button class="btn btn-sm" onclick="exportRegistryCsv()" title="Экспорт в CSV — для внешних систем/BI">📄 CSV</button>
           <button class="btn btn-sm" onclick="toggleBreakdown()" id="breakdown-btn">📈 Разбивка по орг.</button>
         </div>
       </div>`;
@@ -383,6 +382,65 @@ async function deleteOrg(id) {
   } catch(e) { /* error shown by api() */ }
 }
 
+// ─── Bulk import ───────────────────────────────────────────────────────────
+function openOrgImportModal() {
+  document.getElementById('org-import-text').value = '';
+  document.getElementById('org-import-results').innerHTML = '';
+  document.getElementById('org-import-modal').style.display = 'flex';
+}
+
+function closeOrgImportModal() {
+  document.getElementById('org-import-modal').style.display = 'none';
+}
+
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('org-import-modal');
+  if (e.target === modal) closeOrgImportModal();
+});
+
+// Разделитель — Tab, если он есть в строке (вставка из Excel), иначе ';'.
+// Это позволяет и вставлять таблицу из Excel как есть, и печатать вручную.
+function parseOrgImportText(text) {
+  return text.split('\n')
+    .map(line => line.replace(/\r$/, ''))
+    .filter(line => line.trim())
+    .map(line => {
+      const sep = line.includes('\t') ? '\t' : ';';
+      const cols = line.split(sep).map(c => c.trim());
+      return {
+        full: cols[0] || '', short: cols[1] || '', signatory: cols[2] || '',
+        contract: cols[3] || '', address: cols[4] || '', folder: cols[5] || '',
+      };
+    });
+}
+
+async function runOrgImport() {
+  const text = document.getElementById('org-import-text').value;
+  const rows = parseOrgImportText(text);
+  const resultsEl = document.getElementById('org-import-results');
+  if (!rows.length) { toast('Список пуст'); return; }
+
+  let resp;
+  try {
+    resp = await api('POST', '/api/orgs/bulk', { rows });
+  } catch(e) { return; } // ошибка уже показана api()
+
+  resp.results.forEach(r => {
+    if (r.status === 'added') db.orgs.push(r.org);
+  });
+  renderOrgs();
+  populateOrgSelect();
+
+  resultsEl.innerHTML = `
+    <div style="margin-bottom:6px">✅ Добавлено: ${resp.added} · ⏭️ Пропущено: ${resp.skipped}</div>
+    ${resp.results.filter(r => r.status !== 'added').map(r => `
+      <div style="color:var(--danger);padding:2px 0">
+        Строка ${r.i + 1} (${esc(r.short || r.full || '—')}): ${esc(r.error)}
+      </div>`).join('')}
+  `;
+  if (resp.added && !resp.skipped) toast(`Добавлено организаций: ${resp.added}`);
+}
+
 function renderOrgs() {
   const list = document.getElementById('org-list');
   if (db.orgs.length === 0) {
@@ -412,62 +470,12 @@ function populateOrgSelect() {
     sel.innerHTML += `<option value="${esc(o.id)}" ${cur===o.id?'selected':''}>${o.short}</option>`;
   });
 
-  // Datalist для автокомплита #f-org-search — метка «Короткое (Полное)»,
-  // чтобы можно было найти организацию и по краткому названию, и по части
-  // полного, не листая длинный select руками.
-  const datalist = document.getElementById('f-org-datalist');
-  if (datalist) {
-    datalist.innerHTML = db.orgs.map(o => `<option value="${esc(orgSearchLabel(o))}">`).join('');
-  }
-  syncOrgSearchDisplay();
-
   const specSel = document.getElementById('spec-select');
   const pool = allReqs.length ? allReqs : db.requests;
   specSel.innerHTML = '<option value="">— Выбрать сохранённую заявку —</option>';
   pool.forEach(r => {
     specSel.innerHTML += `<option value="${esc(r.id)}">${esc(r.specNum)} — ${esc(r.name)}</option>`;
   });
-}
-
-// ─── Автокомплит выбора организации (#f-org-search + #f-org-datalist) ──────
-// select #f-org остаётся единственным источником истины для org id — этот
-// слой только переводит удобный текстовый поиск в его value и обратно.
-function orgSearchLabel(o) {
-  return `${o.short} (${o.full})`;
-}
-
-function syncOrgSearchDisplay() {
-  const search = document.getElementById('f-org-search');
-  const sel = document.getElementById('f-org');
-  if (!search || !sel) return;
-  const org = db.orgs.find(o => o.id === sel.value);
-  search.value = org ? orgSearchLabel(org) : '';
-}
-
-function onOrgSearchInput() {
-  const search = document.getElementById('f-org-search');
-  const sel = document.getElementById('f-org');
-  if (!search || !sel) return;
-  const typed = search.value.trim();
-  // Ищем точное совпадение с меткой даталиста, а как фолбэк — точное
-  // совпадение с коротким или полным названием (на случай если пользователь
-  // допечатал вручную, не выбирая из подсказки мышью/стрелками).
-  const org = db.orgs.find(o => orgSearchLabel(o) === typed)
-    || db.orgs.find(o => o.short === typed)
-    || db.orgs.find(o => o.full === typed);
-  if (org) {
-    if (sel.value !== org.id) {
-      sel.value = org.id;
-      updateSpecNum();
-      fillOrgDefaults();
-    }
-  } else if (!typed) {
-    sel.value = '';
-    updateSpecNum();
-  }
-  // Если введённый текст не совпадает ни с одной организацией — оставляем
-  // предыдущее выбранное значение в #f-org (не сбрасываем на полпути ввода),
-  // пока пользователь не допечатает точное совпадение или не выберет явно.
 }
 
 // ─── Pages ───────────────────────────────────────────────────────────────────
@@ -523,7 +531,6 @@ function clearForm() {
   const th = document.querySelector('#page-new table thead th:nth-child(4)');
   if (th) { th.textContent = 'Комментарий / ФИО'; th.style.color = ''; }
   document.getElementById('f-org').value = '';
-  syncOrgSearchDisplay();
   document.getElementById('f-bitrix').value = '';
   document.getElementById('f-name').value = '';
   document.getElementById('f-mol').value = '';

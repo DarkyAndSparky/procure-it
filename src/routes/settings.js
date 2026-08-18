@@ -68,7 +68,12 @@ router.get('/version', operatorOrAdmin, (req, res) => {
 // ── Полная информация «О системе» — динамический список зависимостей и
 // окружения, для отдельной страницы (не путать с мини-виджетом в сайдбаре,
 // у которого только версия+GitHub+лицензия и трогать его не нужно).
-router.get('/system-info', operatorOrAdmin, (req, res) => {
+// Уязвимость (найдена при аудите): страница «О системе» в интерфейсе видна
+// только admin (data-role-min="admin" в zakupki.html), но сам API-эндпоинт
+// был доступен любому operator — версия Node, платформа, PID, полный
+// список зависимостей с версиями отдавались роли, для которой страница
+// в UI и не задумывалась. Приводим к тому же уровню доступа, что и в UI.
+router.get('/system-info', adminOnly, (req, res) => {
   try {
     const fs = require('fs');
     const path = require('path');
@@ -157,7 +162,7 @@ router.get('/system-info', operatorOrAdmin, (req, res) => {
 // ── Проверка устаревших пакетов — по требованию (кнопка), не автоматически:
 // бьёт в npm registry, требует интернет и может быть медленной/недоступной
 // в изолированной сети, поэтому не встроена в обычный /system-info.
-router.get('/system-info/outdated', operatorOrAdmin, (req, res) => {
+router.get('/system-info/outdated', adminOnly, (req, res) => {
   const { execFile } = require('child_process');
   const path = require('path');
   execFile('npm', ['outdated', '--json'], { cwd: path.join(__dirname, '../..'), timeout: 20000 }, (err, stdout) => {

@@ -5,8 +5,49 @@ const { getDb, query, run, rowToRequest, saveDb } = require('../db/connection');
 const { auditLog } = require('../db/audit');
 const { operatorOrAdmin } = require('../auth/middleware');
 const { sendStatusWebhook } = require('../services/bitrixService');
+const { calcRowPricing } = require('../../public/js/pricing-core');
 
 const ALLOWED_STATUSES = ['new','ordered','partial','delivered','cancelled'];
+
+// Уязвимость/находка аудита: сервер писал total/totalPurchase/deliveryCost
+// из тела запроса как есть, без сверки с positions — баг в клиентском
+// расчёте (или намеренно изменённый через devtools запрос от operator)
+// тихо сохранялся бы как «official» сумма заявки и уходил дальше в
+// спецификацию/счёт/Bitrix без единой проверки. Полный пересчёт и жёсткое
+// отклонение — за рамками этой правки (нужно решить, что делать с уже
+// накопленными расхождениями и legacy-заявками), но логировать — дёшево и
+// не меняет поведение сохранения. round2 — тот же допуск, что и в самой
+// формуле (calcRowPricing), плюс небольшой эпсилон на накопление ошибки
+// округления по многим строкам.
+function logTotalsMismatch(id, r) {
+  try {
+    const positions = Array.isArray(r.positions) ? r.positions : [];
+    if (!positions.length) return;
+    const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+    const expectedTotalPurchase = round2(positions.reduce((s, p) => s + (Number(p.purchasePrice)||0) * (Number(p.qty)||0), 0));
+    const markupFrac = (r.markup !== undefined && r.markup !== null ? Number(r.markup) : 5) / 100;
+    const expectedTotal = round2(positions.reduce((s, p) => {
+      const { sellSum } = calcRowPricing({
+        purchasePrice: Number(p.purchasePrice) || 0,
+        qty: Number(p.qty) || 0,
+        totalPurchase: expectedTotalPurchase,
+        deliveryCost: Number(r.deliveryCost) || 0,
+        markup: markupFrac,
+      });
+      return s + sellSum;
+    }, 0));
+    const EPS = 0.05 * positions.length + 0.02; // накопление копеечных округлений по строкам
+    const gotTotalPurchase = Number(r.totalPurchase) || 0;
+    const gotTotal = Number(r.total) || 0;
+    if (Math.abs(expectedTotalPurchase - gotTotalPurchase) > EPS || Math.abs(expectedTotal - gotTotal) > EPS) {
+      console.warn(
+        `[requests] Расхождение суммы заявки ${id}: ` +
+        `totalPurchase получено=${gotTotalPurchase} ожидалось=${expectedTotalPurchase}, ` +
+        `total получено=${gotTotal} ожидалось=${expectedTotal}`
+      );
+    }
+  } catch(e) { /* сверка — best-effort, не должна ронять сохранение заявки */ }
+}
 
 // ── REQUESTS ──────────────────────────────────────────────────────────────────
 router.get('/requests', (req, res) => {
@@ -73,8 +114,9 @@ router.post('/requests', operatorOrAdmin, (req, res) => {
   // файла при загрузке подписанной спецификации/счёта (`${req.params.id}.pdf`),
   // и id вида "../../../../tmp/evil" позволял записать файл ЗА пределами
   // data/signed_specs — path traversal, подтверждено на практике. Теперь id
-  // всегда генерируется на сервере.
-  const id = Date.now().toString();
+  // всегда генерируется на сервере (randomUUID() — заодно исключает и
+  // теоретическую гонку двух Date.now() в одну и ту же миллисекунду).
+  const id = require('crypto').randomUUID();
   if (r.status && !ALLOWED_STATUSES.includes(r.status)) r.status = 'new';
   // Guard against spec_num collisions — e.g. a stale client-side registry cache
   // suggesting a number that was already taken by another request in the meantime.
@@ -85,6 +127,7 @@ router.post('/requests', operatorOrAdmin, (req, res) => {
     const dup = query('SELECT id FROM requests WHERE spec_num=? AND org_id=?', [r.specNum, r.orgId||''])[0];
     if (dup) return res.status(409).json({ error: `Спецификация с номером «${r.specNum}» уже существует у этой организации. Обновите страницу и попробуйте снова.` });
   }
+  logTotalsMismatch(id, r);
   const ok = run(`INSERT INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type,counterparty,warranty_period) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
      r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
@@ -163,6 +206,7 @@ router.put('/requests/:id', operatorOrAdmin, (req, res) => {
     if (dup) return res.status(409).json({ error: `Спецификация с номером «${r.specNum}» уже существует у этой организации. Обновите страницу и попробуйте снова.` });
   }
 
+  logTotalsMismatch(req.params.id, r);
   const ok = run(`UPDATE requests SET spec_num=?,org_id=?,org_full=?,org_short=?,org_signatory=?,org_stamp=?,bitrix=?,name=?,mol=?,date=?,address=?,supplier=?,invoice_num=?,contract=?,status=?,comment=?,is_realization=?,delivery_cost=?,markup=?,total_purchase=?,total=?,positions=?,doc_type=?,counterparty=?,warranty_period=?,updated_at=datetime('now') WHERE id=?`,
     [r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
      r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',

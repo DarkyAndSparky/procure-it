@@ -56,7 +56,7 @@ router.post('/requests/:id/signed-spec', operatorOrAdmin, requireSafeId, express
 });
 
 // Download: GET /api/requests/:id/signed-spec
-router.get('/requests/:id/signed-spec', operatorOrAdmin, (req, res) => {
+router.get('/requests/:id/signed-spec', operatorOrAdmin, requireSafeId, (req, res) => {
   try {
     const row = query('SELECT signed_spec_pdf, spec_num FROM requests WHERE id=?', [req.params.id])[0];
     if (!row?.signed_spec_pdf) return res.status(404).json({ error: 'Подписанная спецификация не прикреплена' });
@@ -124,7 +124,7 @@ router.post('/requests/:id/invoice-file', operatorOrAdmin, requireSafeId, expres
 });
 
 // Download: GET /api/requests/:id/invoice-file
-router.get('/requests/:id/invoice-file', operatorOrAdmin, (req, res) => {
+router.get('/requests/:id/invoice-file', operatorOrAdmin, requireSafeId, (req, res) => {
   try {
     const row = query('SELECT invoice_file, spec_num FROM requests WHERE id=?', [req.params.id])[0];
     if (!row?.invoice_file) return res.status(404).json({ error: 'Счёт не прикреплён' });

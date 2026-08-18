@@ -127,16 +127,7 @@ if (typeof XLSX === 'undefined') {
         <div class="form-grid cols-3">
           <div class="field field-required">
             <label>Организация <span style="color:var(--danger)">*</span></label>
-            <input type="text" id="f-org-search" list="f-org-datalist" autocomplete="off"
-                   placeholder="Начните вводить название..."
-                   oninput="onOrgSearchInput()" onchange="onOrgSearchInput()">
-            <datalist id="f-org-datalist"></datalist>
-            <!-- Настоящее значение (org id) — скрытый select, чтобы весь
-                 остальной код (updateSpecNum/fillOrgDefaults/collectForm/
-                 редактирование заявки и т.д.) продолжал работать через
-                 привычный document.getElementById('f-org').value без
-                 переписывания. #f-org-search — просто UI поверх него. -->
-            <select id="f-org" style="display:none">
+            <select id="f-org" onchange="updateSpecNum(); fillOrgDefaults()">
               <option value="">— выбрать —</option>
             </select>
           </div>
@@ -743,6 +734,7 @@ if (typeof XLSX === 'undefined') {
           <input type="text" id="new-org-folder" placeholder="напр. ЛД (если пусто — короткое название)">
         </div>
         <button class="btn btn-primary" onclick="addOrg()" style="width:100%">Добавить организацию</button>
+        <button class="btn" onclick="openOrgImportModal()" style="width:100%;margin-top:8px">📥 Импорт списком</button>
 
         <hr class="divider">
 
@@ -752,6 +744,29 @@ if (typeof XLSX === 'undefined') {
 
   </div>
 </main>
+</div>
+
+<!-- Org Import Modal -->
+<div id="org-import-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;width:640px;max-width:95vw;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <span style="font-size:15px;font-weight:600">Импорт организаций списком</span>
+      <button onclick="closeOrgImportModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);line-height:1">×</button>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin:0 0 8px">
+      По одной организации в строке. Поля через <code>;</code> или Tab (можно вставить прямо из Excel):<br>
+      <code>Полное название; Короткое; Подписант; Договор; Адрес; Папка</code><br>
+      Обязательны только первые два поля, остальные можно опустить.
+    </p>
+    <textarea id="org-import-text" rows="10" style="width:100%;font-family:monospace;font-size:12px;resize:vertical"
+      placeholder='ООО "Ромашка"; Ромашка; И. И. Иванов; П-202608-01 от «01» августа 2026 г.; г. Екатеринбург, ул. Ленина 1; ромашка
+ООО "Лютик"; Лютик'></textarea>
+    <div class="btn-group" style="margin-top:10px">
+      <button class="btn btn-primary" onclick="runOrgImport()">Импортировать</button>
+      <button class="btn" onclick="closeOrgImportModal()">Отмена</button>
+    </div>
+    <div id="org-import-results" style="margin-top:14px;font-size:12px"></div>
+  </div>
 </div>
 
 <!-- Edit Org Modal -->

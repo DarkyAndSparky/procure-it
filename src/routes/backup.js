@@ -9,7 +9,7 @@ const { DATA_DIR, BACKUP_DIR, SIGNED_DIR, INVOICE_DIR, DEFAULT_SETTINGS } = requ
 const { doBackup, resolveBackupDir } = require('../services/backupService');
 
 module.exports = (strictLimiter) => {
-  router.get('/backup', adminOnly, (req, res) => {
+  router.get('/backup', adminOnly, strictLimiter, (req, res) => {
     const orgs      = query('SELECT * FROM orgs');
     // ВАЖНО: rowToRequest() отдаёт signedSpecPdf/invoiceFile как заглушки
     // ('__has_pdf__'/'__has_file__'), а не реальные имена файлов — это верно
@@ -30,12 +30,20 @@ module.exports = (strictLimiter) => {
     const date = new Date().toISOString().slice(0,10);
     const auditRows = query('SELECT * FROM audit_log ORDER BY id DESC LIMIT 1000');
     const settingsRows = query('SELECT key, value FROM settings');
-    // Exclude networkPass from backup — it's a credential, not config data
+    // Исключаем из бэкапа секреты, а не только конфигурацию: networkPass —
+    // очевидный пароль, но bitrixWebhook/statusWebhook — тоже секреты, хоть
+    // и выглядят как обычный URL. URL вебхука Bitrix24 сам является ключом
+    // доступа (https://.../rest/1/КЛЮЧ/), а statusWebhook может указывать на
+    // Slack/Telegram/другой сервис с токеном в самом URL. Бэкап нередко
+    // пересылают («вот файл, восстанови для отладки») — эти поля не должны
+    // уезжать вместе с ним. При восстановлении их нужно будет прописать в
+    // Настройках заново (админом, вручную) — это осознанный компромисс.
+    const SECRET_SETTINGS = ['networkPass', 'bitrixWebhook', 'statusWebhook'];
     const settings = Object.fromEntries(
-      settingsRows.filter(r => r.key !== 'networkPass').map(r => [r.key, r.value])
+      settingsRows.filter(r => !SECRET_SETTINGS.includes(r.key)).map(r => [r.key, r.value])
     );
     // Include users (with hashed passwords) so restore preserves auth
-    const users = query('SELECT id, username, password, role, must_change_password, created_at FROM users');
+    const users = query('SELECT id, username, password, salt, role, must_change_password, created_at FROM users');
     res.setHeader('Content-Disposition', `attachment; filename="zakupki_backup_${date}.json"`);
     res.json({ version: 4, exported: new Date().toISOString(), orgs, requests, addresses, templates, settings, audit: auditRows, users });
   });
@@ -140,12 +148,24 @@ module.exports = (strictLimiter) => {
         }
       }
       // Restore users (preserve passwords as-is — already hashed)
+      // Уязвимость (найдена при аудите): в отличие от POST/PUT /api/users,
+      // которые проверяют role по белому списку, эта ветка раньше принимала
+      // role из бэкапа как есть. Восстановление — действие только admin, так
+      // что прямой эскалации нет, но подсунутый (скомпрометированный или
+      // отредактированный вручную «для отладки») файл бэкапа мог занести
+      // пользователя с нестандартной ролью, на которую код в остальных
+      // местах не рассчитан. Прогоняем через тот же ROLES whitelist.
       if (req.body.users && Array.isArray(req.body.users) && req.body.users.length) {
+        const ROLES = ['viewer', 'operator', 'admin'];
         run('DELETE FROM users');
         for (const u of req.body.users) {
-          if (!u.username || !u.password || !u.role) continue;
-          run('INSERT OR REPLACE INTO users (id,username,password,role,must_change_password,created_at) VALUES (?,?,?,?,?,?)',
-            [u.id||null, u.username, u.password, u.role, u.must_change_password||0, u.created_at||new Date().toISOString()]);
+          if (!u.username || !u.password || !ROLES.includes(u.role)) continue;
+          // salt может отсутствовать в бэкапах, снятых до перехода на
+          // соль-на-пользователя (см. auth/crypto.js) — восстанавливаем как
+          // есть (''), findUserByCredentials() при следующем входе
+          // распознает старый формат и сам обновит соль.
+          run('INSERT OR REPLACE INTO users (id,username,password,salt,role,must_change_password,created_at) VALUES (?,?,?,?,?,?,?)',
+            [u.id||null, u.username, u.password, u.salt||'', u.role, u.must_change_password||0, u.created_at||new Date().toISOString()]);
         }
       }
       saveDb();

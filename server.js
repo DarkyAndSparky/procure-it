@@ -238,12 +238,36 @@ initDb().then(async () => {
     console.log('══════════════════════════════════════════\n');
   }
 
+  // Уязвимость/находка аудита (см. также fileLayoutService.js): раньше
+  // start.bat открывал браузер по фиксированному таймеру (`timeout /t 3`)
+  // ПАРАЛЛЕЛЬНО со стартом сервера — гонка, а не гарантия. Если сервер
+  // стартовал дольше 3с (генерация сертификата, инициализация БД на
+  // первом запуске), браузер открывался раньше, чем сервер начинал
+  // слушать порт, и показывал ошибку подключения. Здесь же — колбэк
+  // `.listen()`, единственное место, где сервер ДЕЙСТВИТЕЛЬНО готов
+  // принимать соединения, так что гонка исключена структурно. Работает
+  // только когда PROCURE_AUTO_OPEN=1 (выставляет start.bat/start.sh
+  // сами) — при обычном `node server.js` (Docker, systemd, headless)
+  // открывать браузер не нужно и не должно. execFile (не exec) — тот же
+  // приём, что и в fileLayoutService.js: URL здесь целиком server-side
+  // константа, не пользовательский ввод, но лишний повод для shell-
+  // интерполяции всё равно ни к чему.
+  function maybeOpenBrowser(url) {
+    if (process.env.PROCURE_AUTO_OPEN !== '1') return;
+    try {
+      const { execFile } = require('child_process');
+      if (process.platform === 'win32') execFile('cmd', ['/c', 'start', '""', url]);
+      else if (process.platform === 'darwin') execFile('open', [url]);
+      else execFile('xdg-open', [url]);
+    } catch(e) { /* не критично — сервер уже поднят, URL напечатан в баннере */ }
+  }
+
   if (hasCert && fs.existsSync(CERT_FILE) && fs.existsSync(KEY_FILE)) {
     const sslOpts = {
       key:  fs.readFileSync(KEY_FILE,  'utf8'),
       cert: fs.readFileSync(CERT_FILE, 'utf8'),
     };
-    https.createServer(sslOpts, app).listen(PORT, '0.0.0.0', () => printBanner('https'));
+    https.createServer(sslOpts, app).listen(PORT, '0.0.0.0', () => { printBanner('https'); maybeOpenBrowser(`https://localhost:${PORT}`); });
     // HTTP редирект на HTTPS
     const HTTP_PORT = PORT + 1;
     http.createServer((req, res) => {
@@ -254,7 +278,7 @@ initDb().then(async () => {
       console.log(`[HTTP→HTTPS] Редирект с порта ${HTTP_PORT} на ${PORT}`);
     });
   } else {
-    app.listen(PORT, '0.0.0.0', () => printBanner('http'));
+    app.listen(PORT, '0.0.0.0', () => { printBanner('http'); maybeOpenBrowser(`http://localhost:${PORT}`); });
   }
 }).catch(e => { console.error('DB init error:', e); process.exit(1); });
 

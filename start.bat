@@ -1,46 +1,48 @@
 @echo off
 chcp 65001 >nul
-title procure-it - Server
+rem cd в собственную директорию скрипта — без этого call install.bat/npm
+rem падают, если запустить не двойным кликом из проводника (а, например,
+rem через ярлык с другим "Рабочая папка", или из Планировщика заданий),
+rem когда текущая директория не совпадает с директорией скрипта.
+cd /d "%~dp0"
+title procure-it - Сервер
 echo.
 echo  ============================================
-node -e "const p=require('./package.json');process.stdout.write('  procure-it v'+p.version+' - Starting server...\n')" 2>nul || echo   procure-it - Starting server...
+node -e "const p=require('./package.json');process.stdout.write('  procure-it v'+p.version+' - запуск сервера...\n')" 2>nul || echo   procure-it - запуск сервера...
 echo  ============================================
 echo.
 
-where node >nul 2>&1
+rem Установка зависимостей и подготовка директорий (включая проверку
+rem Node.js) вынесены в install.bat — он же используется отдельно, когда
+rem нужно только подготовить окружение без запуска сервера.
+call install.bat --from-start
 if %errorlevel% neq 0 (
-    echo  [ERROR] Node.js not found!
-    echo  Download from: https://nodejs.org
     pause
     exit /b 1
 )
 
-if not exist node_modules (
-    echo  First run - installing dependencies...
-    npm install
-    echo.
-)
-
-if not exist data mkdir data
-if not exist data\certs mkdir data\certs
-if not exist logs mkdir logs
-
 if defined PROCURE_PASSWORD (
-    echo  [AUTH] Password protection: enabled
+    echo  [AUTH] Защита паролем: включена
 ) else (
-    echo  [AUTH] Password protection: disabled
-    echo  [AUTH] To enable: set PROCURE_PASSWORD=yourpassword
+    echo  [AUTH] Защита паролем: выключена
+    echo  [AUTH] Чтобы включить: set PROCURE_PASSWORD=ваш_пароль
 )
 echo.
-echo  HTTPS :9111  (main)
-echo  HTTP  :9112  (redirect to HTTPS)
+echo  HTTPS :9111  (основной)
+echo  HTTP  :9112  (редирект на HTTPS)
 echo.
-echo  NOTE: Browser will warn about self-signed certificate.
-echo  Click Advanced then Proceed to localhost to continue.
+echo  ВНИМАНИЕ: браузер предупредит о самоподписанном сертификате.
+echo  Нажмите "Дополнительно", затем "Перейти на localhost".
 echo.
-echo  To stop: press Ctrl+C
+echo  Для остановки: Ctrl+C
 echo.
 
-start "" /B cmd /C "timeout /t 3 >nul && start https://localhost:9111"
+rem Уязвимость/находка (см. server.js): раньше браузер открывался по
+rem фиксированному таймеру параллельно со стартом сервера — гонка. Теперь
+rem сервер сам открывает браузер из колбэка listen(), когда РЕАЛЬНО готов
+rem принимать соединения — никакой гонки. PROCURE_AUTO_OPEN=1 действует
+rem только на этот процесс (не наследуется в Docker/systemd-запуски, где
+rem node server.js вызывается без этой переменной).
+set PROCURE_AUTO_OPEN=1
 node server.js
 pause

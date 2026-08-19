@@ -9,26 +9,10 @@ echo "  procure-it — Запуск сервера"
 echo "══════════════════════════════════════════"
 echo ""
 
-# Check Node.js
-if ! command -v node &>/dev/null; then
-    echo "[ОШИБКА] Node.js не установлен"
-    echo "Ubuntu/Debian: curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install -y nodejs"
-    echo "macOS: brew install node"
-    echo "Или: https://nodejs.org/"
-    exit 1
-fi
-echo "[OK] Node.js: $(node --version)"
-
-# Install deps
-if [ ! -d "node_modules/express" ]; then
-    echo ""
-    echo "[INFO] Устанавливаем зависимости..."
-    npm install
-    echo "[OK] Зависимости установлены"
-fi
-
-# Create dirs
-mkdir -p data/certs data/backups logs
+# Установка зависимостей и подготовка директорий вынесены в install.sh —
+# он же используется отдельно, когда нужно только подготовить окружение
+# без запуска сервера (systemd-юниты, шаги сборки и т.п.).
+./install.sh --from-start
 
 # Clean corrupt certs
 if [ -f "data/certs/cert.pem" ]; then

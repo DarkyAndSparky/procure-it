@@ -14,9 +14,17 @@ docs/
 .env.*
 !.env.example
 
-# Start scripts — not needed inside container
+# Start / install / test scripts — dev-инструменты, не нужны внутри
+# контейнера (Dockerfile сам делает npm ci --omit=dev + явный COPY нужных
+# директорий; test/ и так не копируется, но явное правило — для ясности и
+# на случай, если COPY когда-нибудь заменят на `COPY . .`)
 start.bat
 start.sh
+install.bat
+install.sh
+test.bat
+test.sh
+test/
 
 # OS noise
 .DS_Store

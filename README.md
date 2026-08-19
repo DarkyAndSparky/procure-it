@@ -138,8 +138,10 @@ procure-it/
 │   ├── backups/                  # .db snapshots (30-day retention) + files_mirror/ (attached-file mirror)
 │   ├── signed_specs/              # Uploaded signed specification PDFs
 │   └── invoices/                  # Uploaded invoice files
-├── start.bat                      # Windows launcher
-├── start.sh                       # Linux/macOS launcher
+├── start.bat                      # Windows launcher (install + run)
+├── start.sh                       # Linux/macOS launcher (install + run)
+├── install.bat / install.sh       # Install deps only, no server start
+├── test.bat / test.sh             # Run test suite only (not needed in prod)
 ├── .env.example
 ├── CONTRIBUTING.md
 └── LICENSE

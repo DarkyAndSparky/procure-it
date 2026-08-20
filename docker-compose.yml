@@ -1,7 +1,7 @@
 services:
   procure-it:
     build: .
-    image: procure-it:26w31-b01  # версия синхронизируется автоматически: npm run version:sync
+    image: procure-it:26w34-b01  # версия синхронизируется автоматически: npm run version:sync
     container_name: procure-it
     restart: unless-stopped
     ports:

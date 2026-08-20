@@ -2,6 +2,39 @@ function generateToken() {
   return require('crypto').randomBytes(32).toString('hex');
 }
 
+// Уязвимость (найдена при аудите): раньше секреты сравнивались через
+// обычное `===`, что для СТРОКОВЫХ секретов — небезопасно: JS сравнивает
+// строки посимвольно и останавливается на первом несовпадении, так что
+// время сравнения слабо коррелирует с тем, сколько первых символов
+// совпало. Для достаточно длинного/угадываемого секрета (например,
+// заданного человеком в LEGACY_PASSWORD) это в теории позволяет подбирать
+// его по одному символу за раз, statistically усредняя время ответа по
+// множеству запросов. Единая timing-safe функция сравнения — на случай
+// всех мест, где сравнивается что-то, приходящее от пользователя, с
+// секретом на сервере.
+//
+// Для сравнения ХЭШЕЙ паролей (PBKDF2/SHA-256) это технически не то же
+// самое: хэш-функция — однонаправленная с лавинным эффектом, соседние
+// пароли дают совершенно несвязанные хэши, так что «нащупать» пароль по
+// времени сравнения хэша нельзя — нет градиента, по которому идти. Тем не
+// менее используем timing-safe сравнение и там тоже: стоит это буквально
+// ничего, зато не приходится объяснять каждому будущему читателю кода,
+// почему в одном месте === безопасен, а в другом — нет.
+function timingSafeStringEqual(a, b) {
+  const { timingSafeEqual } = require('crypto');
+  const bufA = Buffer.from(String(a ?? ''), 'utf8');
+  const bufB = Buffer.from(String(b ?? ''), 'utf8');
+  if (bufA.length !== bufB.length) {
+    // Длины строк секретов (хэш фиксированной длины, длина пароля) сами
+    // по себе не то чтобы чувствительная информация, но чтобы не давать
+    // вообще никакого шортката для несовпадающих длин — тратим
+    // сопоставимое время на фиктивное сравнение buf с самим собой.
+    timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
+}
+
 // Уязвимость (найдена при аудите): раньше соль для PBKDF2 была одной
 // константой на всё приложение ('procure-it-pbkdf2-salt-v1'), общей для
 // ВСЕХ пользователей. Это не давало атакующему, укравшему БД (например,
@@ -36,4 +69,4 @@ function hashPasswordSharedSaltPbkdf2(pw) {
   return pbkdf2Sync(pw, 'procure-it-pbkdf2-salt-v1', 100000, 32, 'sha256').toString('hex');
 }
 
-module.exports = { generateToken, generateSalt, hashPassword, hashPasswordLegacy, hashPasswordSharedSaltPbkdf2 };
+module.exports = { generateToken, generateSalt, hashPassword, hashPasswordLegacy, hashPasswordSharedSaltPbkdf2, timingSafeStringEqual };

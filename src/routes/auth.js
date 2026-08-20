@@ -4,7 +4,7 @@ const router = express.Router();
 const { getDb, saveDb, run } = require('../db/connection');
 const { getUsers, findUserByCredentials } = require('../auth/users');
 const { sessionCreate, sessionDelete, sessionGetUser } = require('../auth/sessions');
-const { generateToken, generateSalt, hashPassword } = require('../auth/crypto');
+const { generateToken, generateSalt, hashPassword, timingSafeStringEqual } = require('../auth/crypto');
 const { adminOnly } = require('../auth/middleware');
 const { LEGACY_PASSWORD } = require('../config');
 
@@ -60,7 +60,7 @@ module.exports = (strictLimiter) => {
       // догнал строку до этого формата при входе (или это новый пользователь,
       // у которого он был с самого начала).
       const row = getDb().exec('SELECT password, salt FROM users WHERE id=?', [user.id])[0]?.values?.[0];
-      if (!row || hashPassword(currentPassword, row[1]) !== row[0]) {
+      if (!row || !timingSafeStringEqual(hashPassword(currentPassword, row[1]), row[0])) {
         return res.status(401).json({ error: 'Текущий пароль неверен' });
       }
     }

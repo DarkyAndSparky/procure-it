@@ -7,7 +7,7 @@ LABEL org.opencontainers.image.title="procure-it" \
       org.opencontainers.image.source="https://github.com/DarkyAndSparky/procure-it" \
       org.opencontainers.image.documentation="https://darkyAndsparky.github.io/procure-it" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.version="26w31-b01"
+      org.opencontainers.image.version="26w34-b01"
 
 # Install openssl (cert generation) + su-exec (privilege drop in entrypoint)
 RUN apk add --no-cache openssl su-exec
@@ -16,6 +16,14 @@ WORKDIR /app
 
 # Copy package files first for layer caching
 COPY package.json package-lock.json ./
+# scripts/ нужен ДО npm ci: "prepare"-хук в package.json запускает
+# scripts/install-hooks.js, а npm ci выполняет prepare-скрипты. Без этой
+# строки сборка образа падает на первом же RUN npm ci — Cannot find module
+# 'scripts/install-hooks.js' (найдено при аудите перед первым релизом;
+# сам install-hooks.js уже написан безопасно для этого случая — тихо
+# завершается, если нет .git, — но найти отсутствующий ФАЙЛ раньше самого
+# require он не может).
+COPY scripts/ ./scripts/
 
 # Install production deps only
 RUN npm ci --omit=dev

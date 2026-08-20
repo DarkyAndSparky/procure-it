@@ -1,5 +1,5 @@
 const { getDb, saveDb } = require('../db/connection');
-const { hashPassword, generateSalt, hashPasswordLegacy, hashPasswordSharedSaltPbkdf2 } = require('./crypto');
+const { hashPassword, generateSalt, hashPasswordLegacy, hashPasswordSharedSaltPbkdf2, timingSafeStringEqual } = require('./crypto');
 const { LEGACY_PASSWORD } = require('../config');
 
 function getUsers() {
@@ -32,7 +32,7 @@ function findUserByCredentials(username, password) {
 
       if (salt) {
         // Текущий формат — соль-на-пользователя.
-        if (hashPassword(password, salt) === storedHash) {
+        if (timingSafeStringEqual(hashPassword(password, salt), storedHash)) {
           return { id, username: uname, role, mustChangePassword: !!mcp };
         }
         return null;
@@ -40,11 +40,11 @@ function findUserByCredentials(username, password) {
 
       // salt='' — запись в одном из двух старых форматов, доиграть при
       // успешном входе (см. upgradeToPerUserSalt).
-      if (hashPasswordSharedSaltPbkdf2(password) === storedHash) {
+      if (timingSafeStringEqual(hashPasswordSharedSaltPbkdf2(password), storedHash)) {
         upgradeToPerUserSalt(id, password);
         return { id, username: uname, role, mustChangePassword: !!mcp };
       }
-      if (hashPasswordLegacy(password) === storedHash) {
+      if (timingSafeStringEqual(hashPasswordLegacy(password), storedHash)) {
         upgradeToPerUserSalt(id, password);
         return { id, username: uname, role, mustChangePassword: !!mcp };
       }
@@ -52,7 +52,12 @@ function findUserByCredentials(username, password) {
     }
     // Legacy fallback: if no users in DB, accept LEGACY_PASSWORD as admin
     const userCount = db.exec('SELECT COUNT(*) FROM users')[0]?.values[0][0] || 0;
-    if (userCount === 0 && LEGACY_PASSWORD && password === LEGACY_PASSWORD) {
+    // Уязвимость (найдена при аудите): было `password === LEGACY_PASSWORD`
+    // — в отличие от сравнения ХЭШЕЙ выше, тут сравнивается СЫРОЙ секрет
+    // (LEGACY_PASSWORD задаётся человеком в .env, может быть коротким) с
+    // пользовательским вводом напрямую. Это ровно тот случай, где обычное
+    // `===` — реальный, а не теоретический риск тайминг-атаки.
+    if (userCount === 0 && LEGACY_PASSWORD && timingSafeStringEqual(password, LEGACY_PASSWORD)) {
       return { id: 0, username: 'admin', role: 'admin', mustChangePassword: false };
     }
     return null;

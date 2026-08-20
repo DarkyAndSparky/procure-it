@@ -18,8 +18,27 @@ const assert = require('node:assert/strict');
 const initSqlJs = require('sql.js');
 const { runMigrations } = require('../src/db/schema');
 const {
-  generateSalt, hashPassword, hashPasswordLegacy, hashPasswordSharedSaltPbkdf2,
+  generateSalt, hashPassword, hashPasswordLegacy, hashPasswordSharedSaltPbkdf2, timingSafeStringEqual,
 } = require('../src/auth/crypto');
+
+test('timingSafeStringEqual: совпадающие строки — true', () => {
+  assert.equal(timingSafeStringEqual('MySecret123', 'MySecret123'), true);
+});
+
+test('timingSafeStringEqual: разные строки одинаковой длины — false', () => {
+  assert.equal(timingSafeStringEqual('MySecret123', 'MySecret124'), false);
+});
+
+test('timingSafeStringEqual: строки разной длины — false, не бросает исключение', () => {
+  assert.equal(timingSafeStringEqual('short', 'a much longer string here'), false);
+  assert.equal(timingSafeStringEqual('a much longer string here', 'short'), false);
+});
+
+test('timingSafeStringEqual: пустые строки и undefined не роняют сравнение', () => {
+  assert.equal(timingSafeStringEqual('', ''), true);
+  assert.equal(timingSafeStringEqual(undefined, undefined), true);
+  assert.equal(timingSafeStringEqual('x', undefined), false);
+});
 
 async function setup() {
   const SQL = await initSqlJs();

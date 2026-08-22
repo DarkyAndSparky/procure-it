@@ -2,7 +2,7 @@
 
 > Web-based IT asset procurement tool — manage purchase requests, generate Excel calculation sheets and specifications.
 
-[![Version](https://img.shields.io/badge/version-<!--VERSION_SHIELDS-->26w34--b01<!--/VERSION_SHIELDS-->-blue)](#)
+[![Version](https://img.shields.io/badge/version-<!--VERSION_SHIELDS-->26w34--b03<!--/VERSION_SHIELDS-->-blue)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-brightgreen)](https://nodejs.org/)
 [![SQLite](https://img.shields.io/badge/Database-SQLite-blue)](https://www.sqlite.org/)

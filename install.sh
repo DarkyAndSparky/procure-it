@@ -28,16 +28,12 @@ if ! command -v node &>/dev/null; then
     exit 1
 fi
 
-# Минимальная версия — из package.json (engines.node), не дублируем число
-# руками, чтобы два места не разъехались при следующем обновлении.
-MIN_NODE_MAJOR=$(node -e "console.log(require('./package.json').engines.node.match(/\d+/)[0])" 2>/dev/null || echo 18)
-NODE_MAJOR=$(node -e "console.log(process.versions.node.split('.')[0])")
-if [ "$NODE_MAJOR" -lt "$MIN_NODE_MAJOR" ]; then
-    echo "[ОШИБКА] Node.js $(node --version) слишком старый — нужен $MIN_NODE_MAJOR.x или новее"
-    echo "Обновление — теми же командами, что и установка (см. выше)"
+# Минимальная версия Node.js — проверка вынесена в отдельный
+# scripts/check-node-version.js (используется и .bat-версией на Windows;
+# единая логика на обе платформы, не дублируем сравнение версий дважды).
+if ! node scripts/check-node-version.js; then
     exit 1
 fi
-echo "[OK] Node.js: $(node --version)"
 
 if ! command -v npm &>/dev/null; then
     echo "[ОШИБКА] npm не найден рядом с Node.js — переустановите Node.js с https://nodejs.org/"
@@ -45,15 +41,9 @@ if ! command -v npm &>/dev/null; then
 fi
 
 # Устанавливаем, если зависимостей ещё нет ИЛИ package-lock.json обновился
-# после последней установки (например, добавили новый пакет в package.json
-# и запустили npm install у себя, а тут разворачиваете начисто) — иначе
-# легко словить «работало на другой машине»: express есть, а какой-то
-# недавно добавленный пакет — нет, и это не всегда сразу заметно.
-NEED_INSTALL=0
-[ ! -d "node_modules/express" ] && NEED_INSTALL=1
-[ -f "package-lock.json" ] && [ "package-lock.json" -nt "node_modules" ] && NEED_INSTALL=1
-
-if [ "$NEED_INSTALL" -eq 1 ]; then
+# после последней установки — проверка тоже в общем файле
+# (scripts/check-deps-fresh.js), по той же причине: единая логика с .bat.
+if ! node scripts/check-deps-fresh.js; then
     echo ""
     echo "[INFO] Устанавливаем зависимости..."
     if ! npm install; then

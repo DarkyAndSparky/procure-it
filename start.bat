@@ -1,48 +1,35 @@
 @echo off
-chcp 65001 >nul
-rem cd в собственную директорию скрипта — без этого call install.bat/npm
-rem падают, если запустить не двойным кликом из проводника (а, например,
-rem через ярлык с другим "Рабочая папка", или из Планировщика заданий),
-rem когда текущая директория не совпадает с директорией скрипта.
+setlocal
+chcp 65001 >nul 2>&1
 cd /d "%~dp0"
-title procure-it - Сервер
-echo.
-echo  ============================================
-node -e "const p=require('./package.json');process.stdout.write('  procure-it v'+p.version+' - запуск сервера...\n')" 2>nul || echo   procure-it - запуск сервера...
-echo  ============================================
-echo.
 
-rem Установка зависимостей и подготовка директорий (включая проверку
-rem Node.js) вынесены в install.bat — он же используется отдельно, когда
-rem нужно только подготовить окружение без запуска сервера.
-call install.bat --from-start
-if %errorlevel% neq 0 (
+if not exist node_modules (
+  echo Зависимости ещё не установлены. Устанавливаю сейчас...
+  echo ЭТО МОЖЕТ ЗАНЯТЬ МИНУТУ-ДВЕ ^(особенно первый раз^) — НЕ ЗАКРЫВАЙТЕ ОКНО,
+  echo даже если кажется, что ничего не происходит.
+  echo.
+  call npm install
+  if errorlevel 1 (
+    echo Установка зависимостей не удалась. Проверьте сообщение выше.
     pause
     exit /b 1
+  )
+  echo.
+  echo Зависимости установлены. Запускаю сервер...
+  echo.
 )
 
-if defined PROCURE_PASSWORD (
-    echo  [AUTH] Защита паролем: включена
-) else (
-    echo  [AUTH] Защита паролем: выключена
-    echo  [AUTH] Чтобы включить: set PROCURE_PASSWORD=ваш_пароль
-)
-echo.
-echo  HTTPS :9111  (основной)
-echo  HTTP  :9112  (редирект на HTTPS)
-echo.
-echo  ВНИМАНИЕ: браузер предупредит о самоподписанном сертификате.
-echo  Нажмите "Дополнительно", затем "Перейти на localhost".
-echo.
-echo  Для остановки: Ctrl+C
+if not exist data mkdir data
+if not exist data\certs mkdir data\certs
+if not exist data\backups mkdir data\backups
+if not exist logs mkdir logs
+
+echo === procure-it ===
+echo Запускаю сервер на https://localhost:9111
+echo Браузер откроется автоматически, как только сервер будет готов принимать запросы.
+echo Чтобы остановить сервер — закройте это окно или нажмите Ctrl+C.
 echo.
 
-rem Уязвимость/находка (см. server.js): раньше браузер открывался по
-rem фиксированному таймеру параллельно со стартом сервера — гонка. Теперь
-rem сервер сам открывает браузер из колбэка listen(), когда РЕАЛЬНО готов
-rem принимать соединения — никакой гонки. PROCURE_AUTO_OPEN=1 действует
-rem только на этот процесс (не наследуется в Docker/systemd-запуски, где
-rem node server.js вызывается без этой переменной).
 set PROCURE_AUTO_OPEN=1
 node server.js
 pause

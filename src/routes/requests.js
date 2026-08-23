@@ -9,6 +9,25 @@ const { calcRowPricing } = require('../../public/js/pricing-core');
 
 const ALLOWED_STATUSES = ['new','ordered','partial','delivered','cancelled'];
 
+// Баг (найден при аудите перед слиянием dev→main): POST /requests
+// валидировал каждую позицию (name — строка, qty>=0, purchasePrice —
+// число), а PUT /requests/:id — только «массив ли вообще positions»,
+// без проверки полей внутри. Через редактирование существующей заявки
+// можно было сохранить то, что create отклонил бы (например,
+// qty: "много" или отрицательную цену) — расхождение в строгости между
+// create и update для одних и тех же данных. Вынесено в общую функцию,
+// чтобы дальше эти две проверки не могли разойтись снова.
+function validatePositions(positions) {
+  if (positions === undefined) return null;
+  if (!Array.isArray(positions)) return 'positions должен быть массивом';
+  for (const p of positions) {
+    if (typeof p.name !== 'string') return 'Некорректная позиция: name';
+    if (p.qty !== undefined && (isNaN(p.qty) || p.qty < 0)) return 'Некорректное кол-во';
+    if (p.purchasePrice !== undefined && isNaN(p.purchasePrice)) return 'Некорректная цена';
+  }
+  return null;
+}
+
 // Уязвимость/находка аудита: сервер писал total/totalPurchase/deliveryCost
 // из тела запроса как есть, без сверки с positions — баг в клиентском
 // расчёте (или намеренно изменённый через devtools запрос от operator)
@@ -95,17 +114,8 @@ router.get('/requests/:id', (req, res) => {
 router.post('/requests', operatorOrAdmin, (req, res) => {
   const r = req.body;
   if (!r.name) return res.status(400).json({ error: 'Название обязательно' });
-  // Validate positions
-  if (r.positions && !Array.isArray(r.positions)) {
-    return res.status(400).json({ error: 'positions должен быть массивом' });
-  }
-  if (r.positions) {
-    for (const p of r.positions) {
-      if (typeof p.name !== 'string') return res.status(400).json({ error: 'Некорректная позиция: name' });
-      if (p.qty !== undefined && (isNaN(p.qty) || p.qty < 0)) return res.status(400).json({ error: 'Некорректное кол-во' });
-      if (p.purchasePrice !== undefined && isNaN(p.purchasePrice)) return res.status(400).json({ error: 'Некорректная цена' });
-    }
-  }
+  const positionsError = validatePositions(r.positions);
+  if (positionsError) return res.status(400).json({ error: positionsError });
   // Уязвимость (найдена при аудите): раньше id можно было задать в теле
   // запроса (`r.id || Date.now()...`). Фронтенд этим никогда не пользовался
   // (id для новой заявки не отправляется — только при PUT/обновлении, и там
@@ -142,7 +152,8 @@ router.post('/requests', operatorOrAdmin, (req, res) => {
 router.put('/requests/:id', operatorOrAdmin, (req, res) => {
   const r = req.body;
   if (!r.name) return res.status(400).json({ error: 'Название обязательно' });
-  if (r.positions && !Array.isArray(r.positions)) return res.status(400).json({ error: 'positions должен быть массивом' });
+  const positionsError = validatePositions(r.positions);
+  if (positionsError) return res.status(400).json({ error: positionsError });
   if (r.status && !ALLOWED_STATUSES.includes(r.status)) r.status = 'new';
   // Compute field-level diff against current state
   const prev = query('SELECT * FROM requests WHERE id=?', [req.params.id])[0];
@@ -312,5 +323,10 @@ router.get('/stats', (req, res) => {
     byOrg,
   });
 });
+
+// Экспортирован как свойство роутера (не меняя module.exports = router,
+// на который завязаны все существующие `app.use(...)`) — чтобы можно было
+// протестировать напрямую, без поднятия HTTP-сервера ради чистой функции.
+router.validatePositions = validatePositions;
 
 module.exports = router;

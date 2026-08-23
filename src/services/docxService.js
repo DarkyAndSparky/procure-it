@@ -6,7 +6,7 @@ const { fmtRub, numToWords, MONTHS_GENITIVE } = require('../utils/docFormat');
 async function buildSpecDocx(r) {
   const { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun,
           WidthType, AlignmentType, BorderStyle, VerticalAlign,
-          ShadingType, HeadingLevel, TabStopType } = require('docx');
+          ShadingType, TabStopType } = require('docx');
 
   const total = r.total || 0;
   const months = MONTHS_GENITIVE;

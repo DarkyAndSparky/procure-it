@@ -97,10 +97,12 @@ function ensureCert() {
   }
 
   // ── Strategy 3: Node.js built-in crypto (Node 18+) ─────────────────────────
+  // Оставлено как документация неудачного пути, а не рабочая ветка: у
+  // Node.js crypto нет своего ASN.1-энкодера для X.509, только строительные
+  // блоки (генерация ключей, подпись) — этого недостаточно для готового
+  // сертификата без сторонней библиотеки (см. Strategy 2 выше — selfsigned).
   try {
-    const { generateKeyPairSync, createSign } = require('crypto');
     console.log('[HTTPS] Попытка через Node.js crypto...');
-
     // Node.js 18+ has X509Certificate but not cert generation
     // Fall through to HTTP mode
     throw new Error('Node.js crypto не поддерживает генерацию X.509 напрямую');

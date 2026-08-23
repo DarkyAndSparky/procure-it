@@ -30,7 +30,15 @@ function doBackup() {
     const db = getDb();
     const data = db.export();
     const date = new Date().toISOString().slice(0, 10);
-    const time = new Date().toTimeString().slice(0, 5).replace(':', '-');
+    // Баг (найден при аудите перед слиянием dev→main): раньше время в имени
+    // файла бралось с точностью до МИНУТЫ (`toTimeString().slice(0,5)` —
+    // только часы:минуты, без секунд). Ручной бэкап админом в ту же минуту,
+    // что и плановый автобэкап (или два быстрых ручных подряд), давали
+    // одинаковое имя файла — второй тихо перезаписывал первый через
+    // fs.writeFileSync, без единого предупреждения. Добавлены секунды —
+    // коллизия для двух РЕАЛЬНО завершившихся бэкапов теперь практически
+    // исключена (нужно уложиться в одну и ту же секунду).
+    const time = new Date().toTimeString().slice(0, 8).replace(/:/g, '-');
     const fname = `zakupki_${date}_${time}.db`;
     const fpath = path.join(backupDir, fname);
     fs.writeFileSync(fpath, Buffer.from(data));

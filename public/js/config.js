@@ -428,7 +428,7 @@ async function loadSystemInfoPage() {
             <th style="padding:6px 10px;text-align:left;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border)">Пакет</th>
             <th style="padding:6px 10px;text-align:left;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border)">Установлено</th>
             <th style="padding:6px 10px;text-align:left;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border)">Диапазон в package.json</th>
-            <th id="outdated-col-header" style="padding:6px 10px;text-align:left;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border);display:none">Последняя на npm</th>
+            <th id="outdated-col-header" style="padding:6px 10px;text-align:left;font-size:11px;color:var(--text-muted);border-bottom:1px solid var(--border);display:none">Доступное обновление</th>
           </tr></thead>
           <tbody id="deps-tbody">${info.dependencies.map(depRow).join('')}</tbody>
         </table>
@@ -554,18 +554,39 @@ async function checkOutdatedPackages() {
       const pkg = tr.getAttribute('data-pkg');
       const cell = tr.querySelector('.outdated-cell');
       const o = outdatedMap[pkg];
-      if (o) {
-        cell.innerHTML = `<span style="color:var(--warning)">${esc(o.latest)}</span>`;
-        cell.title = 'Доступна более новая версия';
-      } else {
+      if (!o) {
         cell.innerHTML = `<span style="color:var(--success)">актуально</span>`;
+        return;
+      }
+      // Находка (замечено пользователем): npm outdated даёт и wanted
+      // (максимум в рамках нашего же диапазона версий в package.json —
+      // например ^4.18.2), и latest (абсолютный последний релиз на npm,
+      // ВКЛЮЧАЯ мажоры, от которых мы сознательно отказались — Express 5
+      // при том, что мы намеренно на 4.x, см. ROADMAP.md). Раньше здесь
+      // показывался только latest и всегда жёлтым — то есть пакет,
+      // полностью актуальный В РАМКАХ нашего диапазона (current===wanted),
+      // выглядел как «пора обновить» точно так же, как пакет, реально
+      // отстающий от собственного диапазона (current!==wanted). Разделяем:
+      // реальная просрочка в рамках диапазона — предупреждение с wanted;
+      // просто более новый мажор вне диапазона — нейтральная информация,
+      // не тревога.
+      if (o.current !== o.wanted) {
+        cell.innerHTML = `<span style="color:var(--warning)">${esc(o.wanted)}</span>`;
+        cell.title = `Доступно обновление в рамках вашего диапазона версий (package.json). Последняя версия на npm вообще: ${o.latest}`;
+      } else {
+        cell.innerHTML = `<span style="color:var(--success)">актуально</span>` +
+          (o.latest !== o.wanted ? ` <span style="color:var(--text-muted)" title="Новая мажорная версия — требует ручного решения об апгрейде, package.json её сознательно не запрашивает">(есть ${esc(o.latest)})</span>` : '');
       }
     });
 
-    const n = (result.outdated || []).length;
+    // Тот же принцип для сводки — считаем «устаревшими» пакеты, реально
+    // отстающие от собственного диапазона (current!==wanted), а не любой
+    // пакет, для которого на npm вышла более новая мажорная версия.
+    const actionable = (result.outdated || []).filter(o => o.current !== o.wanted);
+    const n = actionable.length;
     summary.textContent = n > 0
-      ? `⚠️ Устаревших пакетов: ${n} — проверено ${new Date(result.checkedAt).toLocaleString('ru-RU')}`
-      : `✅ Все пакеты актуальны — проверено ${new Date(result.checkedAt).toLocaleString('ru-RU')}`;
+      ? `⚠️ Устаревших пакетов (в рамках вашего диапазона версий): ${n} — проверено ${new Date(result.checkedAt).toLocaleString('ru-RU')}`
+      : `✅ Все пакеты актуальны в рамках своих диапазонов версий — проверено ${new Date(result.checkedAt).toLocaleString('ru-RU')}`;
     summary.style.color = n > 0 ? 'var(--warning)' : 'var(--success)';
   } catch(e) {
     summary.textContent = '❌ ' + e.message;

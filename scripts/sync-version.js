@@ -20,6 +20,7 @@
  *   - public/zakupki.html     — не трогаем: там версия подтягивается live через
  *                               fetch('/api/version') на клиенте (см. public/js/config.js)
  *   - docker-compose.yml      — тег Docker-образа (image: procure-it:X)
+ *   - Dockerfile              — LABEL org.opencontainers.image.version
  *
  * Как использовать: поменяли package.json → version, затем
  *   npm run version:sync
@@ -49,6 +50,7 @@ function main() {
   changedFiles += syncMarked(path.join(ROOT, 'README.md'), version);
   changedFiles += syncMarked(path.join(ROOT, 'docs', 'index.html'), version);
   changedFiles += syncDockerCompose(path.join(ROOT, 'docker-compose.yml'), version);
+  changedFiles += syncDockerfile(path.join(ROOT, 'Dockerfile'), version);
 
   console.log(`\n✓ Версия ${version} синхронизирована. Файлов изменено: ${changedFiles}.`);
   if (changedFiles === 0) {
@@ -92,6 +94,26 @@ function syncDockerCompose(filePath, version) {
   const updated = original.replace(
     /image: procure-it:[^\s]+/,
     `image: procure-it:${version}`
+  );
+  if (updated !== original) {
+    fs.writeFileSync(filePath, updated);
+    console.log(`  ✓ ${path.relative(ROOT, filePath)}`);
+    return 1;
+  }
+  return 0;
+}
+
+// Dockerfile — LABEL org.opencontainers.image.version. Раньше правился
+// руками при каждом бампе версии (пункт из ROADMAP.md backlog) — легко
+// забыть, что и происходило: несколько релизов подряд эта строка не
+// синхронизировалась автоматически, только вручную теми же руками, что
+// правили package.json.
+function syncDockerfile(filePath, version) {
+  if (!fs.existsSync(filePath)) return 0;
+  const original = fs.readFileSync(filePath, 'utf8');
+  const updated = original.replace(
+    /org\.opencontainers\.image\.version="[^"]*"/,
+    `org.opencontainers.image.version="${version}"`
   );
   if (updated !== original) {
     fs.writeFileSync(filePath, updated);

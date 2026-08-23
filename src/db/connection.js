@@ -46,6 +46,25 @@ function run(sql, params = []) {
 // запросом поверх этого маппинга — см. комментарий там.
 function rowToRequest(row) {
   if (!row) return null;
+  // Баг (найден при аудите перед слиянием dev→main): JSON.parse() без
+  // try/catch — эта функция вызывается для КАЖДОЙ строки на GET /api/requests
+  // (список реестра), так что один-единственный битый JSON в positions
+  // (повреждённая БД, ручное редактирование файла, будущий баг записи)
+  // ронял бы загрузку ВСЕГО списка заявок для всех пользователей, а не
+  // только одну эту заявку. Отдельно — positions должен быть именно
+  // массивом: если в БД случайно оказалась строка/объект/число, дальнейший
+  // код (.map/.reduce по позициям) упал бы TypeError'ом в произвольном
+  // месте фронтенда, а не с понятной ошибкой здесь.
+  let positions = [];
+  try {
+    const parsed = JSON.parse(row.positions || '[]');
+    positions = Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) {
+      console.warn(`[rowToRequest] positions заявки ${row.id} — не массив после JSON.parse, подставлен []`);
+    }
+  } catch(e) {
+    console.warn(`[rowToRequest] Битый JSON в positions заявки ${row.id}: ${e.message} — подставлен []`);
+  }
   return {
     id: row.id, specNum: row.spec_num, orgId: row.org_id,
     orgFull: row.org_full, orgShort: row.org_short, orgSignatory: row.org_signatory,
@@ -61,7 +80,7 @@ function rowToRequest(row) {
     isRealization: !!row.is_realization,
     deliveryCost: row.delivery_cost, markup: row.markup,
     totalPurchase: row.total_purchase, total: row.total,
-    positions: JSON.parse(row.positions || '[]'),
+    positions,
     createdAt: row.created_at, updatedAt: row.updated_at,
   };
 }

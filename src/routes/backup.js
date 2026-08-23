@@ -3,9 +3,9 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 
-const { getDb, query, run, saveDb, rowToRequest } = require('../db/connection');
+const { getDb, query, saveDb, rowToRequest } = require('../db/connection');
 const { adminOnly, operatorOrAdmin } = require('../auth/middleware');
-const { DATA_DIR, BACKUP_DIR, SIGNED_DIR, INVOICE_DIR, DEFAULT_SETTINGS } = require('../config');
+const { BACKUP_DIR, SIGNED_DIR, INVOICE_DIR, DEFAULT_SETTINGS } = require('../config');
 const { doBackup, resolveBackupDir } = require('../services/backupService');
 
 module.exports = (strictLimiter) => {
@@ -51,6 +51,7 @@ module.exports = (strictLimiter) => {
   router.post('/restore', adminOnly, strictLimiter, (req, res) => {
     const { orgs=[], requests=[], addresses=[], templates=[] } = req.body;
     let filesRestored = 0, filesMissing = 0;
+    let orgsInserted = 0, requestsInserted = 0, usersInserted = 0;
     // Уязвимость (найдена при аудите): id заявок/организаций из бэкапа
     // раньше писались в БД без проверки формата. Сама по себе загрузка
     // JSON-бэкапа — действие только для admin, но восстановленный id затем
@@ -66,16 +67,39 @@ module.exports = (strictLimiter) => {
     function safeId(id, fallbackPrefix) {
       return SAFE_ID.test(String(id)) ? String(id) : `${fallbackPrefix}${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
     }
+    // Баг (найден при аудите перед слиянием dev→main): restore делал
+    // DELETE FROM orgs/requests/users и сразу же построчно вставлял новые
+    // записи БЕЗ проверки, что вставка вообще удалась (run() глотает
+    // исключения и возвращает false, но возврат не проверялся) — если
+    // формат бэкапа оказывался несовместимым и КАЖДАЯ вставка проваливалась,
+    // таблица оставалась пустой: для users это означало полную блокировку
+    // входа в систему без единого способа восстановиться, кроме прямого
+    // доступа к файлу БД. Плюс ответ API отдавал `restored: orgs.length` —
+    // размер ВХОДНОГО массива, а не число реально вставленных строк, то
+    // есть врал об успехе даже при полном провале.
+    // Фикс: вся операция — одна SQLite-транзакция. Либо восстановление
+    // применяется целиком, либо (при любой ошибке) откатывается целиком —
+    // прежнее состояние БД остаётся нетронутым. saveDb() — один раз в
+    // конце, а не на каждый run() по пути (заодно и быстрее — раньше это
+    // был full db.export()+writeFileSync на КАЖДУЮ вставленную строку).
+    const db = getDb();
+    function txRun(sql, params = []) {
+      try { db.run(sql, params); return true; }
+      catch(e) { console.error('[restore] Run error:', sql, e.message); return false; }
+    }
     try {
+      db.run('BEGIN TRANSACTION');
       if (orgs.length) {
-        run('DELETE FROM orgs');
+        txRun('DELETE FROM orgs');
         for (const o of orgs) {
-          run('INSERT OR REPLACE INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp,folder) VALUES (?,?,?,?,?,?,?,?,?,?)',
-            [safeId(o.id, 'org-'), o.full, o.short, o.prefix, o.signatory||'', o.contract||'', o.address||'', o.supplier||'', o.stamp !== undefined ? String(o.stamp) : '1', o.folder||'']);
+          if (!o.full || !o.short) { console.warn(`[restore] Организация без full/short пропущена: id=${o.id}`); continue; }
+          const ok = txRun('INSERT OR REPLACE INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp,folder) VALUES (?,?,?,?,?,?,?,?,?,?)',
+            [safeId(o.id, 'org-'), o.full, o.short, o.prefix||'', o.signatory||'', o.contract||'', o.address||'', o.supplier||'', o.stamp !== undefined ? String(o.stamp) : '1', o.folder||'']);
+          if (ok) orgsInserted++;
         }
       }
       if (requests.length) {
-        run('DELETE FROM requests');
+        txRun('DELETE FROM requests');
         const SENTINELS = new Set(['__has_pdf__', '__has_file__']);
         // Ищем в зеркале ТЕКУЩЕЙ настроенной папки бэкапа, а если там нет —
         // в старом дефолтном месте (на случай если папку бэкапа сменили
@@ -86,6 +110,7 @@ module.exports = (strictLimiter) => {
           path.join(BACKUP_DIR, 'files_mirror'),
         ];
         for (const r of requests) {
+          if (!r.name) { console.warn(`[restore] Заявка без name пропущена: id=${r.id}`); continue; }
           // Бэкапы, снятые до этого фикса, могли содержать заглушки
           // '__has_pdf__'/'__has_file__' вместо реальных имён файлов —
           // писать их в БД как имя файла нельзя, иначе привязка сломается.
@@ -93,12 +118,14 @@ module.exports = (strictLimiter) => {
           const invoiceFile   = SENTINELS.has(r.invoiceFile)   ? '' : (r.invoiceFile || '');
           const invoiceFileOriginalName = String(r.invoiceFileOriginalName || '').slice(0, 200);
           const reqId = safeId(r.id, 'req-');
-          run(`INSERT OR REPLACE INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type,signed_spec_pdf,invoice_file,invoice_file_original_name,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          const ok = txRun(`INSERT OR REPLACE INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type,signed_spec_pdf,invoice_file,invoice_file_original_name,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
             [reqId, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
              r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
              r.status||'new', r.comment||'', r.isRealization?1:0,
              r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,
              JSON.stringify(r.positions||[]), r.docType || 'goods', signedSpecPdf, invoiceFile, invoiceFileOriginalName, r.createdAt||new Date().toISOString()]);
+          if (!ok) continue;
+          requestsInserted++;
 
           // Сама база хранит только имя файла — реальный PDF в JSON-бэкапе не
           // лежит (см. /api/backup). Если физического файла нет на диске
@@ -132,19 +159,19 @@ module.exports = (strictLimiter) => {
         }
       }
       for (const a of addresses) {
-        run('INSERT OR IGNORE INTO addresses (address) VALUES (?)', [a]);
+        txRun('INSERT OR IGNORE INTO addresses (address) VALUES (?)', [a]);
       }
       if (templates.length) {
-        run('DELETE FROM templates');
+        txRun('DELETE FROM templates');
         for (const t of templates) {
-          run('INSERT INTO templates (name,positions) VALUES (?,?)', [t.name, JSON.stringify(t.positions||[])]);
+          txRun('INSERT INTO templates (name,positions) VALUES (?,?)', [t.name, JSON.stringify(t.positions||[])]);
         }
       }
       // Restore settings
       if (req.body.settings && typeof req.body.settings === 'object') {
         const allowed = Object.keys(DEFAULT_SETTINGS);
         for (const [k, v] of Object.entries(req.body.settings)) {
-          if (allowed.includes(k)) run('INSERT OR REPLACE INTO settings (key, value) VALUES (?,?)', [k, String(v)]);
+          if (allowed.includes(k)) txRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?,?)', [k, String(v)]);
         }
       }
       // Restore users (preserve passwords as-is — already hashed)
@@ -157,22 +184,39 @@ module.exports = (strictLimiter) => {
       // местах не рассчитан. Прогоняем через тот же ROLES whitelist.
       if (req.body.users && Array.isArray(req.body.users) && req.body.users.length) {
         const ROLES = ['viewer', 'operator', 'admin'];
-        run('DELETE FROM users');
-        for (const u of req.body.users) {
-          if (!u.username || !u.password || !ROLES.includes(u.role)) continue;
-          // salt может отсутствовать в бэкапах, снятых до перехода на
-          // соль-на-пользователя (см. auth/crypto.js) — восстанавливаем как
-          // есть (''), findUserByCredentials() при следующем входе
-          // распознает старый формат и сам обновит соль.
-          run('INSERT OR REPLACE INTO users (id,username,password,salt,role,must_change_password,created_at) VALUES (?,?,?,?,?,?,?)',
-            [u.id||null, u.username, u.password, u.salt||'', u.role, u.must_change_password||0, u.created_at||new Date().toISOString()]);
+        const validUsers = req.body.users.filter(u => u.username && u.password && ROLES.includes(u.role));
+        // Если из присланного списка НИ ОДНА запись не прошла проверку —
+        // это почти наверняка несовместимый/битый формат бэкапа, а не
+        // намеренно пустой список пользователей. Не трогаем таблицу вообще,
+        // а не удаляем всех и вставляем ноль — именно это раньше и
+        // приводило к полной блокировке входа.
+        if (validUsers.length) {
+          txRun('DELETE FROM users');
+          for (const u of validUsers) {
+            // salt может отсутствовать в бэкапах, снятых до перехода на
+            // соль-на-пользователя (см. auth/crypto.js) — восстанавливаем как
+            // есть (''), findUserByCredentials() при следующем входе
+            // распознает старый формат и сам обновит соль.
+            const ok = txRun('INSERT OR REPLACE INTO users (id,username,password,salt,role,must_change_password,created_at) VALUES (?,?,?,?,?,?,?)',
+              [u.id||null, u.username, u.password, u.salt||'', u.role, u.must_change_password||0, u.created_at||new Date().toISOString()]);
+            if (ok) usersInserted++;
+          }
+        } else {
+          console.warn(`[restore] В бэкапе ${req.body.users.length} записей users, но ни одна не прошла валидацию — таблица users не тронута`);
         }
       }
+      db.run('COMMIT');
       saveDb();
       // Invalidate all sessions after restore — DB state changed, force re-login
-      try { getDb().run('DELETE FROM sessions'); } catch(e) {}
-      res.json({ ok: true, restored: { orgs: orgs.length, requests: requests.length }, files: { restored: filesRestored, missing: filesMissing } });
+      try { db.run('DELETE FROM sessions'); saveDb(); } catch(e) {}
+      res.json({
+        ok: true,
+        restored: { orgs: orgsInserted, requests: requestsInserted, users: usersInserted },
+        files: { restored: filesRestored, missing: filesMissing },
+      });
     } catch(e) {
+      try { db.run('ROLLBACK'); } catch(e2) {}
+      console.error('[restore] Ошибка, откат транзакции:', e.message);
       res.status(500).json({ error: e.message });
     }
   });

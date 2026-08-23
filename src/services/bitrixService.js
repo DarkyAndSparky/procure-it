@@ -42,7 +42,13 @@ async function sendStatusWebhook(webhookUrl, payload) {
   return postJson(webhookUrl, payload);
 }
 
-function postJson(url, payload) {
+// timeoutMs — необязательный параметр специально для тестов (см.
+// test/bitrixService.test.js): гонять реальный 15-секундный таймаут в
+// каждом прогоне npm test было бы дорого по времени, а сам механизм
+// (req.on('timeout')/destroy/reject) один и тот же независимо от
+// длительности — тестируем его на короткой отсечке, в проде остаётся
+// прежнее значение по умолчанию.
+function postJson(url, payload, timeoutMs = 15000) {
   const https = require('https');
   const http  = require('http');
   const body  = JSON.stringify(payload);
@@ -55,7 +61,17 @@ function postJson(url, payload) {
       port:     parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
       path:     parsed.pathname + parsed.search,
       method:   'POST',
-      headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+      headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      // Баг (найден при аудите перед слиянием dev→main): раньше запрос к
+      // вебхуку не имел таймаута вообще. Bitrix24/статус-вебхук настраивает
+      // сам admin — опечатка в URL, временная недоступность стороннего
+      // сервиса или зависший TCP-хендшейк вешали запрос НАВСЕГДА: у
+      // POST /api/send-bitrix это await прямо в обработчике, то есть
+      // конкретный HTTP-запрос пользователя, отправившего заявку в Bitrix,
+      // не завершался никогда — ни успехом, ни ошибкой, просто вечная
+      // загрузка в интерфейсе. 15 секунд — с запасом для медленного
+      // стороннего API, но не бесконечность.
+      timeout: timeoutMs,
     };
     const req2 = lib.request(options, resp => {
       let data = '';
@@ -64,10 +80,14 @@ function postJson(url, payload) {
         try { resolve(JSON.parse(data)); } catch(e) { resolve({ raw: data }); }
       });
     });
+    req2.on('timeout', () => {
+      req2.destroy();
+      reject(new Error(`Таймаут запроса к вебхуку (${options.timeout / 1000}с): ${parsed.hostname}`));
+    });
     req2.on('error', reject);
     req2.write(body);
     req2.end();
   });
 }
 
-module.exports = { sendDealToBitrix, sendStatusWebhook };
+module.exports = { sendDealToBitrix, sendStatusWebhook, postJson };

@@ -61,7 +61,9 @@ router.put('/settings', adminOnly, (req, res) => {
   }
 });
 
-router.get('/version', operatorOrAdmin, (req, res) => {
+// Версия не содержит служебных данных, поэтому показываем её всем ролям
+// (включая гостя). Детальная страница «О системе» ниже по-прежнему adminOnly.
+router.get('/version', (req, res) => {
   res.json({ version: PKG_VERSION });
 });
 
@@ -154,6 +156,27 @@ router.get('/system-info', adminOnly, (req, res) => {
       recentChanges,
       env: process.env.NODE_ENV || 'production',
     });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Тест SMTP — по требованию (кнопка «Проверить»), не автоматически.
+// Отправляет тестовое письмо на указанный адрес, чтобы убедиться
+// что настройки рабочие до того как пользователи начнут запрашивать сброс.
+router.post('/settings/smtp-test', adminOnly, async (req, res) => {
+  const { to } = req.body;
+  if (!to) return res.status(400).json({ error: 'Укажите email для теста' });
+  try {
+    const { testSmtpConnection, sendMail, getSmtpConfig } = require('../services/emailService');
+    await testSmtpConnection();
+    const cfg = getSmtpConfig();
+    await sendMail({
+      to,
+      subject: `[${cfg.appName}] Тестовое письмо SMTP`,
+      html: `<p>SMTP настроен корректно. Это тестовое письмо от <strong>${cfg.appName}</strong>.</p>`,
+    });
+    res.json({ ok: true });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }

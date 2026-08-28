@@ -5,8 +5,8 @@ const { LEGACY_PASSWORD } = require('../config');
 function getUsers() {
   const db = getDb();
   try {
-    const rows = db.exec('SELECT id, username, role, must_change_password FROM users ORDER BY id');
-    return rows[0] ? rows[0].values.map(([id, username, role, mcp]) => ({ id, username, role, mustChangePassword: !!mcp })) : [];
+    const rows = db.exec('SELECT id, username, role, must_change_password, email FROM users ORDER BY id');
+    return rows[0] ? rows[0].values.map(([id, username, role, mcp, email]) => ({ id, username, role, mustChangePassword: !!mcp, email: email||'' })) : [];
   } catch(e) { return []; }
 }
 

@@ -1,5 +1,5 @@
 const { hashPassword, generateSalt } = require('../auth/crypto');
-const { LEGACY_PASSWORD } = require('../config');
+const { LEGACY_PASSWORD, INITIAL_ADMIN_PASSWORD } = require('../config');
 
 // Применяет схему и миграции к переданному sql.js Database-инстансу.
 // Вызывается один раз при старте, до того как остальной код начнёт им пользоваться.
@@ -192,19 +192,33 @@ function runMigrations(db) {
   // как «старый формат» и доиграет соль при следующем успешном входе, не
   // требуя принудительного сброса пароля всем сразу.
   try { db.run(`ALTER TABLE users ADD COLUMN salt TEXT NOT NULL DEFAULT ''`); } catch(e) {}
+  // Email для привязки к учётной записи (сброс пароля, уведомления)
+  try { db.run(`ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''`); } catch(e) {}
 
-  // Seed default admin on first run (no users in DB, no LEGACY_PASSWORD in env)
+  // Токены сброса пароля — создаются при запросе сброса, удаляются после
+  // использования или истечения срока (1 час).
+  db.run(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    token      TEXT PRIMARY KEY,
+    user_id    INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+  )`);
+
+  // Первый администратор не получает предсказуемый пароль.
   const userCount = (() => {
     try { return db.exec('SELECT COUNT(*) FROM users')[0]?.values[0][0] || 0; } catch(e) { return 0; }
   })();
   if (userCount === 0 && !LEGACY_PASSWORD) {
+    const initialPassword = INITIAL_ADMIN_PASSWORD || require('crypto').randomBytes(18).toString('base64url');
     const defaultSalt = generateSalt();
-    const defaultHash = hashPassword('admin0000', defaultSalt);
+    const defaultHash = hashPassword(initialPassword, defaultSalt);
     try {
       db.run('INSERT INTO users (username, password, salt, role, must_change_password) VALUES (?,?,?,?,?)',
         ['admin', defaultHash, defaultSalt, 'admin', 1]);
-      console.log('[users] ✓ Default admin created — login: admin / password: admin0000');
-      console.log('[users] ⚠ Change the password on first login!');
+      console.log('[users] ✓ Первый администратор создан — логин: admin');
+      console.log(INITIAL_ADMIN_PASSWORD
+        ? '[users] Пароль взят из PROCURE_INITIAL_ADMIN_PASSWORD'
+        : `[users] Одноразовый пароль: ${initialPassword}`);
+      console.log('[users] ⚠ Смените пароль при первом входе.');
     } catch(e) { console.error('[users] seed error:', e.message); }
   }
 

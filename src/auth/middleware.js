@@ -27,8 +27,15 @@ function requireRole(...roles) {
 
     // Block all write operations if password change is required
     if (user?.mustChangePassword && req.method !== 'GET') {
-      // Allow only the change-password endpoint itself
-      if (!req.path.includes('/auth/change-password')) {
+      // Allow only the change-password endpoint itself.
+      // Уязвимость (найдена при аудите): было req.path.includes('/auth/change-password')
+      // — совпадение по подстроке, а не по точному пути. Роут change-password сам не
+      // навешивает requireRole (проверяет всё вручную), так что практической дыры сейчас
+      // нет, но проверка семантически неверна: любой БУДУЩИЙ роут, чей путь содержит эту
+      // подстроку где угодно (например, гипотетический /auth/change-password-history),
+      // тихо получил бы тот же bypass. Точное сравнение — правильный инвариант независимо
+      // от того, есть ли сегодня реальный путь атаки.
+      if (req.path !== '/auth/change-password') {
         return res.status(403).json({ error: 'Смените временный пароль перед началом работы', mustChangePassword: true });
       }
     }

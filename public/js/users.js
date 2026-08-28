@@ -105,6 +105,7 @@ async function loadUsers() {
     container.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="border-bottom:1px solid var(--border)">
         <th style="text-align:left;padding:6px 8px">Логин</th>
+        <th style="text-align:left;padding:6px 8px">Email</th>
         <th style="text-align:left;padding:6px 8px">Роль</th>
         <th style="padding:6px 8px"></th>
       </tr></thead>
@@ -112,6 +113,11 @@ async function loadUsers() {
         ${users.map(u => `
           <tr style="border-bottom:1px solid var(--border-light)">
             <td style="padding:6px 8px">${esc(u.username)}</td>
+            <td style="padding:6px 8px">
+              <input type="email" value="${esc(u.email||'')}" placeholder="не указан"
+                style="font-size:12px;width:160px;border:1px solid var(--border);border-radius:4px;padding:2px 6px;background:var(--surface)"
+                onblur="saveUserEmail(${u.id}, this.value)">
+            </td>
             <td style="padding:6px 8px">
               <select onchange="changeUserRole(${u.id}, this.value)" style="font-size:12px">
                 ${['viewer','operator','admin'].map(r =>
@@ -131,15 +137,22 @@ async function loadUsers() {
   } catch(e) { console.error('loadUsers', e); }
 }
 
+async function saveUserEmail(id, email) {
+  try { await api('PUT', `/api/users/${id}`, { email: email.trim().toLowerCase() }); }
+  catch(e) { toast('Ошибка сохранения email: ' + e.message); }
+}
+
 async function addUser() {
   const username = document.getElementById('new-user-username')?.value.trim();
   const password = document.getElementById('new-user-password')?.value;
+  const email    = document.getElementById('new-user-email')?.value.trim().toLowerCase();
   const role     = document.getElementById('new-user-role')?.value;
   if (!username || !password) { toast('Введите логин и пароль'); return; }
   try {
-    await api('POST', '/api/users', { username, password, role });
+    await api('POST', '/api/users', { username, password, role, email });
     document.getElementById('new-user-username').value = '';
     document.getElementById('new-user-password').value = '';
+    document.getElementById('new-user-email').value = '';
     toast(`Пользователь ${username} создан`);
     await loadUsers();
   } catch(e) { toast('Ошибка: ' + e.message); }

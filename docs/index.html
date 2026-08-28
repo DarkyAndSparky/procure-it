@@ -333,7 +333,7 @@
 <aside class="sidebar">
   <div class="sidebar-logo">
     <h1>procure-it</h1>
-    <span class="version"><!--VERSION-->26w34-b06<!--/VERSION--></span>
+    <span class="version"><!--VERSION-->26w34-b07<!--/VERSION--></span>
   </div>
   <div class="nav-section">Начало</div>
   <a href="#intro"     class="nav-link active">О проекте</a>
@@ -374,7 +374,7 @@
     <h1>procure-it</h1>
     <p>Self-hosted web tool for IT asset procurement — manage purchase requests, calculate prices, generate Excel sheets and specifications.</p>
     <div class="badges">
-      <span class="badge badge-blue"><!--VERSION-->26w34-b06<!--/VERSION--></span>
+      <span class="badge badge-blue"><!--VERSION-->26w34-b07<!--/VERSION--></span>
       <span class="badge badge-green">MIT</span>
       <span class="badge badge-green">Node.js 18+</span>
       <span class="badge badge-blue">SQLite</span>
@@ -474,7 +474,7 @@
         <tr><td><code>admin</code></td><td>Всё, что может operator, плюс пользователи, настройки, восстановление из бэкапа</td></tr>
       </table>
     </div>
-    <p>При первом запуске автоматически создаётся администратор — <strong>логин <code>admin</code>, пароль <code>admin0000</code></strong> — и приложение сразу требует сменить пароль. Управление остальными пользователями — в боковом меню (только для admin).</p>
+    <p>При первом запуске автоматически создаётся администратор — <strong>логин <code>admin</code>, случайный пароль</strong> (выводится в консоль при старте) — и приложение сразу требует сменить пароль. Управление остальными пользователями — в пункте <strong>«Учётные записи»</strong> бокового меню (только для admin).</p>
     <div class="alert alert-warn">
       <code>PROCURE_PASSWORD</code> — это <strong>legacy-заглушка</strong>, а не основной механизм входа: она работает только пока в базе вообще нет ни одного пользователя (например, самый первый запуск до первого входа через интерфейс). Как только появился хотя бы один пользователь, <code>PROCURE_PASSWORD</code> игнорируется — доступом управляют через интерфейс.
     </div>
@@ -713,7 +713,10 @@ POST /api/restore    → восстановить из JSON</pre>
       <tr><td><span class="method POST">POST</span>/api/auth/change-password</td><td>Сменить свой пароль (body: <code>{currentPassword?, newPassword}</code> — currentPassword не нужен при принудительной смене временного пароля)</td></tr>
       <tr><td><span class="method GET">GET</span>/api/users</td><td>Список пользователей <em>(admin)</em></td></tr>
       <tr><td><span class="method POST">POST</span>/api/users</td><td>Создать пользователя <em>(admin)</em></td></tr>
-      <tr><td><span class="method PUT">PUT</span>/api/users/:id</td><td>Изменить роль/пароль <em>(admin)</em></td></tr>
+      <tr><td><span class="method GET">GET</span>/api/auth/reset-password-info</td><td>Проверить, настроен ли SMTP для сброса пароля <em>(public)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/auth/reset-password-request</td><td>Запросить сброс пароля по email (body: <code>{email}</code>) — всегда отвечает <code>ok:true</code> <em>(public)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/auth/reset-password</td><td>Применить новый пароль по токену (body: <code>{token, newPassword}</code>) <em>(public)</em></td></tr>
+      <tr><td><span class="method PUT">PUT</span>/api/users/:id</td><td>Изменить роль / пароль / email (body: <code>{role?, password?, email?}</code>) <em>(admin)</em></td></tr>
       <tr><td><span class="method DELETE">DELETE</span>/api/users/:id</td><td>Удалить (нельзя удалить последнего admin) <em>(admin)</em></td></tr>
     </table></div>
 
@@ -770,12 +773,15 @@ POST /api/restore    → восстановить из JSON</pre>
       <tr><td><span class="method GET">GET</span>/api/audit</td><td>История изменений (<code>?request_id=&amp;limit=50</code>) <em>(operator)</em></td></tr>
       <tr><td><span class="method GET">GET</span>/api/settings</td><td>Настройки приложения (логотип, цвета, webhook) <em>(operator, часть полей скрыта)</em></td></tr>
       <tr><td><span class="method PUT">PUT</span>/api/settings</td><td>Сохранить настройки <em>(admin)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/settings/smtp-test</td><td>Проверить SMTP и отправить тестовое письмо (body: <code>{to}</code>) <em>(admin)</em></td></tr>
       <tr><td><span class="method GET">GET</span>/api/version</td><td>Версия приложения <em>(operator)</em></td></tr>
       <tr><td><span class="method POST">POST</span>/api/spec-docx</td><td>Сгенерировать спецификацию в .docx <em>(operator)</em></td></tr>
       <tr><td><span class="method POST">POST</span>/api/send-bitrix</td><td>Отправить заявку в Bitrix24 через webhook <em>(operator)</em></td></tr>
     </table></div>
     <div class="alert alert-warn">
-      Операторам (не admin) в ответе <code>GET /api/settings</code> скрыты инфраструктурные поля: сетевая папка/логин/пароль и webhook'и Bitrix/статусов.
+      Операторам (не admin) в ответе <code>GET /api/settings</code> скрыты инфраструктурные поля: сетевая папка/логин/пароль, webhook'и Bitrix/статусов и SMTP-параметры (smtpHost/smtpUser/smtpPass/smtpFrom).
+      <br><br>
+      <strong>SMTP (сброс пароля и уведомления).</strong> Настраивается в разделе «Настройки» → блок «📧 SMTP». Поддерживаются любые SMTP-серверы (Yandex, Gmail, корпоративный Exchange/Postfix). После заполнения полей кнопка «Тест соединения» отправляет тестовое письмо через <code>POST /api/settings/smtp-test</code>. Когда SMTP настроен, на странице логина появляется ссылка «Забыли пароль?» — пользователь вводит email, получает письмо со ссылкой <code>/reset-password?token=...</code> (токен действует 1 час). Если SMTP не настроен — показывается инструкция «обратитесь к администратору», который может сбросить пароль вручную кнопкой 🔑 в разделе «Учётные записи».
     </div>
   </section>
 
@@ -802,7 +808,7 @@ POST /api/restore    → восстановить из JSON</pre>
 cd procure-it
 
 docker compose up -d</pre>
-    <p>Встроенная система ролей включена всегда — при первом запуске автоматически создаётся администратор (<strong>admin / admin0000</strong>), приложение сразу попросит сменить пароль. <code>PROCURE_PASSWORD</code> не обязателен — это legacy-заглушка на случай самого первого запуска без доступа к интерфейсу, см. <a href="#config" style="color:var(--accent)">«Аутентификация»</a>.</p>
+    <p>Встроенная система ролей включена всегда — при первом запуске автоматически создаётся администратор (<strong>логин <code>admin</code>, случайный пароль выводится в консоль</strong>), приложение сразу попросит сменить пароль. <code>PROCURE_PASSWORD</code> не обязателен — это legacy-заглушка на случай самого первого запуска без доступа к интерфейсу, см. <a href="#config" style="color:var(--accent)">«Аутентификация»</a>.</p>
 
     <div class="alert alert-warn">
       При первом открытии браузер покажет предупреждение о сертификате.<br>
@@ -900,8 +906,13 @@ docker exec -it procure-it sh # войти в контейнер</pre>
     <h3>Тесты</h3>
     <p>Встроенный тест-раннер Node (<code>node --test</code>), без новых зависимостей:</p>
     <pre>npm test</pre>
-    <p>Покрытие: формула расчёта цены с наценкой и долей доставки (<code>public/js/pricing-core.js</code> — общий модуль, используется и формой заявки, и Excel-экспортом, чтобы не рассинхронизироваться), генерация <code>.docx</code> (табуляция вместо <code>w:ind</code>, невидимые границы служебных таблиц, ширина таблицы, содержимое по типам документа), миграция схемы БД, парсер <code>CHANGELOG.md</code>. Подключено в CI (<code>.github/workflows/ci.yml</code>).</p>
-    <p>Отдельный слой — интеграционные тесты (<code>test/http-functional.test.js</code>, <code>test/http-security.test.js</code>): поднимают настоящий сервер дочерним процессом в изолированной временной папке данных (<code>PROCURE_DATA_DIR</code>) и бьют по нему реальным HTTP — роли и доступ, уникальность номера спецификации, path traversal в файловых маршрутах, SQL-инъекции через фильтры, rate limiting, security-заголовки, инвалидация сессии после смены пароля.</p>
+    <p>Покрытие: формула расчёта цены с наценкой и долей доставки (<code>public/js/pricing-core.js</code> — общий модуль, используется и формой заявки, и Excel-экспортом, и сервером при пересчёте итоговых сумм заявки, чтобы не рассинхронизироваться), генерация <code>.docx</code> (табуляция вместо <code>w:ind</code>, невидимые границы служебных таблиц, ширина таблицы, содержимое по типам документа), миграция схемы БД, парсер <code>CHANGELOG.md</code>, аутентификация (соль-на-пользователя, миграция legacy-хэшей, timing-safe сравнение), валидация позиций и восстановление из бэкапа. Подключено в CI (<code>.github/workflows/ci.yml</code>).</p>
+
+    <h3>E2e-тесты (Playwright)</h3>
+    <p>Отдельный слой поверх unit-тестов — гоняет настоящий Chromium против настоящего сервера (реальные клики, реальная форма логина, а не только HTTP-запросы напрямую):</p>
+    <pre>npx playwright install chromium   # один раз
+npm run test:e2e</pre>
+    <p>Сеттап-проект (<code>e2e/auth.setup.js</code>) заводит admin/operator/viewer через API один раз на весь прогон и сохраняет сессию (<code>storageState</code> — токен в <code>localStorage</code>, приложение не использует куки для сессии), остальные тесты подключают готовую сессию вместо повторного прохождения формы логина. Покрытие: логин-форма и гостевой режим, организации (создание, дубликат короткого названия, редактирование, удаление), полный цикл заявки (создание с проверкой формулы наценки прямо в форме → сохранение → поиск в реестре → смена статуса → редактирование с пересчётом суммы → удаление), ролевые границы viewer/operator/admin — включая прямые API-запросы в обход UI (403/400 от сервера, не только «кнопка скрыта»). Сервер поднимается на изолированной временной директории данных (<code>PROCURE_DATA_DIR</code>) — не трогает <code>data/</code> репозитория. Пока не подключено в CI — прогоняется вручную.</p>
 
     <h3>CHANGELOG.md</h3>
     <p><code>CHANGELOG.md</code> в формате <a href="https://keepachangelog.com/ru/1.0.0/" target="_blank" style="color:var(--accent)">Keep a Changelog</a> — единственный источник истины по истории изменений. Раздел «Последние изменения» на странице <a href="#about-page" style="color:var(--accent)">«О системе»</a> парсит именно этот файл, отдельного списка в коде нет.</p>
@@ -945,7 +956,7 @@ git checkout dev</pre>
   </section>
 
   <div style="border-top:1px solid var(--border);margin-top:48px;padding-top:24px;color:var(--text2);font-size:12px;display:flex;justify-content:space-between;align-items:center">
-    <span>procure-it <!--VERSION-->26w34-b06<!--/VERSION--> · MIT License</span>
+    <span>procure-it <!--VERSION-->26w34-b07<!--/VERSION--> · MIT License</span>
     <a href="https://github.com/DarkyAndSparky" style="color:var(--text2);text-decoration:none">© DarkyAndSparky</a>
   </div>
 

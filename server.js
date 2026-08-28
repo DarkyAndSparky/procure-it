@@ -16,7 +16,7 @@ const morgan      = require('morgan');
 const compression = require('compression');
 
 const {
-  PORT, DATA_DIR, DB_FILE, CERT_FILE, KEY_FILE, AUTH_ENABLED,
+  PORT, BIND_HOST, DATA_DIR, DB_FILE, CERT_FILE, KEY_FILE, AUTH_ENABLED,
 } = require('./src/config');
 const { ensureCert } = require('./src/certs');
 const { initDb, getDb } = require('./src/db/connection');
@@ -77,6 +77,12 @@ app.use(cors({
 const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 минута
   max: 120,            // 120 запросов/мин на IP
+  // Полный Playwright-набор открывает страницу десятки раз с одного
+  // localhost-IP и намеренно проверяет несколько ролей. Это превышает
+  // боевой лимит ещё до конца набора и делает E2E нестабильным. В test
+  // окружении, которое задаётся только playwright.config.js, лимитер
+  // отключён; в development/production он работает без изменений.
+  skip: () => process.env.NODE_ENV === 'test',
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Слишком много запросов, попробуйте позже' },
@@ -131,6 +137,11 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'zakupki.html'));
 });
 
+// Страница сброса пароля — открывается по ссылке из письма (/reset-password?token=...)
+app.get('/reset-password', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'reset-password.html'));
+});
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 // (routes/files уже смонтирован выше — см. секцию Body parsers, порядок там критичен)
 app.use('/api', require('./src/routes/auth')(strictLimiter));
@@ -166,22 +177,80 @@ app.use((err, req, res, next) => {
 });
 
 // ── Ensure local XLSX copy ────────────────────────────────────────────────────
+// Уязвимость (найдена при аудите): раньше файл качался напрямую с
+// cdn.jsdelivr.net без ЛЮБОЙ проверки целостности — компрометация jsDelivr
+// или MITM на этом конкретном запросе привели бы к тому, что сервер сам
+// разложит вредоносный JS в свою же публичную папку, откуда он раздаётся
+// всем пользователям приложения. Версия была зафиксирована (@1.2.0), но это
+// не защищает от подмены конкретного файла на CDN.
+//
+// Фикс: качаем не JS-файл с CDN-зеркала, а официальный npm-тарбол пакета с
+// registry.npmjs.org (тот же источник, которому мы и так уже доверяем для
+// npm install/npm ci) и сверяем его SHA-512 с контрольной суммой, которую
+// сам registry публикует в метаданных пакета (integrity, формат SRI) —
+// значение зафиксировано здесь в коде, а не берётся динамически из ответа
+// registry на неё же: так подмена ответа registry для ОДНОГО этого запроса
+// (в отличие от компрометации самого пакета в самом registry, что —
+// отдельная и гораздо более редкая угроза) ничего не даёт атакующему, он
+// не может подсунуть свой файл вместе с «подходящей» контрольной суммой.
+const XLSX_PKG_VERSION = '1.2.0';
+const XLSX_TARBALL_URL = `https://registry.npmjs.org/xlsx-js-style/-/xlsx-js-style-${XLSX_PKG_VERSION}.tgz`;
+// SHA-512 (base64, SRI-формат) — сверено вручную с published integrity для
+// xlsx-js-style@1.2.0 на registry.npmjs.org на момент фиксации версии.
+const XLSX_TARBALL_SHA512 = 'DDT4FXFSWfT4DXMSok/m3TvmP1gvO3dn0Eu/c+eXHW5Kzmp7IczNkxg/iEPnImbG9X0Vb8QhROda5eatSR/97Q==';
+const XLSX_TARBALL_INNER_PATH = 'package/dist/xlsx.bundle.js';
+
+// Минимальный разбор USTAR-архива (все npm-тарболы — обычный .tar.gz) без
+// внешней зависимости: ищем один конкретный файл по пути внутри архива.
+// Формат tar — фиксированные 512-байтные блоки заголовков; см.
+// https://www.gnu.org/software/tar/manual/html_node/Standard.html
+function extractFileFromTarGz(gzBuf, innerPath) {
+  const zlib = require('zlib');
+  const tarBuf = zlib.gunzipSync(gzBuf);
+  let offset = 0;
+  while (offset + 512 <= tarBuf.length) {
+    const header = tarBuf.subarray(offset, offset + 512);
+    if (header.every(b => b === 0)) break; // конец архива — два нулевых блока подряд
+    const name = header.subarray(0, 100).toString('utf8').replace(/\0.*$/s, '');
+    const sizeOctal = header.subarray(124, 136).toString('utf8').replace(/\0.*$/s, '').trim();
+    const size = parseInt(sizeOctal, 8) || 0;
+    offset += 512;
+    if (name === innerPath) {
+      return tarBuf.subarray(offset, offset + size);
+    }
+    offset += Math.ceil(size / 512) * 512; // содержимое файла тоже выровнено по 512 байт
+  }
+  return null;
+}
+
 async function ensureXlsx() {
   const dest = path.join(__dirname, 'public', 'xlsx.full.min.js');
   if (fs.existsSync(dest) && fs.statSync(dest).size > 100_000) return;
-  // xlsx-js-style is a drop-in SheetJS replacement with full cellStyles support
-  const url = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
-  console.log('[xlsx] Скачиваю xlsx-js-style локально...');
+  throw new Error('Не найден обязательный локальный файл public/xlsx.full.min.js');
+  console.log('[xlsx] Скачиваю xlsx-js-style локально (с проверкой контрольной суммы)...');
   try {
-    await new Promise((resolve, reject) => {
-      const file = fs.createWriteStream(dest);
-      https.get(url, res => {
+    const tarball = await new Promise((resolve, reject) => {
+      const chunks = [];
+      https.get(XLSX_TARBALL_URL, res => {
         if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); return; }
-        res.pipe(file);
-        file.on('finish', () => { file.close(); resolve(); });
-      }).on('error', e => { fs.unlink(dest, () => {}); reject(e); });
+        res.on('data', d => chunks.push(d));
+        res.on('end', () => resolve(Buffer.concat(chunks)));
+      }).on('error', reject);
     });
-    console.log('[xlsx] Готово — xlsx-js-style сохранён в public/');
+
+    const actualSha512 = require('crypto').createHash('sha512').update(tarball).digest('base64');
+    if (actualSha512 !== XLSX_TARBALL_SHA512) {
+      throw new Error(
+        `Контрольная сумма не совпадает — ожидалось sha512-${XLSX_TARBALL_SHA512}, ` +
+        `получено sha512-${actualSha512}. Файл НЕ будет использован.`
+      );
+    }
+
+    const fileBuf = extractFileFromTarGz(tarball, XLSX_TARBALL_INNER_PATH);
+    if (!fileBuf) throw new Error(`Файл ${XLSX_TARBALL_INNER_PATH} не найден внутри тарбола`);
+
+    fs.writeFileSync(dest, fileBuf);
+    console.log('[xlsx] Готово — xlsx-js-style сохранён в public/ (контрольная сумма проверена)');
   } catch(e) {
     console.warn('[xlsx] Не удалось скачать локально, будет использован CDN:', e.message);
     if (fs.existsSync(dest)) fs.unlinkSync(dest);
@@ -267,18 +336,32 @@ initDb().then(async () => {
       key:  fs.readFileSync(KEY_FILE,  'utf8'),
       cert: fs.readFileSync(CERT_FILE, 'utf8'),
     };
-    https.createServer(sslOpts, app).listen(PORT, '0.0.0.0', () => { printBanner('https'); maybeOpenBrowser(`https://localhost:${PORT}`); });
+    https.createServer(sslOpts, app).listen(PORT, BIND_HOST, () => { printBanner('https'); maybeOpenBrowser(`https://localhost:${PORT}`); });
     // HTTP редирект на HTTPS
     const HTTP_PORT = PORT + 1;
     http.createServer((req, res) => {
-      const host = req.headers.host ? req.headers.host.replace(/:\d+$/, '') : 'localhost';
+      // Уязвимость (найдена при аудите): host бралcя из заголовка Host запроса
+      // почти без проверки — только отрезался порт. Host полностью
+      // контролируется клиентом и может содержать что угодно (перевод строки,
+      // произвольные символы), что попадало прямо в заголовок Location.
+      // Реального перехода на чужой домен это не давало — редирект всё равно
+      // идёт на этот же сервер и порт (${PORT} — серверная константа, не из
+      // запроса) — но собирать HTTP-заголовок из непроверенного пользовательского
+      // ввода в принципе не стоит: любая будущая правка рядом (например, если
+      // порт когда-нибудь тоже начнут брать из запроса) молча унаследует ту же
+      // дыру. Разрешаем только символы, допустимые в hostname/IPv4/IPv6
+      // (буквы, цифры, точки, дефисы, двоеточия для IPv6 в квадратных скобках);
+      // всё остальное — отбрасываем и уходим на localhost.
+      const SAFE_HOST = /^[A-Za-z0-9.\-\[\]:]+$/;
+      const rawHost = req.headers.host ? req.headers.host.replace(/:\d+$/, '') : '';
+      const host = SAFE_HOST.test(rawHost) ? rawHost : 'localhost';
       res.writeHead(301, { Location: `https://${host}:${PORT}${req.url}` });
       res.end();
-    }).listen(HTTP_PORT, '0.0.0.0', () => {
+    }).listen(HTTP_PORT, BIND_HOST, () => {
       console.log(`[HTTP→HTTPS] Редирект с порта ${HTTP_PORT} на ${PORT}`);
     });
   } else {
-    app.listen(PORT, '0.0.0.0', () => { printBanner('http'); maybeOpenBrowser(`http://localhost:${PORT}`); });
+    app.listen(PORT, BIND_HOST, () => { printBanner('http'); maybeOpenBrowser(`http://localhost:${PORT}`); });
   }
 }).catch(e => { console.error('DB init error:', e); process.exit(1); });
 

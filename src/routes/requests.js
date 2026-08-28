@@ -32,40 +32,59 @@ function validatePositions(positions) {
 // из тела запроса как есть, без сверки с positions — баг в клиентском
 // расчёте (или намеренно изменённый через devtools запрос от operator)
 // тихо сохранялся бы как «official» сумма заявки и уходил дальше в
-// спецификацию/счёт/Bitrix без единой проверки. Полный пересчёт и жёсткое
-// отклонение — за рамками этой правки (нужно решить, что делать с уже
-// накопленными расхождениями и legacy-заявками), но логировать — дёшево и
-// не меняет поведение сохранения. round2 — тот же допуск, что и в самой
-// формуле (calcRowPricing), плюс небольшой эпсилон на накопление ошибки
-// округления по многим строкам.
-function logTotalsMismatch(id, r) {
+// спецификацию/счёт/Bitrix без единой проверки. Раньше это только
+// логировалось (см. историю в CHANGELOG/ROADMAP) — сознательно отложенное
+// решение, которое перед слиянием в main решили не откладывать дальше:
+// теперь сервер сам считает totalPurchase/total из positions той же
+// формулой (calcRowPricing — общий модуль для браузера и Node, см. его
+// комментарий) и полностью игнорирует то, что прислал клиент в этих двух
+// полях. Позиционные суммы (purchaseSum/sellPerUnit/sellSum ВНУТРИ каждой
+// строки) по-прежнему приходят от клиента как есть — не трогаем: это 1:1
+// то же самое отображение, что видел пользователь в форме перед
+// сохранением, и трогать их — отдельная, более крупная правка (пришлось
+// бы тащить на сервер весь calcRowPricing-пайплайн для каждой строки,
+// включая распределение доли доставки), не обязательная для закрытия
+// именно этой дыры — итоговые total/totalPurchase проверяются, что
+// решает вопрос «нельзя тихо подделать сумму заявки».
+function computeAuthoritativeTotals(id, r) {
+  const positions = Array.isArray(r.positions) ? r.positions : [];
+  const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
   try {
-    const positions = Array.isArray(r.positions) ? r.positions : [];
-    if (!positions.length) return;
-    const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
-    const expectedTotalPurchase = round2(positions.reduce((s, p) => s + (Number(p.purchasePrice)||0) * (Number(p.qty)||0), 0));
+    const totalPurchase = round2(positions.reduce((s, p) => s + (Number(p.purchasePrice)||0) * (Number(p.qty)||0), 0));
     const markupFrac = (r.markup !== undefined && r.markup !== null ? Number(r.markup) : 5) / 100;
-    const expectedTotal = round2(positions.reduce((s, p) => {
+    const total = round2(positions.reduce((s, p) => {
       const { sellSum } = calcRowPricing({
         purchasePrice: Number(p.purchasePrice) || 0,
         qty: Number(p.qty) || 0,
-        totalPurchase: expectedTotalPurchase,
+        totalPurchase,
         deliveryCost: Number(r.deliveryCost) || 0,
         markup: markupFrac,
       });
       return s + sellSum;
     }, 0));
+
+    // Расхождение с тем, что прислал клиент, больше не решает, что попадёт
+    // в БД — но по-прежнему полезный сигнал: подсказывает баг в форме или
+    // рассинхронившуюся версию фронтенда, а не только попытку подделки.
     const EPS = 0.05 * positions.length + 0.02; // накопление копеечных округлений по строкам
     const gotTotalPurchase = Number(r.totalPurchase) || 0;
     const gotTotal = Number(r.total) || 0;
-    if (Math.abs(expectedTotalPurchase - gotTotalPurchase) > EPS || Math.abs(expectedTotal - gotTotal) > EPS) {
+    if (Math.abs(totalPurchase - gotTotalPurchase) > EPS || Math.abs(total - gotTotal) > EPS) {
       console.warn(
-        `[requests] Расхождение суммы заявки ${id}: ` +
-        `totalPurchase получено=${gotTotalPurchase} ожидалось=${expectedTotalPurchase}, ` +
-        `total получено=${gotTotal} ожидалось=${expectedTotal}`
+        `[requests] Пересчитана сумма заявки ${id}: ` +
+        `клиент прислал totalPurchase=${gotTotalPurchase}/total=${gotTotal}, ` +
+        `сервер сохраняет totalPurchase=${totalPurchase}/total=${total}`
       );
     }
-  } catch(e) { /* сверка — best-effort, не должна ронять сохранение заявки */ }
+    return { totalPurchase, total };
+  } catch(e) {
+    // Даже если calcRowPricing упал на каких-то экзотических данных —
+    // не откатываемся на «доверять клиенту», а считаем максимально грубо,
+    // но всё ещё из positions, не из тела запроса.
+    console.warn(`[requests] computeAuthoritativeTotals упал на заявке ${id}, грубый пересчёт:`, e.message);
+    const totalPurchase = round2(positions.reduce((s, p) => s + (Number(p.purchasePrice)||0) * (Number(p.qty)||0), 0));
+    return { totalPurchase, total: totalPurchase };
+  }
 }
 
 // ── REQUESTS ──────────────────────────────────────────────────────────────────
@@ -137,12 +156,12 @@ router.post('/requests', operatorOrAdmin, (req, res) => {
     const dup = query('SELECT id FROM requests WHERE spec_num=? AND org_id=?', [r.specNum, r.orgId||''])[0];
     if (dup) return res.status(409).json({ error: `Спецификация с номером «${r.specNum}» уже существует у этой организации. Обновите страницу и попробуйте снова.` });
   }
-  logTotalsMismatch(id, r);
+  const { totalPurchase, total } = computeAuthoritativeTotals(id, r);
   const ok = run(`INSERT INTO requests (id,spec_num,org_id,org_full,org_short,org_signatory,org_stamp,bitrix,name,mol,date,address,supplier,invoice_num,contract,status,comment,is_realization,delivery_cost,markup,total_purchase,total,positions,doc_type,counterparty,warranty_period) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [id, r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
      r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
      r.status||'new', r.comment||'', r.isRealization?1:0,
-     r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,
+     r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), totalPurchase, total,
      JSON.stringify(r.positions||[]), r.docType || 'goods', r.counterparty||'', r.warrantyPeriod||'']);
   if (!ok) return res.status(500).json({ error: 'Не удалось сохранить заявку. Возможно, номер спецификации уже занят — обновите страницу и попробуйте снова.' });
   auditLog('CREATE', id, null, null, r.specNum, { name: r.name, org: r.orgShort });
@@ -155,6 +174,10 @@ router.put('/requests/:id', operatorOrAdmin, (req, res) => {
   const positionsError = validatePositions(r.positions);
   if (positionsError) return res.status(400).json({ error: positionsError });
   if (r.status && !ALLOWED_STATUSES.includes(r.status)) r.status = 'new';
+  // Считаем authoritative-суммы ДО diff-блока ниже — сравнение изменений
+  // должно идти против того, что реально попадёт в БД, а не против
+  // непроверенных чисел из тела запроса (см. computeAuthoritativeTotals).
+  const { totalPurchase, total } = computeAuthoritativeTotals(req.params.id, r);
   // Compute field-level diff against current state
   const prev = query('SELECT * FROM requests WHERE id=?', [req.params.id])[0];
   if (!prev) return res.status(404).json({ error: 'Заявка не найдена' });
@@ -206,8 +229,8 @@ router.put('/requests/:id', operatorOrAdmin, (req, res) => {
     if (prevPos.length !== newPos.length) {
       diffFields.push({ field: 'positions_count', old: String(prevPos.length), new: String(newPos.length) });
     }
-    if (String(prev.total) !== String(r.total || 0)) {
-      diffFields.push({ field: 'total', old: String(prev.total), new: String(r.total || 0) });
+    if (String(prev.total) !== String(total)) {
+      diffFields.push({ field: 'total', old: String(prev.total), new: String(total) });
     }
   }
 
@@ -217,12 +240,11 @@ router.put('/requests/:id', operatorOrAdmin, (req, res) => {
     if (dup) return res.status(409).json({ error: `Спецификация с номером «${r.specNum}» уже существует у этой организации. Обновите страницу и попробуйте снова.` });
   }
 
-  logTotalsMismatch(req.params.id, r);
   const ok = run(`UPDATE requests SET spec_num=?,org_id=?,org_full=?,org_short=?,org_signatory=?,org_stamp=?,bitrix=?,name=?,mol=?,date=?,address=?,supplier=?,invoice_num=?,contract=?,status=?,comment=?,is_realization=?,delivery_cost=?,markup=?,total_purchase=?,total=?,positions=?,doc_type=?,counterparty=?,warranty_period=?,updated_at=datetime('now') WHERE id=?`,
     [r.specNum||'', r.orgId||'', r.orgFull||'', r.orgShort||'', r.orgSignatory||'', r.orgStamp !== undefined ? (r.orgStamp?'1':'0') : '1',
      r.bitrix||'', r.name, r.mol||'', r.date||'', r.address||'', r.supplier||'', r.invoiceNum||'', r.contract||'',
      r.status||'new', r.comment||'', r.isRealization?1:0,
-     r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), r.totalPurchase||0, r.total||0,
+     r.deliveryCost||0, (r.markup!==undefined&&r.markup!==null?r.markup:5), totalPurchase, total,
      JSON.stringify(r.positions||[]), r.docType || 'goods', r.counterparty||'', r.warrantyPeriod||'', req.params.id]);
   if (!ok) return res.status(500).json({ error: 'Не удалось сохранить заявку. Возможно, номер спецификации уже занят — обновите страницу и попробуйте снова.' });
   auditLog('UPDATE', req.params.id, 'request', null, r.specNum, { name: r.name, diff: diffFields });

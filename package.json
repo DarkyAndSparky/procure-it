@@ -1,12 +1,15 @@
 {
   "name": "procure-it",
-  "version": "26w34-b06",
+  "version": "26w34-b07",
   "description": "IT Asset Procurement Tool — web-based tool for managing IT equipment purchase requests, generating specifications and calculation sheets",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node --test test/*.test.js",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
     "prepare": "node scripts/install-hooks.js",
     "version:sync": "node scripts/sync-version.js"
   },
@@ -40,10 +43,12 @@
     "express-rate-limit": "^7.0.0",
     "helmet": "^8.0.0",
     "morgan": "^1.10.0",
+    "nodemailer": "^9.0.5",
     "selfsigned": "^2.4.1",
     "sql.js": "^1.10.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "playwright": "^1.62.1"
   }
 }

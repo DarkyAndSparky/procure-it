@@ -105,7 +105,28 @@ module.exports = (strictLimiter) => {
         // в старом дефолтном месте (на случай если папку бэкапа сменили
         // ПОСЛЕ того, как файлы туда уже были сохранены).
         const currentBackupDir = resolveBackupDir();
+        // Ищем файлы в снапшоте, соответствующем восстанавливаемой DB
+        // (files_<stamp>/), затем в общем зеркале files_mirror (старые бэкапы),
+        // затем в дефолтном месте. Порядок важен: снапшот гарантированно
+        // синхронен с DB, зеркало — нет.
+        const dbFiles = fs.readdirSync(currentBackupDir)
+          .filter(f => f.startsWith('zakupki_') && f.endsWith('.db'))
+          .sort().reverse(); // свежий снапшот первым
+        const snapshotCandidates = dbFiles.map(f => {
+          const stamp = f.replace(/^zakupki_/, '').replace(/\.db$/, '');
+          return path.join(currentBackupDir, `files_${stamp}`);
+        });
+        if (currentBackupDir !== BACKUP_DIR) {
+          const altFiles = fs.existsSync(BACKUP_DIR) ? fs.readdirSync(BACKUP_DIR)
+            .filter(f => f.startsWith('zakupki_') && f.endsWith('.db'))
+            .sort().reverse() : [];
+          altFiles.forEach(f => {
+            const stamp = f.replace(/^zakupki_/, '').replace(/\.db$/, '');
+            snapshotCandidates.push(path.join(BACKUP_DIR, `files_${stamp}`));
+          });
+        }
         const FILES_MIRROR_CANDIDATES = [
+          ...snapshotCandidates,
           path.join(currentBackupDir, 'files_mirror'),
           path.join(BACKUP_DIR, 'files_mirror'),
         ];

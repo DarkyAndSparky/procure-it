@@ -152,6 +152,12 @@ async function saveConfig() {
     supplierSignatory: document.getElementById('cfg-supplier-signatory')?.value.trim() || '',
     supplierStamp:     document.getElementById('cfg-supplier-stamp')?.checked ? '1' : '0',
     backupFolder:      document.getElementById('cfg-backup-folder')?.value.trim() || '',
+    smtpHost:    document.getElementById('cfg-smtp-host')?.value.trim() || '',
+    smtpPort:    document.getElementById('cfg-smtp-port')?.value.trim() || '587',
+    smtpSecure:  document.getElementById('cfg-smtp-secure')?.checked ? '1' : '0',
+    smtpUser:    document.getElementById('cfg-smtp-user')?.value.trim() || '',
+    smtpPass:    document.getElementById('cfg-smtp-pass')?.value || '',
+    smtpFrom:    document.getElementById('cfg-smtp-from')?.value.trim() || '',
   };
 
   await api('PUT', '/api/settings', payload);
@@ -284,6 +290,21 @@ function populateConfigPage() {
   if (st) st.checked = appConfig.supplierStamp === '1';
   const bf = document.getElementById('cfg-backup-folder');
   if (bf) bf.value = appConfig.backupFolder || '';
+
+  // SMTP
+  const sh = document.getElementById('cfg-smtp-host');
+  if (sh) sh.value = appConfig.smtpHost || '';
+  const sp = document.getElementById('cfg-smtp-port');
+  if (sp) sp.value = appConfig.smtpPort || '587';
+  const sec = document.getElementById('cfg-smtp-secure');
+  if (sec) sec.checked = appConfig.smtpSecure === '1';
+  const su = document.getElementById('cfg-smtp-user');
+  if (su) su.value = appConfig.smtpUser || '';
+  // Пароль не заполняем — показываем placeholder если уже задан
+  const spwd = document.getElementById('cfg-smtp-pass');
+  if (spwd) spwd.placeholder = appConfig.smtpPass ? '••••••••' : 'Пароль';
+  const sf = document.getElementById('cfg-smtp-from');
+  if (sf) sf.value = appConfig.smtpFrom || '';
 
   // Highlight active theme btn
   const curTheme = localStorage.getItem('zakupki_theme') || 'auto';
@@ -594,5 +615,36 @@ async function checkOutdatedPackages() {
   } finally {
     btn.disabled = false;
     btn.textContent = origText;
+  }
+}
+
+async function testSmtp() {
+  const to = document.getElementById('cfg-smtp-test-email')?.value.trim();
+  const result = document.getElementById('smtp-test-result');
+  if (!to) {
+    result.textContent = '← Укажите email для теста';
+    result.style.color = 'var(--warning, #f59e0b)';
+    return;
+  }
+  result.textContent = 'Проверяем…';
+  result.style.color = 'var(--text-muted)';
+  try {
+    // Сохраняем текущие SMTP-поля перед тестом — тест использует настройки из БД
+    const smtpPayload = {
+      smtpHost:   document.getElementById('cfg-smtp-host')?.value.trim() || '',
+      smtpPort:   document.getElementById('cfg-smtp-port')?.value.trim() || '587',
+      smtpSecure: document.getElementById('cfg-smtp-secure')?.checked ? '1' : '0',
+      smtpUser:   document.getElementById('cfg-smtp-user')?.value.trim() || '',
+      smtpPass:   document.getElementById('cfg-smtp-pass')?.value || '',
+      smtpFrom:   document.getElementById('cfg-smtp-from')?.value.trim() || '',
+    };
+    // Сохраняем только SMTP-поля (не трогаем остальные настройки)
+    await api('PUT', '/api/settings', smtpPayload);
+    const r = await api('POST', '/api/settings/smtp-test', { to });
+    result.textContent = `✅ Письмо отправлено на ${to}`;
+    result.style.color = 'var(--success)';
+  } catch(e) {
+    result.textContent = '❌ ' + (e.message || 'Ошибка');
+    result.style.color = 'var(--danger)';
   }
 }

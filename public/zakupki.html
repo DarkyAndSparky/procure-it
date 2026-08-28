@@ -4,25 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Закупки — IT Assets</title>
-<script src="/xlsx.full.min.js" onerror="window._xlsxLocal=false"></script>
-<script>
-// xlsx-js-style is a drop-in replacement for SheetJS that actually supports cellStyles
-// in the community version. Falls back to plain CDN if local copy is missing.
-if (typeof XLSX === 'undefined') {
-  const s = document.createElement('script');
-  // Try xlsx-js-style from CDN first (supports cellStyles)
-  s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
-  s.crossOrigin = 'anonymous';
-  s.onerror = function() {
-    // Last-resort fallback to plain SheetJS (no styles)
-    const s2 = document.createElement('script');
-    s2.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    s2.crossOrigin = 'anonymous';
-    document.head.appendChild(s2);
-  };
-  document.head.appendChild(s);
-}
-</script>
+<script src="/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -64,6 +46,10 @@ if (typeof XLSX === 'undefined') {
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
       Организации
     </button>
+    <button class="nav-item" id="nav-users" onclick="showPage('config'); setTimeout(()=>document.getElementById('users-section')?.scrollIntoView({behavior:'smooth'}),100)" data-role-min="admin">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Учётные записи
+    </button>
     <button class="nav-item" id="nav-config" onclick="showPage('config')" data-role-min="admin">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       Настройки
@@ -77,7 +63,7 @@ if (typeof XLSX === 'undefined') {
   <!-- О системе — компактный блок внизу сайдбара -->
   <div class="sidebar-about" style="margin-top:auto;padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);line-height:1.7">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-      <span onclick="showPage('about')" style="cursor:pointer" title="Открыть «О системе»">Версия <span id="about-version" style="font-family:monospace;color:var(--text-secondary)">…</span></span>
+      <span id="about-version-link" title="Версия приложения">Версия <span id="about-version" style="font-family:monospace;color:var(--text-secondary)">…</span></span>
       <a href="https://github.com/DarkyAndSparky/procure-it" target="_blank" rel="noopener"
          title="Открыть репозиторий на GitHub"
          style="display:inline-flex;align-items:center;gap:4px;color:var(--text-secondary);text-decoration:none;padding:2px 8px;border:1px solid var(--border);border-radius:12px">
@@ -108,8 +94,9 @@ if (typeof XLSX === 'undefined') {
       <span class="topbar-title" id="page-title">Новая заявка</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
+      <button class="theme-toggle" id="login-btn" onclick="showLoginModal()" title="Войти в учётную запись" style="font-size:15px">🔑</button>
       <button class="theme-toggle" id="logout-btn" onclick="doLogout()" title="Выйти" style="display:none;font-size:15px">🔓</button>
-      <button class="theme-toggle" id="change-pw-btn" onclick="showChangePasswordModal(false)" title="Сменить пароль" style="display:none;font-size:15px">🔑</button>
+      <button class="theme-toggle" id="change-pw-btn" onclick="showChangePasswordModal(false)" title="Сменить пароль" style="display:none;font-size:15px">🗝️</button>
       <span id="role-badge" onclick="showPage('config')" style="display:none;cursor:pointer;font-size:11px;color:var(--text-muted);padding:3px 8px;background:var(--surface-2);border-radius:12px;border:1px solid var(--border)"></span>
       <button class="theme-toggle" onclick="showShortcutsHelp()" title="Горячие клавиши [?]" style="font-size:15px">⌨️</button>
       <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" title="Сменить тему">🌙</button>
@@ -610,13 +597,14 @@ if (typeof XLSX === 'undefined') {
       </div>
 
       <!-- Users Management (admin only) -->
-      <div class="card" style="max-width:680px;margin-top:16px" data-role-min="admin">
+      <div id="users-section" class="card" style="max-width:680px;margin-top:16px" data-role-min="admin">
         <div class="card-header">👥 Пользователи</div>
         <div class="card-body">
           <div id="users-list" style="margin-bottom:16px"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <input type="text" id="new-user-username" placeholder="Логин" style="width:120px">
-            <input type="password" id="new-user-password" placeholder="Пароль" style="width:120px">
+            <input type="text" id="new-user-username" placeholder="Логин" style="width:110px">
+            <input type="password" id="new-user-password" placeholder="Пароль" style="width:110px">
+            <input type="email" id="new-user-email" placeholder="Email (необяз.)" style="width:150px">
             <select id="new-user-role" style="width:120px">
               <option value="viewer">👁 Просмотр</option>
               <option value="operator" selected>✏️ Оператор</option>
@@ -661,6 +649,53 @@ if (typeof XLSX === 'undefined') {
             Смысл бэкапа — не хранить его там же, где рабочие данные: если сломается тот же диск, пропадёт и бэкап.
             Укажи путь на другом диске или сетевой ресурс (например <code>D:\Backups\zakupki</code> или <code>\\nas\backups\zakupki</code>).
             Оставь пустым — поведение как раньше (внутри проекта).
+          </div>
+        </div>
+      </div>
+
+      <!-- SMTP — для сброса пароля и будущих уведомлений -->
+      <div class="card" style="max-width:680px;margin-top:16px">
+        <div class="card-header">📧 SMTP — отправка email</div>
+        <div class="card-body">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5">
+            Используется для отправки ссылок сброса пароля.
+            Поддерживаются любые SMTP-серверы: Yandex, Gmail, Mail.ru, корпоративный Exchange/Postfix.
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 90px;gap:8px;margin-bottom:10px">
+            <div class="field" style="margin:0">
+              <label>Хост</label>
+              <input type="text" id="cfg-smtp-host" placeholder="smtp.yandex.ru" style="width:100%">
+            </div>
+            <div class="field" style="margin:0">
+              <label>Порт</label>
+              <input type="number" id="cfg-smtp-port" value="587" min="1" max="65535" style="width:100%">
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:10px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="cfg-smtp-secure" style="margin:0">
+              SSL/TLS (порт 465) — снимите для STARTTLS (587) или plain (25)
+            </label>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+            <div class="field" style="margin:0">
+              <label>Логин</label>
+              <input type="text" id="cfg-smtp-user" placeholder="user@example.com" autocomplete="off" style="width:100%">
+            </div>
+            <div class="field" style="margin:0">
+              <label>Пароль</label>
+              <input type="password" id="cfg-smtp-pass" autocomplete="new-password" style="width:100%">
+            </div>
+          </div>
+          <div class="field" style="margin-bottom:14px">
+            <label>Адрес отправителя (необязательно)</label>
+            <input type="email" id="cfg-smtp-from" placeholder="noreply@example.com" style="width:100%">
+            <div style="font-size:11px;color:var(--text-muted);margin-top:3px">Если пусто — используется логин</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button class="btn" onclick="testSmtp()" style="font-size:13px">📨 Тест соединения</button>
+            <input type="email" id="cfg-smtp-test-email" placeholder="ваш@email.com" style="font-size:13px;width:200px">
+            <span id="smtp-test-result" style="font-size:12px"></span>
           </div>
         </div>
       </div>

@@ -28,37 +28,58 @@ function doBackup() {
   try {
     const backupDir = resolveBackupDir();
     const db = getDb();
-    const data = db.export();
+
     const date = new Date().toISOString().slice(0, 10);
-    // Баг (найден при аудите перед слиянием dev→main): раньше время в имени
-    // файла бралось с точностью до МИНУТЫ (`toTimeString().slice(0,5)` —
-    // только часы:минуты, без секунд). Ручной бэкап админом в ту же минуту,
-    // что и плановый автобэкап (или два быстрых ручных подряд), давали
-    // одинаковое имя файла — второй тихо перезаписывал первый через
-    // fs.writeFileSync, без единого предупреждения. Добавлены секунды —
-    // коллизия для двух РЕАЛЬНО завершившихся бэкапов теперь практически
-    // исключена (нужно уложиться в одну и ту же секунду).
     const time = new Date().toTimeString().slice(0, 8).replace(/:/g, '-');
-    const fname = `zakupki_${date}_${time}.db`;
+    const stamp = `${date}_${time}`;
+
+    // Прикреплённые файлы (подписанные PDF-спецификации, счета) хранятся на
+    // диске отдельно от SQLite. Раньше бэкап DB и синхронизация файлов были
+    // независимыми операциями: DB-снапшот записывался первым, потом файлы
+    // синхронизировались в единое зеркало (files_mirror). Проблема: при
+    // восстановлении «старой» DB с «новым» зеркалом файлы не совпадали с
+    // заявками в базе — то, что ссылается на только что загруженный счёт,
+    // видело файл, появившийся ПО ФАКТУ в зеркале уже ПОСЛЕ этого снапшота.
+    //
+    // Решение: файлы и DB копируются в одну именованную папку снапшота
+    // (files_<stamp>/), а не в общее зеркало. Снапшот либо есть целиком,
+    // либо его нет. При восстановлении из этого снапшота DB и файлы
+    // гарантированно на одну версию. Старое зеркало files_mirror остаётся
+    // поддерживаться для совместимости — restore.js умеет искать там.
+    const snapshotFilesDir = path.join(backupDir, `files_${stamp}`);
+    let filesCopied = 0;
+    try {
+      for (const [srcDir, label] of [[SIGNED_DIR, 'signed_specs'], [INVOICE_DIR, 'invoices']]) {
+        const destDir = path.join(snapshotFilesDir, label);
+        fs.mkdirSync(destDir, { recursive: true });
+        if (!fs.existsSync(srcDir)) continue;
+        for (const entry of fs.readdirSync(srcDir)) {
+          fs.copyFileSync(path.join(srcDir, entry), path.join(destDir, entry));
+          filesCopied++;
+        }
+      }
+    } catch(e) {
+      console.error('[BACKUP] Ошибка копирования вложенных файлов в снапшот:', e.message);
+    }
+
+    // DB пишется ПОСЛЕ того как файлы снапшота уже скопированы — так
+    // наличие .db-файла служит сигналом «снапшот завершён»: если процесс
+    // упадёт на середине копирования файлов, .db не появится и такой
+    // неполный снапшот не будет использован при восстановлении.
+    const data = db.export();
+    const fname = `zakupki_${stamp}.db`;
     const fpath = path.join(backupDir, fname);
     fs.writeFileSync(fpath, Buffer.from(data));
 
-    // Прикреплённые файлы (подписанные PDF-спецификации, счета) хранятся на
-    // диске отдельно от SQLite (см. комментарий у /signed-spec — «avoids
-    // bloating SQLite with binary data»), поэтому сами по себе .db-снапшоты
-    // их не содержат и раньше эти файлы вообще не бэкапились. Держим
-    // единое зеркало (не версионируем на каждый запуск, чтобы не раздувать
-    // диск копиями одних и тех же PDF каждые 6 часов) — просто обновляем
-    // его текущим содержимым signed_specs/ и invoices/ при каждом бэкапе.
+    // Обновляем также общее зеркало files_mirror (без версионирования)
+    // для обратной совместимости со старым restore-кодом.
     const filesMirrorDir = path.join(backupDir, 'files_mirror');
-    let filesCopied = 0;
     try {
       for (const [srcDir, label] of [[SIGNED_DIR, 'signed_specs'], [INVOICE_DIR, 'invoices']]) {
         const destDir = path.join(filesMirrorDir, label);
         fs.mkdirSync(destDir, { recursive: true });
         if (!fs.existsSync(srcDir)) continue;
         const srcEntries = new Set(fs.readdirSync(srcDir));
-        // Копируем новые/изменившиеся файлы
         for (const entry of srcEntries) {
           const srcPath = path.join(srcDir, entry);
           const destPath = path.join(destDir, entry);
@@ -66,33 +87,36 @@ function doBackup() {
           const destStat = fs.existsSync(destPath) ? fs.statSync(destPath) : null;
           if (!destStat || destStat.mtimeMs < srcStat.mtimeMs || destStat.size !== srcStat.size) {
             fs.copyFileSync(srcPath, destPath);
-            filesCopied++;
           }
         }
-        // Убираем из зеркала файлы, удалённые из исходной папки
         for (const entry of fs.readdirSync(destDir)) {
           if (!srcEntries.has(entry)) fs.rmSync(path.join(destDir, entry), { force: true });
         }
       }
     } catch(e) {
-      console.error('[BACKUP] Ошибка синхронизации вложенных файлов:', e.message);
+      console.error('[BACKUP] Ошибка синхронизации files_mirror:', e.message);
     }
 
-    // Удаляем .db-снапшоты старше 30 дней (файловое зеркало не версионируется —
-    // оно всегда актуально и не растёт со временем)
-    const files = fs.readdirSync(backupDir)
-      .filter(f => f.endsWith('.db'))
-      .map(f => ({ name: f, time: fs.statSync(path.join(backupDir, f)).mtime }));
-
+    // Удаляем снапшоты (DB-файл + папку files_<stamp>) старше 30 дней.
     const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    files.forEach(f => {
-      if (f.time < cutoff) {
-        fs.unlinkSync(path.join(backupDir, f.name));
-        console.log('[BACKUP] Удалён старый бэкап:', f.name);
+    const entries = fs.readdirSync(backupDir);
+    for (const entry of entries) {
+      const entryPath = path.join(backupDir, entry);
+      const stat = fs.statSync(entryPath);
+      if (entry.endsWith('.db') && stat.mtimeMs < cutoff) {
+        fs.unlinkSync(entryPath);
+        console.log('[BACKUP] Удалён старый DB-снапшот:', entry);
+        // Удаляем и папку файлов этого же снапшота, если есть
+        const snapshotStamp = entry.replace(/^zakupki_/, '').replace(/\.db$/, '');
+        const snapshotDir = path.join(backupDir, `files_${snapshotStamp}`);
+        if (fs.existsSync(snapshotDir)) {
+          fs.rmSync(snapshotDir, { recursive: true, force: true });
+          console.log('[BACKUP] Удалена папка файлов снапшота:', `files_${snapshotStamp}`);
+        }
       }
-    });
+    }
 
-    console.log(`[BACKUP] ✓ ${fname} → ${backupDir} (${(data.byteLength / 1024).toFixed(1)} KB)${filesCopied ? `, файлов синхронизировано: ${filesCopied}` : ''}`);
+    console.log(`[BACKUP] ✓ ${fname} → ${backupDir} (${(data.byteLength / 1024).toFixed(1)} KB)${filesCopied ? `, файлов в снапшоте: ${filesCopied}` : ''}`);
   } catch(e) {
     console.error('[BACKUP] Ошибка:', e.message);
   }

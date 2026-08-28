@@ -7,6 +7,7 @@ const { sessionCreate, sessionDelete, sessionGetUser } = require('../auth/sessio
 const { generateToken, generateSalt, hashPassword, timingSafeStringEqual } = require('../auth/crypto');
 const { adminOnly } = require('../auth/middleware');
 const { LEGACY_PASSWORD } = require('../config');
+const { isSmtpConfigured, sendPasswordResetEmail, getSmtpConfig } = require('../services/emailService');
 
 // strictLimiter применяется на login/change-password (передаётся из server.js при монтировании)
 module.exports = (strictLimiter) => {
@@ -70,20 +71,114 @@ module.exports = (strictLimiter) => {
     res.json({ ok: true });
   });
 
+  // ── Сброс пароля ──────────────────────────────────────────────────────────────
+  // Возвращает флаг — настроен ли SMTP для отправки ссылки сброса.
+  // Фронтенд использует это чтобы показать либо форму email, либо инструкцию
+  // «обратитесь к администратору».
+  router.get('/auth/reset-password-info', (req, res) => {
+    res.json({ smtpConfigured: isSmtpConfigured() });
+  });
+
+  // Инициирует сброс пароля: ищет пользователя по email (поле пока не
+  // обязательное — если email не привязан, возвращаем ok:true без деталей,
+  // чтобы не раскрывать, есть ли такой email). Когда SMTP настроен —
+  // отправляет письмо со ссылкой. Сейчас просто генерирует токен и пишет
+  // в лог — до реализации email-рассылки (SMTP в настройках).
+  router.post('/auth/reset-password-request', strictLimiter, (req, res) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Укажите email' });
+    const db = getDb();
+    // Ищем пользователя по email (колонка может отсутствовать в старых БД)
+    let user = null;
+    try {
+      const rows = db.exec('SELECT id, username FROM users WHERE email=?', [email.trim().toLowerCase()]);
+      if (rows[0]?.values?.length) {
+        const [id, username] = rows[0].values[0];
+        user = { id, username };
+      }
+    } catch(e) { /* колонка email ещё не мигрирована — игнорируем */ }
+
+    if (user) {
+      const token = require('crypto').randomBytes(32).toString('hex');
+      const expires = Date.now() + 60 * 60 * 1000; // 1 час
+      try {
+        db.run('DELETE FROM password_reset_tokens WHERE user_id=?', [user.id]);
+        db.run('INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?,?,?)',
+          [token, user.id, expires]);
+        const { saveDb } = require('../db/connection');
+        saveDb();
+
+        // Формируем URL сброса. Берём origin из заголовка запроса — это
+        // корректный хост/порт даже за reverse-proxy (если тот прокидывает
+        // X-Forwarded-Host). Фолбэк — конструируем из req.protocol + host.
+        const origin = req.headers['x-forwarded-proto']
+          ? `${req.headers['x-forwarded-proto']}://${req.headers['x-forwarded-host'] || req.headers.host}`
+          : `${req.protocol}://${req.headers.host}`;
+        const resetUrl = `${origin}/reset-password?token=${token}`;
+
+        // Отправляем письмо асинхронно — не держим HTTP-ответ.
+        // Ошибка отправки логируется, но не возвращается клиенту
+        // (чтобы не раскрывать наличие адреса через тайминг/ошибку).
+        const smtpCfg = getSmtpConfig();
+        sendPasswordResetEmail({
+          to: email.trim(),
+          username: user.username,
+          resetUrl,
+          appName: smtpCfg.appName,
+        }).catch(e => console.error(`[auth] Ошибка отправки письма сброса для ${user.username}:`, e.message));
+
+        console.log(`[auth] Сброс пароля для ${user.username} (${email}): ${resetUrl}`);
+      } catch(e) {
+        console.error('[auth] Ошибка создания токена сброса:', e.message);
+      }
+    }
+    // Всегда отвечаем ok — не раскрываем, зарегистрирован ли email
+    res.json({ ok: true });
+  });
+
+  // Применяет новый пароль по токену сброса
+  router.post('/auth/reset-password', strictLimiter, (req, res) => {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) return res.status(400).json({ error: 'Укажите токен и новый пароль' });
+    if (newPassword.length < 6) return res.status(400).json({ error: 'Минимум 6 символов' });
+    const db = getDb();
+    try {
+      const rows = db.exec('SELECT user_id, expires_at FROM password_reset_tokens WHERE token=?', [token]);
+      if (!rows[0]?.values?.length) return res.status(400).json({ error: 'Недействительный или просроченный токен' });
+      const [userId, expiresAt] = rows[0].values[0];
+      if (Date.now() > expiresAt) {
+        db.run('DELETE FROM password_reset_tokens WHERE token=?', [token]);
+        return res.status(400).json({ error: 'Токен истёк, запросите сброс заново' });
+      }
+      const { generateSalt, hashPassword } = require('../auth/crypto');
+      const salt = generateSalt();
+      const hash = hashPassword(newPassword, salt);
+      db.run('UPDATE users SET password=?, salt=?, must_change_password=0 WHERE id=?', [hash, salt, userId]);
+      db.run('DELETE FROM password_reset_tokens WHERE token=?', [token]);
+      db.run('DELETE FROM sessions WHERE user_id=?', [userId]);
+      const { saveDb } = require('../db/connection');
+      saveDb();
+      res.json({ ok: true });
+    } catch(e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   // ── Users API (admin only) ──────────────────────────────────────────────────
   router.get('/users', adminOnly, (req, res) => {
     res.json(getUsers());
   });
 
   router.post('/users', adminOnly, (req, res) => {
-    const { username, password, role } = req.body;
+    const { username, password, role, email } = req.body;
     if (!username || !password) return res.status(400).json({ error: 'Логин и пароль обязательны' });
     const ROLES = ['viewer', 'operator', 'admin'];
     if (!ROLES.includes(role)) return res.status(400).json({ error: `Роль должна быть: ${ROLES.join(', ')}` });
     try {
       const salt = generateSalt();
       const hash = hashPassword(password, salt);
-      run('INSERT INTO users (username, password, salt, role) VALUES (?,?,?,?)', [username, hash, salt, role]);
+      const userEmail = (email || '').trim().toLowerCase();
+      run('INSERT INTO users (username, password, salt, role, email) VALUES (?,?,?,?,?)', [username, hash, salt, role, userEmail]);
       saveDb();
       res.json({ ok: true });
     } catch(e) {
@@ -93,7 +188,7 @@ module.exports = (strictLimiter) => {
   });
 
   router.put('/users/:id', adminOnly, (req, res) => {
-    const { password, role } = req.body;
+    const { password, role, email } = req.body;
     const ROLES = ['viewer', 'operator', 'admin'];
     if (role && !ROLES.includes(role)) return res.status(400).json({ error: `Недопустимая роль` });
 
@@ -110,6 +205,7 @@ module.exports = (strictLimiter) => {
       run('UPDATE users SET password=?, salt=?, must_change_password=0 WHERE id=?', [hash, salt, req.params.id]);
     }
     if (role) run('UPDATE users SET role=? WHERE id=?', [role, req.params.id]);
+    if (email !== undefined) run('UPDATE users SET email=? WHERE id=?', [(email || '').trim().toLowerCase(), req.params.id]);
     saveDb();
     res.json({ ok: true });
   });

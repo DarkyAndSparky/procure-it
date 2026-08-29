@@ -3,991 +3,1759 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>procure-it — документация</title>
+<title>IT Assets · Dev Docs</title>
 <style>
   :root {
-    --bg: #0d1117;
-    --surface: #161b22;
-    --surface2: #21262d;
-    --border: #30363d;
-    --text: #e6edf3;
-    --text2: #8b949e;
-    --accent: #58a6ff;
-    --accent2: #1f6feb;
-    --green: #3fb950;
-    --orange: #d29922;
-    --red: #f85149;
-    --purple: #bc8cff;
-    --radius: 6px;
-    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --mono: 'SF Mono', Consolas, 'Liberation Mono', monospace;
+    --bg: #0f1117;
+    --surface: #161b27;
+    --surface2: #1e2535;
+    --border: #2a3347;
+    --accent: #4f8ef7;
+    --accent2: #7c4dff;
+    --green: #22c55e;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --orange: #f97316;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --code-bg: #0d1117;
   }
-
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    font-family: var(--sans);
-    background: var(--bg);
-    color: var(--text);
-    font-size: 15px;
-    line-height: 1.6;
-  }
-
-  /* Layout */
-  .layout { display: flex; min-height: 100vh; }
-
-  /* Sidebar */
-  .sidebar {
-    width: 260px;
-    flex-shrink: 0;
-    background: var(--surface);
-    border-right: 1px solid var(--border);
-    position: fixed;
-    top: 0; left: 0; bottom: 0;
-    overflow-y: auto;
-    padding: 24px 0;
-  }
-
-  .sidebar-logo {
-    padding: 0 20px 20px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 16px;
-  }
-  .sidebar-logo h1 {
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text);
-    font-family: var(--mono);
-  }
-  .sidebar-logo .version {
-    font-size: 11px;
-    color: var(--accent);
-    background: rgba(88,166,255,0.1);
-    border: 1px solid rgba(88,166,255,0.3);
-    border-radius: 100px;
-    padding: 1px 8px;
-    display: inline-block;
-    margin-top: 4px;
-    font-family: var(--mono);
-  }
-
-  .nav-section {
-    padding: 8px 20px 4px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: var(--text2);
-  }
-
-  .nav-link {
-    display: block;
-    padding: 6px 20px;
-    color: var(--text2);
-    text-decoration: none;
-    font-size: 13px;
-    border-left: 2px solid transparent;
-    transition: color 0.1s, border-color 0.1s, background 0.1s;
-  }
-  .nav-link:hover { color: var(--text); background: var(--surface2); }
-  .nav-link.active { color: var(--accent); border-left-color: var(--accent); background: rgba(88,166,255,0.06); }
-
-  /* Main */
-  .main {
-    margin-left: 260px;
-    flex: 1;
-    max-width: 860px;
-    padding: 48px 40px;
-  }
-
-  /* Hero */
-  .hero {
-    margin-bottom: 48px;
-    padding-bottom: 32px;
-    border-bottom: 1px solid var(--border);
-  }
-  .hero h1 {
-    font-size: 32px;
-    font-weight: 600;
-    font-family: var(--mono);
-    color: var(--text);
-    margin-bottom: 8px;
-  }
-  .hero p {
-    font-size: 16px;
-    color: var(--text2);
-    margin-bottom: 20px;
-  }
-  .badges { display: flex; gap: 6px; flex-wrap: wrap; }
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    font-weight: 500;
-    padding: 3px 8px;
-    border-radius: 100px;
-    border: 1px solid;
-    font-family: var(--mono);
-  }
-  .badge-blue   { color: var(--accent); border-color: rgba(88,166,255,0.4); background: rgba(88,166,255,0.1); }
-  .badge-green  { color: var(--green);  border-color: rgba(63,185,80,0.4);  background: rgba(63,185,80,0.1); }
-  .badge-orange { color: var(--orange); border-color: rgba(210,153,34,0.4); background: rgba(210,153,34,0.1); }
-  .badge-purple { color: var(--purple); border-color: rgba(188,140,255,0.4);background: rgba(188,140,255,0.1); }
-
-  /* Sections */
-  .section { margin-bottom: 56px; scroll-margin-top: 24px; }
-  .section h2 {
-    font-size: 22px;
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 16px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--border);
-  }
-  .section h3 {
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--text);
-    margin: 24px 0 10px;
-  }
-  .section p { color: var(--text2); margin-bottom: 12px; }
-  .section ul { padding-left: 20px; color: var(--text2); margin-bottom: 12px; }
-  .section ul li { margin-bottom: 4px; }
-
-  /* Code */
-  pre {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px;
-    overflow-x: auto;
-    margin: 12px 0;
-    font-family: var(--mono);
-    font-size: 13px;
-    line-height: 1.5;
-    color: var(--text);
-  }
-  code {
-    font-family: var(--mono);
-    font-size: 0.875em;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 1px 6px;
-    color: var(--text);
-  }
-  pre code { background: none; border: none; padding: 0; font-size: 1em; }
-
-  /* Table */
-  .table-wrap { overflow-x: auto; margin: 12px 0; }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-  }
-  th {
-    text-align: left;
-    padding: 8px 12px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    color: var(--text2);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
-    font-weight: 600;
-  }
-  td {
-    padding: 8px 12px;
-    border: 1px solid var(--border);
-    color: var(--text2);
-    vertical-align: top;
-  }
-  td:first-child { color: var(--accent); font-family: var(--mono); font-size: 12px; }
-  tr:hover td { background: rgba(255,255,255,0.02); }
-
-  /* Method badges */
-  .method {
-    display: inline-block;
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 700;
-    padding: 1px 5px;
-    border-radius: 3px;
-    margin-right: 4px;
-  }
-  .GET    { background: rgba(63,185,80,0.15);  color: var(--green); }
-  .POST   { background: rgba(88,166,255,0.15); color: var(--accent); }
-  .PUT    { background: rgba(210,153,34,0.15); color: var(--orange); }
-  .PATCH  { background: rgba(188,140,255,0.15);color: var(--purple); }
-  .DELETE { background: rgba(248,81,73,0.15);  color: var(--red); }
-
-  /* Steps */
-  .steps { counter-reset: step; }
-  .step {
-    display: flex;
-    gap: 16px;
-    margin-bottom: 16px;
-    counter-increment: step;
-  }
-  .step-num {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: var(--accent2);
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: 700;
-    flex-shrink: 0;
-    margin-top: 2px;
-  }
-  .step-body { flex: 1; }
-  .step-body strong { color: var(--text); display: block; margin-bottom: 4px; }
-
-  /* Keyboard */
-  kbd {
-    display: inline-block;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 2px 8px;
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--text);
-  }
-
-  /* Alert */
-  .alert {
-    border-radius: var(--radius);
-    padding: 12px 16px;
-    margin: 12px 0;
-    border-left: 3px solid;
-    font-size: 13px;
-  }
-  .alert-info  { background: rgba(88,166,255,0.08); border-color: var(--accent); color: var(--text2); }
-  .alert-warn  { background: rgba(210,153,34,0.08); border-color: var(--orange); color: var(--text2); }
-  .alert-green { background: rgba(63,185,80,0.08);  border-color: var(--green);  color: var(--text2); }
-
-  /* File tree */
-  .tree {
-    font-family: var(--mono);
-    font-size: 13px;
-    line-height: 1.8;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px;
-    color: var(--text2);
-  }
-  .tree .dir  { color: var(--accent); }
-  .tree .file { color: var(--text); }
-  .tree .dim  { color: var(--text2); opacity: 0.5; }
-  .tree .comment { color: var(--text2); }
-
-  /* Branch diagram */
-  .branch-diagram {
-    font-family: var(--mono);
-    font-size: 13px;
-    line-height: 2;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 16px 20px;
-  }
-  .br-main { color: var(--green); }
-  .br-dev  { color: var(--orange); }
-  .br-tag  { color: var(--purple); }
-  .br-dim  { color: var(--text2); opacity: 0.4; }
-
-  /* GitHub link */
-  .gh-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    color: var(--text);
-    text-decoration: none;
-    font-size: 13px;
-    font-weight: 500;
-    transition: border-color 0.1s, background 0.1s;
-  }
-  .gh-link:hover { border-color: var(--accent); background: rgba(88,166,255,0.05); }
-
-  /* Scrollspy active */
-  @media (max-width: 768px) {
-    .sidebar { display: none; }
-    .main { margin-left: 0; padding: 24px 16px; }
-  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', system-ui, sans-serif; font-size: 14px; line-height: 1.6; display: flex; min-height: 100vh; }
+  .sidebar { width: 260px; min-height: 100vh; background: var(--surface); border-right: 1px solid var(--border); position: fixed; top: 0; left: 0; overflow-y: auto; display: flex; flex-direction: column; z-index: 100; }
+  .sidebar-logo { padding: 20px 20px 16px; border-bottom: 1px solid var(--border); }
+  .sidebar-logo .project { font-size: 16px; font-weight: 700; color: var(--text); }
+  .sidebar-logo .version { font-size: 11px; color: var(--accent); background: rgba(79,142,247,.12); padding: 2px 7px; border-radius: 10px; display: inline-block; margin-top: 4px; }
+  .sidebar-logo .badge { font-size: 10px; color: var(--muted); margin-top: 4px; display: block; }
+  .nav-section { padding: 12px 0 4px; }
+  .nav-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 0 20px 6px; }
+  .nav-item { display: block; padding: 7px 20px; color: #94a3b8; text-decoration: none; font-size: 13px; border-left: 2px solid transparent; transition: all .15s; cursor: pointer; }
+  .nav-item:hover, .nav-item.active { color: var(--text); background: rgba(79,142,247,.07); border-left-color: var(--accent); }
+  .nav-item .icon { margin-right: 7px; }
+  .main { margin-left: 260px; flex: 1; padding: 40px 48px 80px; max-width: 960px; }
+  .section { display: none; }
+  .section.active { display: block; }
+  h1 { font-size: 26px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+  .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
+  h2 { font-size: 18px; font-weight: 600; color: var(--text); margin: 36px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 14px; font-weight: 600; color: var(--text); margin: 20px 0 8px; }
+  p { color: #94a3b8; margin-bottom: 12px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 24px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .stat-card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .stat-card .value { font-size: 20px; font-weight: 700; margin-top: 4px; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12.5px; line-height: 1.7; color: #c9d1d9; margin: 10px 0 20px; }
+  code { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 12px; background: rgba(79,142,247,.1); color: var(--accent); padding: 2px 5px; border-radius: 4px; }
+  .endpoint { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+  .endpoint-header { display: flex; align-items: center; gap: 12px; padding: 13px 18px; cursor: pointer; user-select: none; }
+  .endpoint-header:hover { background: var(--surface2); }
+  .method { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 5px; min-width: 54px; text-align: center; }
+  .GET    { background: rgba(34,197,94,.15);  color: #22c55e; }
+  .POST   { background: rgba(79,142,247,.15); color: #4f8ef7; }
+  .PUT    { background: rgba(245,158,11,.15); color: #f59e0b; }
+  .PATCH  { background: rgba(249,115,22,.15); color: #f97316; }
+  .DELETE { background: rgba(239,68,68,.15);  color: #ef4444; }
+  .endpoint-path { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text); flex: 1; }
+  .endpoint-desc { font-size: 12px; color: var(--muted); }
+  .auth-badge { font-size: 10px; background: rgba(239,68,68,.12); color: #ef4444; padding: 2px 7px; border-radius: 10px; border: 1px solid rgba(239,68,68,.2); white-space: nowrap; }
+  .admin-badge { font-size: 10px; background: rgba(124,77,255,.15); color: #a78bfa; padding: 2px 7px; border-radius: 10px; border: 1px solid rgba(124,77,255,.25); white-space: nowrap; }
+  .endpoint-body { padding: 0 18px 16px; border-top: 1px solid var(--border); display: none; }
+  .endpoint-body.open { display: block; }
+  .endpoint-body h4 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 14px 0 6px; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 20px; font-size: 13px; }
+  th { text-align: left; padding: 9px 12px; background: var(--surface2); color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; border-bottom: 1px solid var(--border); }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: #94a3b8; vertical-align: top; }
+  td:first-child { color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(79,142,247,.04); }
+  .alert { border-radius: 8px; padding: 12px 16px; margin: 12px 0 16px; font-size: 13px; }
+  .alert.info    { background: rgba(79,142,247,.08); border-left: 3px solid var(--accent); color: #93c5fd; }
+  .alert.warning { background: rgba(245,158,11,.08); border-left: 3px solid var(--yellow); color: #fcd34d; }
+  .alert.danger  { background: rgba(239,68,68,.08);  border-left: 3px solid var(--red); color: #fca5a5; }
+  .alert.success { background: rgba(34,197,94,.08);  border-left: 3px solid var(--green); color: #86efac; }
+  .arch-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin: 6px 0; }
+  .arch-arrow { text-align: center; color: var(--muted); font-size: 18px; line-height: 1.8; }
+  .arch-label { font-size: 11px; color: var(--muted); margin-left: 10px; }
+  .schema-field { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); align-items: flex-start; }
+  .schema-field:last-child { border-bottom: none; }
+  .schema-key { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); min-width: 160px; }
+  .schema-type { font-size: 11px; color: #a78bfa; min-width: 80px; padding-top: 2px; }
+  .schema-note { font-size: 12px; color: var(--muted); flex: 1; }
+  .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+  .breadcrumb { font-size: 12px; color: var(--muted); }
+  .breadcrumb span { color: var(--text); }
+  .doc-meta { font-size: 11px; color: var(--muted); display: flex; gap: 16px; }
+  .doc-meta strong { color: var(--accent); }
+  .badge-req { display: inline-block; font-size: 10px; background: rgba(239,68,68,.12); color: #ef4444; padding: 1px 6px; border-radius: 8px; font-weight: 600; margin-left: 4px; }
 </style>
 </head>
 <body>
-<div class="layout">
 
-<!-- Sidebar -->
-<aside class="sidebar">
+<nav class="sidebar">
   <div class="sidebar-logo">
-    <h1>procure-it</h1>
-    <span class="version"><!--VERSION-->26w34-b07<!--/VERSION--></span>
+    <div class="project">⚙️ IT Assets</div>
+    <div class="version">β1 · 26w35·01</div>
+    <div class="badge">Developer Documentation</div>
   </div>
-  <div class="nav-section">Начало</div>
-  <a href="#intro"     class="nav-link active">О проекте</a>
-  <a href="#quickstart" class="nav-link">Быстрый старт</a>
-  <a href="#structure" class="nav-link">Структура проекта</a>
-  <a href="#config"    class="nav-link">Конфигурация</a>
+  <div class="nav-section">
+    <div class="nav-label">Для пользователей</div>
+    <div class="nav-item" onclick="show('guide')"><span class="icon">📖</span>Руководство пользователя</div>
+    <div class="nav-item" onclick="show('roles')"><span class="icon">👥</span>Роли и права</div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Для администраторов</div>
+    <div class="nav-item" onclick="show('install')"><span class="icon">⚙️</span>Установка и настройка</div>
+    <div class="nav-item" onclick="show('workflow')"><span class="icon">🔁</span>Рабочий процесс</div>
+    <div class="nav-item" onclick="show('i18n')"><span class="icon">🌐</span>Локализация (i18n)</div>
+    <div class="nav-item" onclick="show('frontend')"><span class="icon">🧩</span>Фронтенд-модули</div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Технический раздел</div>
+    <div class="nav-item active" onclick="show('overview')"><span class="icon">🏠</span>Обзор проекта</div>
+    <div class="nav-item" onclick="show('arch')"><span class="icon">🏗</span>Архитектура</div>
+    <div class="nav-item" onclick="show('stack')"><span class="icon">📦</span>Стек и зависимости</div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">База данных</div>
+    <div class="nav-item" onclick="show('db')"><span class="icon">🗄</span>Файлы данных</div>
+    <div class="nav-item" onclick="show('schema-asset')"><span class="icon">📋</span>Схема: Asset</div>
+    <div class="nav-item" onclick="show('schema-history')"><span class="icon">📋</span>Схема: History</div>
+    <div class="nav-item" onclick="show('schema-config')"><span class="icon">📋</span>Схема: Config</div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">REST API</div>
+    <div class="nav-item" onclick="show('api-auth')"><span class="icon">🔐</span>Авторизация</div>
+    <div class="nav-item" onclick="show('api-users')"><span class="icon">👤</span>Users</div>
+    <div class="nav-item" onclick="show('api-employees')"><span class="icon">🧑‍💼</span>Employees</div>
+    <div class="nav-item" onclick="show('api-assets')"><span class="icon">💻</span>Assets</div>
+    <div class="nav-item" onclick="show('api-history')"><span class="icon">🔄</span>History</div>
+    <div class="nav-item" onclick="show('api-orgs')"><span class="icon">🏢</span>Organizations</div>
+    <div class="nav-item" onclick="show('api-filials')"><span class="icon">📍</span>Filials & Locations</div>
+    <div class="nav-item" onclick="show('api-inv')"><span class="icon">🔢</span>Inv Numbers</div>
+    <div class="nav-item" onclick="show('api-backup')"><span class="icon">💾</span>Backup</div>
+    <div class="nav-item" onclick="show('api-misc')"><span class="icon">⚙️</span>Settings & Misc</div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Разработка</div>
+    <div class="nav-item" onclick="show('run')"><span class="icon">🚀</span>Запуск и конфиг</div>
+    <div class="nav-item" onclick="show('tests')"><span class="icon">🧪</span>Тесты (Jest)</div>
+    <div class="nav-item" onclick="show('tests-e2e')"><span class="icon">🎭</span>E2E тесты (Playwright)</div>
+  </div>
+</nav>
 
-  <div class="nav-section">Использование</div>
-  <a href="#requests"      class="nav-link">Заявки</a>
-  <a href="#registry"      class="nav-link">Реестр</a>
-  <a href="#excel"         class="nav-link">Excel экспорт</a>
-  <a href="#bitrix"        class="nav-link">Bitrix24</a>
-  <a href="#spec"          class="nav-link">Спецификация</a>
-  <a href="#about-page"    class="nav-link">О системе</a>
-  <a href="#shortcuts"     class="nav-link">Горячие клавиши</a>
-
-  <div class="nav-section">Инфраструктура</div>
-  <a href="#https"    class="nav-link">HTTPS</a>
-  <a href="#backup"   class="nav-link">Бэкап</a>
-  <a href="#api"      class="nav-link">REST API</a>
-  <a href="#health"   class="nav-link">Health check</a>
-
-  <div class="nav-section">Деплой</div>
-  <a href="#docker"      class="nav-link">Docker</a>
-
-  <div class="nav-section">Разработка</div>
-  <a href="#branches"    class="nav-link">Ветки (main / dev)</a>
-  <a href="#versioning"  class="nav-link">Версионирование</a>
-  <a href="#testing"     class="nav-link">Автотесты и CHANGELOG</a>
-  <a href="#contributing" class="nav-link">Contributing</a>
-</aside>
-
-<!-- Main -->
 <main class="main">
 
-  <!-- Hero -->
-  <div class="hero" id="intro">
-    <h1>procure-it</h1>
-    <p>Self-hosted web tool for IT asset procurement — manage purchase requests, calculate prices, generate Excel sheets and specifications.</p>
-    <div class="badges">
-      <span class="badge badge-blue"><!--VERSION-->26w34-b07<!--/VERSION--></span>
-      <span class="badge badge-green">MIT</span>
-      <span class="badge badge-green">Node.js 18+</span>
-      <span class="badge badge-blue">SQLite</span>
-      <span class="badge badge-orange">HTTPS</span>
-    </div>
-    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
-      <a href="https://github.com/DarkyAndSparky/procure-it" class="gh-link" target="_blank">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        GitHub Repository
-      </a>
-      <a href="https://github.com/DarkyAndSparky/procure-it/issues" class="gh-link" target="_blank">🐛 Issues</a>
-    </div>
+
+<!-- GUIDE -->
+<section id="guide" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Руководство пользователя</span></div><div class="doc-meta"><strong>v</strong> beta-1-26w29-01</div></div>
+  <h1>Руководство пользователя</h1>
+  <p class="subtitle">Как работать с системой учёта ИТ-оборудования</p>
+
+  <h2>Вход в систему</h2>
+  <p>Откройте браузер и перейдите по адресу, который выдал администратор (например <code>https://192.168.1.50:3443</code>). Браузер может показать предупреждение о сертификате — нажмите «Дополнительно» → «Перейти на сайт», это нормально.</p>
+  <div class="alert warning"><strong>⚠ Смените PIN после первого входа.</strong> Дефолтный PIN: <code>admn0000</code>. Система напомнит об этом сама при входе.</div>
+
+  <h2>Реестры оборудования</h2>
+  <p>Всё оборудование разделено на три вкладки:</p>
+  <table>
+    <tr><th>Вкладка</th><th>Что включает</th></tr>
+    <tr><td>📋 ОС</td><td>Компьютеры, ноутбуки, серверы, моноблоки</td></tr>
+    <tr><td>📦 Мелочи</td><td>Периферия: мышки, клавиатуры, гарнитуры, веб-камеры</td></tr>
+    <tr><td>🌐 Инфра</td><td>Сетевое оборудование: свитчи, роутеры, точки доступа</td></tr>
+  </table>
+
+  <h2>Добавление оборудования</h2>
+  <p>Нажмите кнопку <strong>«+ Добавить»</strong> на нужной вкладке. Заполните поля:</p>
+  <table>
+    <tr><th>Поле</th><th>Описание</th><th>Обязательно</th></tr>
+    <tr><td>Тип</td><td>Тип устройства (ноутбук, ПК, принтер...)</td><td>✅</td></tr>
+    <tr><td>Модель</td><td>Название модели</td><td>✅</td></tr>
+    <tr><td>Серийный №</td><td>Уникальный серийный номер с наклейки устройства</td><td>✅</td></tr>
+    <tr><td>Организация</td><td>Юридическое лицо-владелец</td><td>✅</td></tr>
+    <tr><td>Филиал</td><td>Офис или подразделение</td><td>✅</td></tr>
+    <tr><td>Расположение</td><td>Конкретное помещение</td><td>✅</td></tr>
+    <tr><td>Ответственный</td><td>Сотрудник, за которым закреплено устройство</td><td>—</td></tr>
+    <tr><td>Инв. номер</td><td>Генерируется автоматически по правилу организации</td><td>—</td></tr>
+    <tr><td>Статус</td><td>В работе / Хранение / Списано / Ремонт</td><td>✅</td></tr>
+    <tr><td>Примечание</td><td>Любой дополнительный текст</td><td>—</td></tr>
+  </table>
+
+  <h2>Перемещение оборудования</h2>
+  <p>Откройте карточку устройства → кнопка <strong>«Переместить»</strong>. Выберите новый филиал, расположение и ответственного. Все перемещения автоматически фиксируются в истории.</p>
+
+  <h2>Списание оборудования</h2>
+  <p>Откройте карточку устройства → измените статус на <strong>«Списано»</strong>. Устройство остаётся в реестре, но помечается как выведенное из эксплуатации. История сохраняется.</p>
+
+  <h2>Поиск и фильтрация</h2>
+  <p>Используйте строку поиска вверху — ищет по модели, серийному номеру, инв. номеру, ответственному. Фильтры позволяют сузить список по организации, филиалу, статусу, типу устройства.</p>
+
+  <h2>История изменений</h2>
+  <p>Раздел <strong>«История»</strong> показывает все действия: добавление, перемещения, смену статуса, изменение полей. Можно фильтровать по дате, сотруднику, типу действия.</p>
+
+  <h2>QR-коды</h2>
+  <p>В карточке устройства есть кнопка <strong>«QR-код»</strong> — генерирует QR с инвентарным номером для наклейки на устройство. Распечатайте и приклейте для быстрой идентификации.</p>
+
+  <h2>Экспорт данных</h2>
+  <p>Кнопка <strong>«Экспорт CSV»</strong> на вкладке реестра — выгружает все видимые устройства в файл CSV, совместимый с Excel.</p>
+
+  <h2>Импорт из CSV</h2>
+  <p>⚙️ Настройки → <strong>Импорт из CSV</strong>. Файл должен содержать заголовки:</p>
+  <pre>Вкладка, Инв. номер, Филиал, Расположение, Ответственный, Тип, Модель, Серийный №, Статус, Организация, Примечание, MAC, IP, Hostname, Прошивка</pre>
+  <p>Дубли по серийному номеру пропускаются автоматически.</p>
+</section>
+
+<!-- ROLES -->
+<section id="roles" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Роли и права</span></div><div class="doc-meta"><strong>v</strong> beta-1-26w29-01</div></div>
+  <h1>Роли и права доступа</h1>
+  <p class="subtitle">Система поддерживает три роли с разными уровнями доступа</p>
+
+  <div class="cards-grid">
+    <div class="stat-card"><div class="label">Роли</div><div class="value" style="color:var(--green)">3</div></div>
+    <div class="stat-card"><div class="label">Аутентификация</div><div class="value" style="color:var(--accent)">PIN (bcrypt)</div></div>
   </div>
 
-  <!-- Quick Start -->
-  <section class="section" id="quickstart">
-    <h2>Быстрый старт</h2>
-    <p>Единственное требование — <strong>Node.js 18+</strong>. Скачать: <a href="https://nodejs.org/" style="color:var(--accent)">nodejs.org</a> (LTS версия).</p>
+  <h2>Таблица прав</h2>
+  <table>
+    <tr><th>Действие</th><th>👑 Администратор</th><th>🔧 Оператор</th><th>👁 Просмотр</th></tr>
+    <tr><td>Просмотр оборудования</td><td>✅</td><td>✅</td><td>✅</td></tr>
+    <tr><td>Поиск и фильтрация</td><td>✅</td><td>✅</td><td>✅</td></tr>
+    <tr><td>Просмотр истории</td><td>✅</td><td>✅</td><td>✅</td></tr>
+    <tr><td>Добавить устройство</td><td>✅</td><td>✅</td><td>❌</td></tr>
+    <tr><td>Редактировать устройство</td><td>✅</td><td>✅</td><td>❌</td></tr>
+    <tr><td>Переместить устройство</td><td>✅</td><td>✅</td><td>❌</td></tr>
+    <tr><td>Списать устройство</td><td>✅</td><td>✅</td><td>❌</td></tr>
+    <tr><td>Импорт CSV</td><td>✅</td><td>✅</td><td>❌</td></tr>
+    <tr><td>Экспорт CSV</td><td>✅</td><td>✅</td><td>✅</td></tr>
+    <tr><td>Управление сотрудниками</td><td>✅</td><td>❌</td><td>❌</td></tr>
+    <tr><td>Управление организациями</td><td>✅</td><td>❌</td><td>❌</td></tr>
+    <tr><td>Управление пользователями</td><td>✅</td><td>❌</td><td>❌</td></tr>
+    <tr><td>Резервное копирование</td><td>✅</td><td>❌</td><td>❌</td></tr>
+    <tr><td>Настройки системы</td><td>✅</td><td>❌</td><td>❌</td></tr>
+  </table>
 
-    <h3>Windows</h3>
-    <pre>Дважды кликнуть start.bat</pre>
-    <p>При первом запуске автоматически устанавливаются зависимости (~1 мин) и генерируется TLS-сертификат.</p>
+  <h2>Управление пользователями</h2>
+  <p>⚙️ Настройки → <strong>Пользователи</strong> — только для администратора. Можно создавать, редактировать и удалять пользователей, назначать роли, сбрасывать PIN.</p>
 
-    <h3>Linux / macOS</h3>
-    <pre>chmod +x start.sh && ./start.sh</pre>
+  <h2>Смена PIN</h2>
+  <p>Каждый пользователь может сменить свой PIN в настройках профиля. Минимальная длина — 4 символа. PIN хранится в зашифрованном виде (bcrypt).</p>
 
-    <h3>Доступ</h3>
-    <div class="table-wrap">
-      <table>
-        <tr><th>Где</th><th>Адрес</th></tr>
-        <tr><td>Локально</td><td><code>https://localhost:9111</code></td></tr>
-        <tr><td>По сети (LAN)</td><td><code>https://[IP сервера]:9111</code></td></tr>
-        <tr><td>HTTP редирект</td><td><code>http://[IP]:9112</code> → HTTPS</td></tr>
-      </table>
-    </div>
-    <div class="alert alert-warn">
-      <strong>Предупреждение браузера:</strong> при первом открытии браузер покажет «Небезопасное соединение». Нажмите <strong>Дополнительно → Перейти на сайт</strong> (Chrome/Edge) или <strong>Принять риск</strong> (Firefox). Это происходит один раз.
-    </div>
-  </section>
+  <div class="alert info"><strong>Дефолтные учётные данные:</strong> логин <code>admin</code>, PIN <code>admn0000</code>. Обязательно смените после первого входа.</div>
+</section>
 
-  <!-- Structure -->
-  <section class="section" id="structure">
-    <h2>Структура проекта</h2>
-    <div class="tree">
-      <span class="dir">procure-it/</span><br>
-      ├── <span class="file">server.js</span>         <span class="comment"># Сборка приложения: middleware, роуты, запуск сервера</span><br>
-      ├── <span class="dir">src/</span><br>
-      │   ├── <span class="file">config.js</span>, <span class="file">certs.js</span><br>
-      │   ├── <span class="dir">db/</span>            <span class="comment"># connection.js, schema.js, audit.js</span><br>
-      │   ├── <span class="dir">auth/</span>          <span class="comment"># crypto.js, users.js, sessions.js, middleware.js</span><br>
-      │   ├── <span class="dir">services/</span>      <span class="comment"># docxService.js, fileLayoutService.js, backupService.js, bitrixService.js</span><br>
-      │   ├── <span class="dir">utils/</span>         <span class="comment"># docFormat.js</span><br>
-      │   └── <span class="dir">routes/</span>        <span class="comment"># auth, orgs, requests, files, backup, settings, docx, bitrix</span><br>
-      ├── <span class="file">package.json</span><br>
-      ├── <span class="file">start.bat</span>          <span class="comment"># Запуск Windows</span><br>
-      ├── <span class="file">start.sh</span>           <span class="comment"># Запуск Linux/macOS</span><br>
-      ├── <span class="file">.env.example</span>       <span class="comment"># Шаблон переменных</span><br>
-      ├── <span class="file">CONTRIBUTING.md</span><br>
-      ├── <span class="file">LICENSE</span><br>
-      ├── <span class="dir">public/</span><br>
-      │   ├── <span class="file">zakupki.html</span>   <span class="comment"># Только разметка</span><br>
-      │   ├── <span class="dir">css/</span>            <span class="comment"># style.css</span><br>
-      │   └── <span class="dir">js/</span>             <span class="comment"># auth.js…main.js — обычные &lt;script src&gt;, без сборщика</span><br>
-      ├── <span class="dir">docs/</span><br>
-      │   └── <span class="file">index.html</span>     <span class="comment"># Эта страница</span><br>
-      └── <span class="dir dim">data/</span>              <span class="comment dim"># git-ignored, создаётся автоматически</span><br>
-          ├── <span class="dim">zakupki.db</span>     <span class="comment dim"># SQLite база данных</span><br>
-          ├── <span class="dir dim">certs/</span>         <span class="comment dim"># TLS сертификат</span><br>
-          ├── <span class="dir dim">signed_specs/</span>, <span class="dir dim">invoices/</span> <span class="comment dim"># Прикреплённые файлы</span><br>
-          └── <span class="dir dim">backups/</span>       <span class="comment dim"># .db-снапшоты + зеркало прикреплённых файлов</span><br>
-    </div>
-  </section>
+<!-- INSTALL -->
+<section id="install" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Установка и настройка</span></div><div class="doc-meta"><strong>v</strong> beta-1-26w29-01</div></div>
+  <h1>Установка и настройка</h1>
+  <p class="subtitle">Инструкция для IT-администратора</p>
 
-  <!-- Config -->
-  <section class="section" id="config">
-    <h2>Конфигурация</h2>
-    <pre>cp .env.example .env</pre>
-    <div class="table-wrap">
-      <table>
-        <tr><th>Переменная</th><th>По умолчанию</th><th>Описание</th></tr>
-        <tr><td>PORT</td><td>9111</td><td>Порт HTTPS сервера. HTTP-редирект = PORT+1 (9112)</td></tr>
-        <tr><td>PROCURE_PASSWORD</td><td><em>пусто</em></td><td>Legacy-режим единого пароля — см. «Аутентификация» ниже</td></tr>
-        <tr><td>BACKUP_INTERVAL_MS</td><td>21600000</td><td>Интервал автобэкапа (мс). 21600000 = 6 часов</td></tr>
-      </table>
-    </div>
-    <div class="alert alert-info">
-      HTTP-редирект всегда слушает на <code>PORT + 1</code> (по умолчанию 9112).
-    </div>
+  <h2>Требования</h2>
+  <table>
+    <tr><th></th><th>Минимум</th><th>Рекомендуется</th></tr>
+    <tr><td>Node.js</td><td>v22.5 LTS</td><td>v24+ LTS</td></tr>
+    <tr><td>ОЗУ</td><td>128 MB</td><td>256 MB</td></tr>
+    <tr><td>Место на диске</td><td>50 MB + данные</td><td>500 MB</td></tr>
+    <tr><td>ОС</td><td colspan="2">Windows 10+, Ubuntu 20.04+, macOS 12+</td></tr>
+  </table>
 
-    <h3>Аутентификация</h3>
-    <p>В приложении встроена система пользователей с тремя ролями:</p>
-    <div class="table-wrap">
-      <table>
-        <tr><th>Роль</th><th>Доступ</th></tr>
-        <tr><td><code>viewer</code></td><td>Только чтение — без входа вообще</td></tr>
-        <tr><td><code>operator</code></td><td>Создание/редактирование заявок, организаций, загрузка файлов</td></tr>
-        <tr><td><code>admin</code></td><td>Всё, что может operator, плюс пользователи, настройки, восстановление из бэкапа</td></tr>
-      </table>
-    </div>
-    <p>При первом запуске автоматически создаётся администратор — <strong>логин <code>admin</code>, случайный пароль</strong> (выводится в консоль при старте) — и приложение сразу требует сменить пароль. Управление остальными пользователями — в пункте <strong>«Учётные записи»</strong> бокового меню (только для admin).</p>
-    <div class="alert alert-warn">
-      <code>PROCURE_PASSWORD</code> — это <strong>legacy-заглушка</strong>, а не основной механизм входа: она работает только пока в базе вообще нет ни одного пользователя (например, самый первый запуск до первого входа через интерфейс). Как только появился хотя бы один пользователь, <code>PROCURE_PASSWORD</code> игнорируется — доступом управляют через интерфейс.
-    </div>
-  </section>
+  <h2>Установка на Windows</h2>
+  <p>1. Установите <a href="https://nodejs.org" target="_blank">Node.js LTS</a></p>
+  <p>2. Скачайте и распакуйте архив с приложением</p>
+  <p>3. Дважды кликните <code>INSTALL.bat</code> — установит зависимости</p>
+  <p>4. Дважды кликните <code>START.bat</code> — запустит сервер и откроет браузер</p>
+  <div class="alert info">Для автозапуска при старте Windows создайте ярлык <code>START.bat</code> в папке <code>shell:startup</code></div>
 
-  <!-- Requests -->
-  <section class="section" id="requests">
-    <h2>Заявки</h2>
-    <p>Основная единица работы. Каждая заявка содержит:</p>
-    <ul>
-      <li><strong>Организация</strong> — выбирается из справочника с автокомплитом (поиск по короткому и полному названию), автоматически подставляет договор и адрес доставки</li>
-      <li><strong>Тип документа</strong> — влияет и на префикс номера спецификации, и на содержимое самого документа (см. таблицу ниже)</li>
-      <li><strong>Номер задачи Битрикс</strong> — для связи с системой задач</li>
-      <li><strong>Контрагент</strong> — магазин/поставщик, у которого закупали (можно фильтровать заявки по нему в реестре)</li>
-      <li><strong>Номер счёта поставщика</strong> — текстовое поле, только для справки, отдельно от прикреплённого файла счёта</li>
-      <li><strong>Гарантийный срок</strong> — только для типа «Сопровождение», по умолчанию 12 месяцев</li>
-      <li><strong>МОЛ</strong> — материально ответственное лицо / получатель</li>
-      <li><strong>Позиции</strong> — таблица товаров с полями: наименование, комментарий/ФИО, ссылка, кол-во, ед., цена закупа</li>
-    </ul>
+  <h2>Установка на Linux / macOS</h2>
+  <pre>sudo apt update && sudo apt install nodejs npm   # Ubuntu/Debian
+chmod +x install.sh start.sh
+./install.sh     # установить зависимости
+./start.sh       # запустить сервер</pre>
 
-    <h3>Тип документа и номер спецификации</h3>
-    <p>Номер спецификации формируется как <code>{префикс}{ГГГГММ}-{№ в месяце}</code>, где префикс зависит от выбранного типа документа:</p>
-    <div class="table-wrap">
-      <table>
-        <tr><th>Тип документа</th><th>Префикс</th><th>Особенности документа</th></tr>
-        <tr><td>📦 Товары (спецификация)</td><td><code>П</code></td><td>Обычная спецификация: договор в шапке, порядок оплаты, Поставщик/Покупатель</td></tr>
-        <tr><td>🔧 Услуги монтажа</td><td><code>М</code></td><td>«Спецификация на выполнение работ», акт вместо накладной</td></tr>
-        <tr><td>🏪 Реализация</td><td><code>Р</code></td><td>Товар для себя: без наценки (включается автоматически), без блока «Приложение №1 к договору», без «Порядка оплаты», одна сторона в подписи вместо Поставщик/Покупатель</td></tr>
-        <tr><td>🛠️ Сопровождение</td><td><code>С</code></td><td>«Акт гарантийного обслуживания»: гарантийный срок (по умолчанию 12 месяцев), условия покрытия, без «Порядка оплаты» — обслуживание в рамках срока бесплатно</td></tr>
-      </table>
-    </div>
-    <div class="alert alert-info">
-      Номер уникален <strong>в рамках организации</strong>, а не глобально — у разных организаций может быть одинаковый номер (<code>П202608-01</code> у обеих), это нормально. Повторно тот же номер у одной и той же организации использовать нельзя.
-    </div>
+  <h2>Установка Node.js через nvm (рекомендуется)</h2>
+  <pre>curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+source ~/.bashrc
+nvm install --lts
+nvm use --lts</pre>
 
-    <h3>Расчёт цены продажи</h3>
-    <p>Формула соответствует оригинальному Excel-шаблону:</p>
-    <pre>% от заказа  = цена_закупа_строки / итого_закупа
-доля_доставки = % от заказа × стоимость_доставки
-цена_с_дост   = цена_закупа + доля_доставки / кол-во
-цена_продажи  = цена_с_дост × (1 + наценка%)</pre>
-    <p>Все денежные значения (закуп, доставка, продажа — в рублях) округляются до 2 знаков после запятой как в интерфейсе, так и в формулах Excel-экспорта, чтобы не было длинных хвостов вроде <code>56639,8048645469</code>.</p>
+  <h2>Доступ из локальной сети</h2>
+  <p>Сервер автоматически слушает на всех интерфейсах (<code>0.0.0.0</code>). Узнайте IP сервера:</p>
+  <pre>hostname -I | awk '{print $1}'    # Linux
+ipconfig                           # Windows</pre>
+  <p>Сообщите сотрудникам адрес: <code>https://192.168.x.x:3443</code></p>
 
-    <div class="alert alert-green">
-      Формула верифицирована по трём реальным файлам (ЯП июнь, ЛД июнь, ИП Рогулькин июль) — все 16 позиций совпали с точностью до копейки.
-    </div>
+  <h2>Открыть порт в firewall</h2>
+  <pre>sudo ufw allow 3443/tcp && sudo ufw reload         # Ubuntu (ufw)
+sudo firewall-cmd --add-port=3443/tcp --permanent   # RHEL/Fedora
+sudo firewall-cmd --reload</pre>
 
-    <h3>Шаблоны позиций</h3>
-    <p>Часто используемые наборы товаров можно сохранить как шаблон (кнопка «💾 Шаблон») и добавлять одним кликом из выпадашки «+ Из шаблона».</p>
+  <h2>Автозапуск как systemd-сервис (Linux)</h2>
+  <pre>[Unit]
+Description=IT Assets
+After=network.target
 
-    <h3>Перетаскивание позиций</h3>
-    <p>Строки таблицы позиций можно перетаскивать за иконку <strong>⠿</strong> слева для изменения порядка. Нумерация и расчёты обновляются автоматически.</p>
+[Service]
+WorkingDirectory=/opt/it-assets
+ExecStart=/usr/bin/node server/index.js
+Restart=always
+User=www-data
+Environment=NODE_ENV=production
 
-    <h3>Импорт из Excel</h3>
-    <p>Загрузи прайс-лист поставщика или собственный экспорт «Расчётов» этого же приложения — импорт сам находит строку заголовков на любом листе книги (ищет колонку «Наименование») и по названиям колонок определяет, где Кол-во / Ед. / Цена / ФИО / Ссылка, независимо от их порядка. Если заголовков нет вообще — используется простой позиционный формат:</p>
-    <pre>Наименование | Кол-во | Ед. | Цена</pre>
-    <p>Если в книге несколько листов с ценами (например «Расчёты» + «Спецификация»), автоматически выбирается лист с <strong>закупочной</strong> ценой, а не ценой продажи — иначе при повторном импорте наценка задвоилась бы. Цена округляется до 2 знаков. Если в шапке файла есть общая сумма доставки («Доставка» → число рядом), она подставляется в заявку и включает чекбокс «Включить доставку» автоматически.</p>
-  </section>
+[Install]
+WantedBy=multi-user.target</pre>
+  <pre>sudo cp it-assets.service /etc/systemd/system/
+sudo systemctl enable --now it-assets</pre>
 
-  <!-- Registry -->
-  <section class="section" id="registry">
-    <h2>Реестр заявок</h2>
-    <h3>Поиск</h3>
-    <p>Поиск работает по: названию заявки, МОЛ, номеру спецификации, номеру Битрикс, наименованиям позиций.</p>
-    <div class="alert alert-info">
-      Организация и номер счёта поставщика в текстовый поиск не входят — для них есть отдельные фильтры ниже.
-    </div>
+  <h2>Переменные окружения</h2>
+  <table>
+    <tr><th>Переменная</th><th>По умолчанию</th><th>Описание</th></tr>
+    <tr><td><code>PORT</code></td><td>3000</td><td>HTTP-порт (редирект на HTTPS)</td></tr>
+    <tr><td><code>HTTPS_PORT</code></td><td>3443</td><td>Основной HTTPS-порт</td></tr>
+    <tr><td><code>IT_ASSETS_DATA_DIR</code></td><td>./data</td><td>Путь к папке с данными (БД и бэкапы)</td></tr>
+    <tr><td><code>TRUST_PROXY</code></td><td>—</td><td>Установите <code>1</code> при работе за nginx/reverse proxy</td></tr>
+    <tr><td><code>CORS_ORIGINS</code></td><td>—</td><td>Разрешённые origins через запятую</td></tr>
+  </table>
 
-    <h3>Фильтры</h3>
-    <div class="table-wrap">
-      <table>
-        <tr><th>Фильтр</th><th>Описание</th></tr>
-        <tr><td>Организация</td><td>Только заявки выбранной организации</td></tr>
-        <tr><td>Месяц</td><td>По дате заявки</td></tr>
-        <tr><td>Статус</td><td>См. таблицу статусов ниже</td></tr>
-        <tr><td>Поставщик</td><td>По полю «Поставщик» (сторона в шапке документа)</td></tr>
-        <tr><td>Контрагент</td><td>По полю «Контрагент» (магазин закупки — Ситилинк, DNS и т.д.)</td></tr>
-      </table>
-    </div>
+  <h2>Резервное копирование</h2>
+  <p>Данные хранятся в папке <code>data/</code>. Для бэкапа достаточно скопировать эту папку:</p>
+  <pre>cp -r /opt/it-assets/data /backup/it-assets-$(date +%Y%m%d)</pre>
+  <table>
+    <tr><th>Тип бэкапа</th><th>Хранится копий</th></tr>
+    <tr><td>Авто (каждый час)</td><td>20</td></tr>
+    <tr><td>При старте сервера</td><td>10</td></tr>
+    <tr><td>Ручной (через интерфейс)</td><td>20</td></tr>
+    <tr><td>Перед восстановлением</td><td>5</td></tr>
+  </table>
 
-    <h3>Пагинация</h3>
-    <p>25 / 50 / 100 заявок на странице. Появляется автоматически когда заявок больше выбранного размера страницы. Детальная разметка строки (позиции, кнопки, статус раскладки файлов) строится лениво — только при первом разворачивании конкретной заявки, а не заранее для всех строк страницы.</p>
+  <h2>Обновление системы</h2>
+  <p>1. Остановите сервер</p>
+  <p>2. Сделайте бэкап папки <code>data/</code></p>
+  <p>3. Замените файлы <code>server/</code> и <code>public/</code> новыми</p>
+  <p>4. Запустите <code>npm install</code></p>
+  <p>5. Запустите сервер — миграция схемы произойдёт автоматически</p>
+  <div class="alert info"><strong>Данные не затрагиваются при обновлении</strong> — папка <code>data/</code> не меняется, схема мигрирует автоматически при первом запуске новой версии.</div>
+</section>
 
-    <h3>Статусы</h3>
-    <p>Выпадающий список в строке реестра меняет статус напрямую (это select, а не циклическая кнопка).</p>
-    <div class="table-wrap">
-      <table>
-        <tr><th>Статус</th><th>Значение</th><th>Цвет</th></tr>
-        <tr><td>🆕 Новая</td><td>Заявка только создана</td><td>синий</td></tr>
-        <tr><td>📦 Заказано</td><td>Отправлено поставщику</td><td>жёлтый</td></tr>
-        <tr><td>🔄 Частично</td><td>Получена частичная поставка</td><td>оранжевый</td></tr>
-        <tr><td>✅ Получено</td><td>Заявка выполнена полностью</td><td>зелёный</td></tr>
-        <tr><td>❌ Отменена</td><td>Заявка отменена</td><td>красный</td></tr>
-      </table>
-    </div>
-    <p>Каждая смена статуса пишется в <a href="#api" style="color:var(--accent)">audit log</a>, а если в Конфиге настроен «Webhook при смене статуса» — отправляется туда же.</p>
+<!-- WORKFLOW -->
+<section id="workflow" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Рабочий процесс</span></div><div class="doc-meta"><strong>v</strong> beta-1-26w29-01</div></div>
+  <h1>Рабочий процесс разработки</h1>
+  <p class="subtitle">Git-процесс: ветки, коммиты, релизы</p>
 
-    <h3>Экспорт</h3>
-    <p>Кнопка «📊 Экспорт реестра» — .xlsx с текущими фильтрами и итоговой строкой. Кнопка «📄 CSV» рядом — тот же набор данных в CSV (точка с запятой как разделитель, UTF-8 с BOM — открывается в Excel без кракозябр с кириллицей) для внешних систем/BI, которым проще работать с CSV, чем с .xlsx.</p>
-  </section>
+  <h2>Структура веток</h2>
+  <table>
+    <tr><th>Ветка</th><th>Назначение</th><th>Содержит тесты</th></tr>
+    <tr><td><code>main</code></td><td>Production — чистый билд для деплоя</td><td>❌</td></tr>
+    <tr><td><code>dev</code></td><td>Разработка — полный код с тестами и инструментами</td><td>✅</td></tr>
+  </table>
 
-  <!-- Excel -->
-  <section class="section" id="excel">
-    <h2>Excel экспорт</h2>
-    <p>Генерируется файл <code>{краткое_название_орг}_Расчеты_{номер_спецификации}.xlsx</code> с двумя листами.</p>
+  <h2>Ежедневная разработка</h2>
+  <pre>git checkout dev              # убедиться что ты на dev
 
-    <h3>Лист 1 — Расчёты</h3>
-    <p>Структура соответствует оригинальному ручному шаблону:</p>
-    <div class="table-wrap">
-      <table>
-        <tr><th>Строка</th><th>Содержимое</th></tr>
-        <tr><td>1</td><td>Пустая</td></tr>
-        <tr><td>2</td><td>«Потребности пользователей» + «Доставка» + сумма</td></tr>
-        <tr><td>3</td><td>Заголовки колонок (ЮЛ, ФИО, №ПП, Наименование, ...)</td></tr>
-        <tr><td>4+</td><td>Позиции с расчётными полями, включая долю доставки в числовом и процентном соотношении</td></tr>
-        <tr><td>n+1</td><td>Итого</td></tr>
-        <tr><td>n+3</td><td>Прибыль</td></tr>
-      </table>
-    </div>
-    <p>Все денежные формулы (цена закупа, доля доставки, цена с доставкой, цена/сумма продажи, итого, прибыль) обёрнуты в <code>ROUND(...,2)</code> — значения не «плывут» длинными хвостами дробей ни в кэшированном значении, ни при пересчёте формулы в Excel.</p>
+# ... редактируешь файлы ...
 
-    <h3>Лист 2 — Спецификация</h3>
-    <p>Таблица с ценами продажи. Для типа документа «Реализация» — только позиции ИП, не все строки.</p>
+git add .                     # добавить все изменения
+git commit -m "описание"      # сохранить коммит
+git push origin dev           # отправить на GitHub</pre>
 
-    <h3>Импорт обратно</h3>
-    <p>Файл, экспортированный отсюда, можно загрузить через «Импорт позиций из Excel» в форме заявки — импорт узнаёт собственный формат по заголовкам колонок и подставляет закупочную (не продажную) цену и сумму доставки автоматически. Подробнее — в разделе <a href="#requests" style="color:var(--accent)">«Заявки → Импорт из Excel»</a>.</p>
-  </section>
-
-  <!-- Bitrix24 -->
-  <section class="section" id="bitrix">
-    <h2>Интеграция Bitrix24</h2>
-    <p>Кнопка <strong>🔗 Bitrix24</strong> в форме заявки отправляет данные через входящий webhook — создаёт сделку в CRM с описанием позиций и суммой. Кнопка скрыта, пока webhook не настроен.</p>
-    <h3>Настройка</h3>
-    <ol style="padding-left:20px;color:var(--text2);line-height:2">
-      <li>В Bitrix24: <strong>Настройки → Разработчикам → Входящий webhook</strong></li>
-      <li>Добавить права: <code>crm</code></li>
-      <li>Скопировать URL вида <code>https://your.bitrix24.ru/rest/1/ключ/</code></li>
-      <li>Вставить в procure-it: <strong>Настройки → Интеграция Bitrix24 → Webhook URL</strong> (этот блок специально в самом низу страницы настроек — большинству он не нужен)</li>
-    </ol>
-    <div class="alert alert-info">
-      Webhook не передаётся в JSON-бэкап и маскируется в <code>GET /api/settings</code>. Пароль сетевой папки тоже не попадает в бэкап.
-    </div>
-  </section>
-
-  <!-- Spec -->
-  <section class="section" id="spec">
-    <h2>Спецификация</h2>
-    <p>Предпросмотр спецификации в браузере: кнопка «📄 Спецификация» в форме или «Спецификация» в раскрытой строке реестра.</p>
-    <p>Печать в PDF: кнопка «Печать / PDF» → в диалоге выбрать «Сохранить как PDF». Кнопка «Сохранить в Word» скачивает <code>.docx</code>, сгенерированный на сервере (<code>POST /api/spec-docx</code>) — красная строка (первая строка абзаца, 1.25см) сделана через явный символ табуляции + табстоп, а не через свойство <code>w:ind firstLine</code>: это надёжнее при печати в реальном Word.</p>
-    <p>Файл называется <code>{краткое_название_орг}_Спецификация_{номер}.docx</code> — например <code>ЛД_Спецификация_П202608-01.docx</code>.</p>
-    <p>Содержимое зависит от типа документа заявки (см. <a href="#requests" style="color:var(--accent)">«Заявки → Тип документа»</a>): для «Товаров»/«Услуг монтажа» — заголовок, ссылка на договор, дата, таблица позиций, итого, условия поставки, порядок оплаты, блок подписей Поставщик/Покупатель. Для «Реализации» — без ссылки на договор и без порядка оплаты, подпись только одной стороны. Для «Сопровождения» — «Акт гарантийного обслуживания» с гарантийным сроком и условиями покрытия, без порядка оплаты.</p>
-  </section>
-
-  <!-- About page -->
-  <section class="section" id="about-page">
-    <h2>О системе</h2>
-    <p>Отдельная страница (доступна админам) — динамическая, не статический текст:</p>
-    <ul>
-      <li><strong>Окружение</strong> — версия Node.js, платформа, время работы, память процесса, размер БД, время последнего бэкапа; обновляется каждые 10 секунд</li>
-      <li><strong>Технологии</strong> — курируемое описание стека (строится по факту наличия пакета в зависимостях, а не захардкожено)</li>
-      <li><strong>Последние изменения</strong> — раскрывашка, парсит <code>CHANGELOG.md</code> напрямую (см. <a href="#testing" style="color:var(--accent)">«Автотесты и CHANGELOG»</a>) — отдельного дублирующего списка в коде нет</li>
-      <li><strong>Зависимости</strong> — полный список из <code>package.json</code> с реально установленными версиями (резолвятся из <code>node_modules</code>), плюс кнопка «🔄 Проверить обновления» — по требованию дёргает <code>npm outdated --json</code> и подсвечивает устаревшие пакеты</li>
-    </ul>
-    <p>Компактный мини-виджет с версией, ссылкой на GitHub и лицензией MIT (со скачиванием текста по клику) есть и в сайдбаре — виден всегда, независимо от роли.</p>
-  </section>
-
-  <!-- Shortcuts -->
-  <section class="section" id="shortcuts">
-    <h2>Горячие клавиши</h2>
-    <div class="table-wrap">
-      <table>
-        <tr><th>Клавиша</th><th>Действие</th></tr>
-        <tr><td><kbd>Ctrl+S</kbd></td><td>Сохранить заявку</td></tr>
-        <tr><td><kbd>Ctrl+N</kbd></td><td>Новая заявка (очистить форму)</td></tr>
-        <tr><td><kbd>Ctrl+R</kbd></td><td>Открыть реестр</td></tr>
-        <tr><td><kbd>Ctrl+Enter</kbd></td><td>Добавить строку позиции</td></tr>
-        <tr><td><kbd>Escape</kbd></td><td>Закрыть модалку / отменить редактирование</td></tr>
-        <tr><td><kbd>?</kbd></td><td>Показать справку по клавишам</td></tr>
-      </table>
-    </div>
-    <p>Кнопка ⌨️ в правом верхнем углу также открывает справку.</p>
-  </section>
-
-  <!-- HTTPS -->
-  <section class="section" id="https">
-    <h2>HTTPS</h2>
-    <p>При первом запуске автоматически генерируется самоподписанный сертификат RSA-2048 сроком на 10 лет.</p>
-    <pre>data/certs/cert.pem   # сертификат
-data/certs/key.pem    # приватный ключ</pre>
-    <p>Чтобы использовать собственный сертификат — замените файлы и перезапустите сервер.</p>
-    <div class="alert alert-info">
-      HTTP-порт (PORT+1, по умолчанию 9112) автоматически редиректит на HTTPS.
-    </div>
-  </section>
-
-  <!-- Backup -->
-  <section class="section" id="backup">
-    <h2>Бэкап</h2>
-    <h3>Автоматический</h3>
-    <p>Запускается через 10 секунд после старта, затем каждые 6 часов. Снапшот БД сохраняется в <code>data/backups/zakupki_YYYY-MM-DD_HH-MM.db</code> (или в настроенную папку — см. ниже), файлы старше 30 дней удаляются автоматически.</p>
-    <p>Одновременно синхронизируется <code>files_mirror/</code> — зеркало прикреплённых файлов (подписанные PDF-спецификации, счета). Сами файлы хранятся на диске отдельно от SQLite, поэтому снапшот <code>.db</code> их не содержит — зеркало закрывает этот пробел. Копируются только новые/изменённые файлы, зеркало не версионируется и не растёт бесконечно.</p>
-
-    <h3>Своя папка для бэкапов</h3>
-    <p><strong>Настройки → Резервная копия → «Папка для автобэкапов»</strong> — необязательное поле. Пусто — поведение как раньше (<code>data/backups</code> внутри проекта). Если бэкап лежит там же, где рабочие данные, при поломке того же диска пропадает и он — можно указать путь на другом диске или сетевой ресурс (<code>D:\Backups\zakupki</code>, <code>\\nas\backups\zakupki</code>). Если настроенный путь недоступен на момент бэкапа — сервер откатывается на дефолт и пишет об этом в лог, не роняя бэкап целиком.</p>
-
-    <h3>Ручной (из интерфейса)</h3>
-    <p>Раздел «Настройки» (внизу страницы) → кнопки:</p>
-    <ul>
-      <li><strong>💾 Скачать JSON</strong> — полный экспорт в JSON: организации, заявки, адреса, шаблоны, пользователи и все настройки (включая поставщика по умолчанию)</li>
-      <li><strong>🗄️ Скачать DB</strong> — скачать SQLite файл (заодно синхронизирует зеркало прикреплённых файлов)</li>
-      <li><strong>📂 Восстановить из JSON</strong> — загрузить JSON бэкап</li>
-    </ul>
-    <div class="alert alert-info">
-      Перед восстановлением показывается модалка с реальными цифрами «сейчас в системе / будет из файла» (заявки/организации/пользователи) и датой формирования бэкапа — вместо голого подтверждения без деталей. При восстановлении сервер сначала ищет прикреплённый файл на месте, а если его там нет (например, диск был потерян) — берёт из <code>files_mirror/</code> (проверяет и текущую настроенную папку бэкапа, и старую дефолтную, если папка менялась).
-    </div>
-
-    <h3>Через API</h3>
-    <pre>GET  /api/backup     → JSON
-GET  /api/backup/db  → SQLite файл
-POST /api/restore    → восстановить из JSON</pre>
-  </section>
-
-  <!-- API -->
-  <section class="section" id="api">
-    <h2>REST API</h2>
-    <div class="alert alert-info">
-      Роли указаны в скобках: <code>public</code> — без токена, <code>operator</code> — оператор или admin, <code>admin</code> — только admin.
-    </div>
-
-    <h3>Аутентификация и пользователи</h3>
-    <div class="table-wrap"><table>
-      <tr><th>Метод</th><th>Путь</th><th>Описание</th></tr>
-      <tr><td><span class="method GET">GET</span>/api/auth/status</td><td>Статус авторизации <em>(public)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/auth/login</td><td>Войти (body: <code>{username, password}</code>) <em>(public)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/auth/logout</td><td>Выйти <em>(public)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/auth/change-password</td><td>Сменить свой пароль (body: <code>{currentPassword?, newPassword}</code> — currentPassword не нужен при принудительной смене временного пароля)</td></tr>
-      <tr><td><span class="method GET">GET</span>/api/users</td><td>Список пользователей <em>(admin)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/users</td><td>Создать пользователя <em>(admin)</em></td></tr>
-      <tr><td><span class="method GET">GET</span>/api/auth/reset-password-info</td><td>Проверить, настроен ли SMTP для сброса пароля <em>(public)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/auth/reset-password-request</td><td>Запросить сброс пароля по email (body: <code>{email}</code>) — всегда отвечает <code>ok:true</code> <em>(public)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/auth/reset-password</td><td>Применить новый пароль по токену (body: <code>{token, newPassword}</code>) <em>(public)</em></td></tr>
-      <tr><td><span class="method PUT">PUT</span>/api/users/:id</td><td>Изменить роль / пароль / email (body: <code>{role?, password?, email?}</code>) <em>(admin)</em></td></tr>
-      <tr><td><span class="method DELETE">DELETE</span>/api/users/:id</td><td>Удалить (нельзя удалить последнего admin) <em>(admin)</em></td></tr>
-    </table></div>
-
-    <h3>Организации</h3>
-    <div class="table-wrap"><table>
-      <tr><th>Метод</th><th>Путь</th><th>Описание</th></tr>
-      <tr><td><span class="method GET">GET</span>/api/orgs</td><td>Список организаций <em>(public)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/orgs</td><td>Создать организацию <em>(operator)</em></td></tr>
-      <tr><td><span class="method PUT">PUT</span>/api/orgs/:id</td><td>Обновить организацию <em>(operator)</em></td></tr>
-      <tr><td><span class="method DELETE">DELETE</span>/api/orgs/:id</td><td>Удалить (если нет заявок) <em>(operator)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/orgs/bulk</td><td>Импорт списком — <code>{ rows: [{full,short,signatory,contract,address,folder}, ...] }</code>, построчный отчёт <em>(operator)</em></td></tr>
-    </table></div>
-    <div class="alert alert-info">
-      <code>POST</code>/<code>PUT</code> отклоняют дубли (<code>409</code>) — по короткому названию и по фактической папке раскладки файлов, регистронезависимо (включая кириллицу). Две организации с одинаковым коротким названием иначе физически раскладывались бы в одну и ту же папку на диске. <code>POST /orgs/bulk</code> не откатывает всю пачку из-за одной проблемной строки — каждая строка обрабатывается независимо (дубль с БД, дубль внутри самого списка или незаполненные обязательные поля отмечаются как <code>skipped</code>/<code>error</code>, остальные добавляются).
-    </div>
-
-    <h3>Заявки</h3>
-    <div class="table-wrap"><table>
-      <tr><th>Метод</th><th>Путь</th><th>Описание</th></tr>
-      <tr><td><span class="method GET">GET</span>/api/requests</td><td>Список. Query: <code>?q= &org= &month= &status= &supplier= &counterparty= &limit= &offset=</code> <em>(public)</em></td></tr>
-      <tr><td><span class="method GET">GET</span>/api/requests/:id</td><td>Одна заявка <em>(public)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/requests</td><td>Создать <em>(operator)</em></td></tr>
-      <tr><td><span class="method PUT">PUT</span>/api/requests/:id</td><td>Обновить <em>(operator)</em></td></tr>
-      <tr><td><span class="method PATCH">PATCH</span>/api/requests/:id/status</td><td>Только статус — см. <a href="#registry" style="color:var(--accent)">таблицу статусов</a> <em>(operator)</em></td></tr>
-      <tr><td><span class="method DELETE">DELETE</span>/api/requests/:id</td><td>Удалить <em>(operator)</em></td></tr>
-      <tr><td><span class="method GET">GET</span>/api/requests/:id/layout-status</td><td>Статус раскладки файлов в сетевую папку — read-only проверка по факту на диске, не хранится в БД <em>(operator)</em></td></tr>
-    </table></div>
-
-    <h3>Файлы заявки</h3>
-    <div class="table-wrap"><table>
-      <tr><th>Метод</th><th>Путь</th><th>Описание</th></tr>
-      <tr><td><span class="method POST">POST</span>/api/requests/:id/signed-spec</td><td>Загрузить подписанную спецификацию, PDF (body: <code>{pdf: base64}</code>, лимит 20MB) <em>(operator)</em></td></tr>
-      <tr><td><span class="method GET">GET</span>/api/requests/:id/signed-spec</td><td>Скачать подписанную спецификацию <em>(operator)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/requests/:id/invoice-file</td><td>Загрузить счёт — PDF/PNG/JPG/WebP (лимит 20MB) <em>(operator)</em></td></tr>
-      <tr><td><span class="method GET">GET</span>/api/requests/:id/invoice-file</td><td>Скачать счёт <em>(operator)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/requests/:id/layout-files</td><td>Разложить docx/excel/счёт в сетевую папку (лимит 50MB) <em>(operator)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/requests/:id/open-folder</td><td>Создать/открыть папку заявки в проводнике ОС (Windows/macOS/Linux) <em>(operator)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/test-folder</td><td>Проверить доступность сетевой папки/WebDAV <em>(operator)</em></td></tr>
-    </table></div>
-
-    <h3>Прочее</h3>
-    <div class="table-wrap"><table>
-      <tr><th>Метод</th><th>Путь</th><th>Описание</th></tr>
-      <tr><td><span class="method GET">GET</span>/api/addresses</td><td>Последние адреса доставки <em>(operator)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/addresses</td><td>Сохранить адрес <em>(operator)</em></td></tr>
-      <tr><td><span class="method GET">GET</span>/api/templates</td><td>Шаблоны позиций <em>(operator)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/templates</td><td>Создать шаблон <em>(operator)</em></td></tr>
-      <tr><td><span class="method DELETE">DELETE</span>/api/templates/:id</td><td>Удалить шаблон <em>(operator)</em></td></tr>
-      <tr><td><span class="method GET">GET</span>/api/stats</td><td>Агрегированная статистика <em>(public)</em></td></tr>
-      <tr><td><span class="method GET">GET</span>/api/backup</td><td>JSON бэкап <em>(admin)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/restore</td><td>Восстановить из JSON <em>(admin)</em></td></tr>
-      <tr><td><span class="method GET">GET</span>/api/backup/db</td><td>SQLite бэкап <em>(admin)</em></td></tr>
-      <tr><td><span class="method GET">GET</span>/health</td><td>Health check <em>(public)</em></td></tr>
-      <tr><td><span class="method GET">GET</span>/api/audit</td><td>История изменений (<code>?request_id=&amp;limit=50</code>) <em>(operator)</em></td></tr>
-      <tr><td><span class="method GET">GET</span>/api/settings</td><td>Настройки приложения (логотип, цвета, webhook) <em>(operator, часть полей скрыта)</em></td></tr>
-      <tr><td><span class="method PUT">PUT</span>/api/settings</td><td>Сохранить настройки <em>(admin)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/settings/smtp-test</td><td>Проверить SMTP и отправить тестовое письмо (body: <code>{to}</code>) <em>(admin)</em></td></tr>
-      <tr><td><span class="method GET">GET</span>/api/version</td><td>Версия приложения <em>(operator)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/spec-docx</td><td>Сгенерировать спецификацию в .docx <em>(operator)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/send-bitrix</td><td>Отправить заявку в Bitrix24 через webhook <em>(operator)</em></td></tr>
-    </table></div>
-    <div class="alert alert-warn">
-      Операторам (не admin) в ответе <code>GET /api/settings</code> скрыты инфраструктурные поля: сетевая папка/логин/пароль, webhook'и Bitrix/статусов и SMTP-параметры (smtpHost/smtpUser/smtpPass/smtpFrom).
-      <br><br>
-      <strong>SMTP (сброс пароля и уведомления).</strong> Настраивается в разделе «Настройки» → блок «📧 SMTP». Поддерживаются любые SMTP-серверы (Yandex, Gmail, корпоративный Exchange/Postfix). После заполнения полей кнопка «Тест соединения» отправляет тестовое письмо через <code>POST /api/settings/smtp-test</code>. Когда SMTP настроен, на странице логина появляется ссылка «Забыли пароль?» — пользователь вводит email, получает письмо со ссылкой <code>/reset-password?token=...</code> (токен действует 1 час). Если SMTP не настроен — показывается инструкция «обратитесь к администратору», который может сбросить пароль вручную кнопкой 🔑 в разделе «Учётные записи».
-    </div>
-  </section>
-
-  <!-- Health -->
-  <section class="section" id="health">
-    <h2>Health check</h2>
-    <pre>GET /health
-
-{
-  "status": "ok",
-  "version": "26w31-b01",
-  "requests": 42,
-  "uptime": 3600
-}</pre>
-    <p>Используется Docker healthcheck-ом и системами мониторинга. Не требует авторизации.</p>
-  </section>
-
-  <!-- Docker -->
-  <section class="section" id="docker">
-    <h2>Docker</h2>
-
-    <h3>Быстрый старт</h3>
-    <pre>git clone https://github.com/DarkyAndSparky/procure-it.git
-cd procure-it
-
-docker compose up -d</pre>
-    <p>Встроенная система ролей включена всегда — при первом запуске автоматически создаётся администратор (<strong>логин <code>admin</code>, случайный пароль выводится в консоль</strong>), приложение сразу попросит сменить пароль. <code>PROCURE_PASSWORD</code> не обязателен — это legacy-заглушка на случай самого первого запуска без доступа к интерфейсу, см. <a href="#config" style="color:var(--accent)">«Аутентификация»</a>.</p>
-
-    <div class="alert alert-warn">
-      При первом открытии браузер покажет предупреждение о сертификате.<br>
-      Нажмите <strong>Дополнительно → Перейти</strong>.
-    </div>
-
-    <h3>Порты</h3>
-    <div class="table-wrap"><table>
-      <tr><th>Порт</th><th>Протокол</th><th>Назначение</th></tr>
-      <tr><td>9111</td><td>HTTPS</td><td>Основной</td></tr>
-      <tr><td>9112</td><td>HTTP</td><td>Редирект на HTTPS</td></tr>
-    </table></div>
-
-    <h3>Данные</h3>
-    <p>Все данные хранятся в папке <code>./data/</code> на хосте (volume mount) — не теряются при пересборке контейнера.</p>
-    <pre>data/zakupki.db               # База данных
-data/certs/                   # TLS сертификат
-data/backups/                 # Автобэкапы .db каждые 6ч + files_mirror/ (зеркало прикреплённых файлов)
-data/signed_specs/            # Подписанные спецификации (PDF)
-data/invoices/                # Приложенные файлы счетов
-logs/access.log                # Логи запросов</pre>
-
-    <h3>Команды</h3>
-    <pre>docker compose ps             # статус
-docker compose logs -f        # логи в реальном времени
-docker compose down           # остановить
-docker compose up -d --build  # пересобрать после обновления
-docker exec -it procure-it sh # войти в контейнер</pre>
-
-    <h3>Переменные окружения</h3>
-    <div class="table-wrap"><table>
-      <tr><th>Переменная</th><th>По умолчанию</th><th>Описание</th></tr>
-      <tr><td>PORT</td><td>9111</td><td>HTTPS порт</td></tr>
-      <tr><td>PROCURE_PASSWORD</td><td>не задан</td><td>Legacy-заглушка для самого первого запуска — см. <a href="#config" style="color:var(--accent)">«Аутентификация»</a></td></tr>
-      <tr><td>BACKUP_INTERVAL_MS</td><td>21600000</td><td>Интервал автобэкапа (мс)</td></tr>
-    </table></div>
-  </section>
-
-  <!-- Branches -->
-  <section class="section" id="branches">
-    <h2>Ветки: main / dev</h2>
-    <div class="branch-diagram">
-      <span class="br-dev">dev</span>  ──●──●──●──●──●──●──●──●─── (активная разработка)<br>
-      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;╲&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;╲<br>
-      <span class="br-main">main</span> ─────────────────●───────────────●── (только релизы)<br>
-      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="br-tag">v26w29r02</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="br-tag">v26w31-b01</span>
-    </div>
-
-    <h3>Правила</h3>
-    <ul>
-      <li>В <code>main</code> никогда не коммитим напрямую</li>
-      <li>Вся работа ведётся в <code>dev</code></li>
-      <li>Когда <code>dev</code> стабилен и проверен — merge в <code>main</code> + тег</li>
-      <li>Дефолтная ветка на GitHub — <code>dev</code></li>
-    </ul>
-  </section>
-
-  <!-- Versioning -->
-  <section class="section" id="versioning">
-    <h2>Версионирование</h2>
-    <p>Формат: <code>YYwWW-СТАДИЯNN</code></p>
-    <div class="table-wrap"><table>
-      <tr><th>Часть</th><th>Значение</th><th>Пример</th></tr>
-      <tr><td>YY</td><td>Год (2 цифры)</td><td>26</td></tr>
-      <tr><td>wWW</td><td>ISO-номер недели</td><td>w31</td></tr>
-      <tr><td>СТАДИЯ</td><td>Стадия сборки — см. таблицу ниже</td><td>b</td></tr>
-      <tr><td>NN</td><td>Порядковый номер сборки на этой неделе (с этой стадией)</td><td>01</td></tr>
-    </table></div>
-
-    <h3>Стадии</h3>
-    <div class="table-wrap"><table>
-      <tr><th>Код</th><th>Стадия</th><th>Когда использовать</th></tr>
-      <tr><td><code>a</code></td><td>Alpha</td><td>Ранняя, потенциально нестабильная сборка — активная разработка в <code>dev</code></td></tr>
-      <tr><td><code>b</code></td><td>Beta</td><td>Функционал закончен, идёт обкатка/тестирование</td></tr>
-      <tr><td><code>rc</code></td><td>Release Candidate</td><td>Кандидат в релиз — багов не найдено, финальная проверка перед merge в <code>main</code></td></tr>
-      <tr><td><code>r</code></td><td>Release</td><td>Финальный релиз в <code>main</code></td></tr>
-    </table></div>
-
-    <pre>26w31-b01    # 2026, неделя 31, бета, первая сборка
-26w31-b02    # 2026, неделя 31, бета, вторая сборка
-26w31-rc01   # 2026, неделя 31, кандидат в релиз, первая сборка
-26w31-r01    # 2026, неделя 31, релиз, первая сборка
-26w32-a01    # 2026, неделя 32, альфа, первая сборка</pre>
-
-    <div class="alert alert-warn">
-      <strong>package.json — единственный источник правды.</strong> Номер версии больше не редактируется вручную в README/доках — при бампе версии меняется <em>только</em> <code>package.json</code> → <code>version</code>, а затем запускается синхронизация:
-      <pre>npm run version:sync</pre>
-      Скрипт (<code>scripts/sync-version.js</code>) сам подставит новый номер во все места, где он отображается: бейдж в README, версия в шапке и футере этой страницы, тег Docker-образа в <code>docker-compose.yml</code>. Иллюстративные примеры формата (как в таблице выше) скрипт не трогает — только реальные «текущая версия» плейсхолдеры, помеченные комментариями <code>&lt;!--VERSION--&gt;…&lt;!--/VERSION--&gt;</code> в исходниках.
-    </div>
-  </section>
-
-  <!-- Testing & changelog -->
-  <section class="section" id="testing">
-    <h2>Автотесты и CHANGELOG</h2>
-    <h3>Тесты</h3>
-    <p>Встроенный тест-раннер Node (<code>node --test</code>), без новых зависимостей:</p>
-    <pre>npm test</pre>
-    <p>Покрытие: формула расчёта цены с наценкой и долей доставки (<code>public/js/pricing-core.js</code> — общий модуль, используется и формой заявки, и Excel-экспортом, и сервером при пересчёте итоговых сумм заявки, чтобы не рассинхронизироваться), генерация <code>.docx</code> (табуляция вместо <code>w:ind</code>, невидимые границы служебных таблиц, ширина таблицы, содержимое по типам документа), миграция схемы БД, парсер <code>CHANGELOG.md</code>, аутентификация (соль-на-пользователя, миграция legacy-хэшей, timing-safe сравнение), валидация позиций и восстановление из бэкапа. Подключено в CI (<code>.github/workflows/ci.yml</code>).</p>
-
-    <h3>E2e-тесты (Playwright)</h3>
-    <p>Отдельный слой поверх unit-тестов — гоняет настоящий Chromium против настоящего сервера (реальные клики, реальная форма логина, а не только HTTP-запросы напрямую):</p>
-    <pre>npx playwright install chromium   # один раз
-npm run test:e2e</pre>
-    <p>Сеттап-проект (<code>e2e/auth.setup.js</code>) заводит admin/operator/viewer через API один раз на весь прогон и сохраняет сессию (<code>storageState</code> — токен в <code>localStorage</code>, приложение не использует куки для сессии), остальные тесты подключают готовую сессию вместо повторного прохождения формы логина. Покрытие: логин-форма и гостевой режим, организации (создание, дубликат короткого названия, редактирование, удаление), полный цикл заявки (создание с проверкой формулы наценки прямо в форме → сохранение → поиск в реестре → смена статуса → редактирование с пересчётом суммы → удаление), ролевые границы viewer/operator/admin — включая прямые API-запросы в обход UI (403/400 от сервера, не только «кнопка скрыта»). Сервер поднимается на изолированной временной директории данных (<code>PROCURE_DATA_DIR</code>) — не трогает <code>data/</code> репозитория. Пока не подключено в CI — прогоняется вручную.</p>
-
-    <h3>CHANGELOG.md</h3>
-    <p><code>CHANGELOG.md</code> в формате <a href="https://keepachangelog.com/ru/1.0.0/" target="_blank" style="color:var(--accent)">Keep a Changelog</a> — единственный источник истины по истории изменений. Раздел «Последние изменения» на странице <a href="#about-page" style="color:var(--accent)">«О системе»</a> парсит именно этот файл, отдельного списка в коде нет.</p>
-    <div class="alert alert-info">
-      Pre-commit git-хук (<code>scripts/hooks/pre-commit</code>, ставится автоматически при <code>npm install</code> через <code>prepare</code>) напоминает обновить <code>CHANGELOG.md</code>, если в коммите меняются файлы в <code>src/</code>, <code>public/js/</code> или <code>public/*.html</code>, а сам changelog не тронут. Не блокирует намертво — просит подтверждения в интерактивном терминале, в CI/GUI-клиентах только предупреждает.
-    </div>
-  </section>
-
-  <!-- Contributing -->
-  <section class="section" id="contributing">
-    <h2>Contributing</h2>
-    <div class="steps">
-      <div class="step">
-        <div class="step-num">1</div>
-        <div class="step-body">
-          <strong>Работай в ветке dev</strong>
-          <pre>git checkout dev</pre>
-        </div>
-      </div>
-      <div class="step">
-        <div class="step-num">2</div>
-        <div class="step-body">
-          <strong>Коммить с понятным сообщением</strong>
-          <pre>git commit -m "fix: исправлен расчёт доставки"</pre>
-          <p>Типы: <code>feat</code> / <code>fix</code> / <code>refactor</code> / <code>docs</code> / <code>chore</code></p>
-        </div>
-      </div>
-      <div class="step">
-        <div class="step-num">3</div>
-        <div class="step-body">
-          <strong>Релиз в main</strong>
-          <pre>git checkout main
-git merge dev
-git tag v26w31-b01
-git push origin main --tags
+  <h2>Релиз в production</h2>
+  <p>Когда <code>dev</code> стабилен и все тесты проходят — запустите <code>release.bat</code> двойным кликом (Windows) или:</p>
+  <pre>git checkout main
+git checkout dev -- server/ public/ START.bat INSTALL.bat start.sh install.sh README.md .gitignore
+git commit -m "main: release vX.X"
+git push origin main
 git checkout dev</pre>
-        </div>
-      </div>
-    </div>
-    <a href="https://github.com/DarkyAndSparky/procure-it/blob/main/CONTRIBUTING.md" class="gh-link" target="_blank">Полный CONTRIBUTING.md →</a>
-  </section>
+  <div class="alert info"><strong>release.bat</strong> автоматизирует весь процесс: проверяет статус, копирует нужные файлы, убирает devDependencies из package.json, делает коммит и возвращается на dev.</div>
 
-  <div style="border-top:1px solid var(--border);margin-top:48px;padding-top:24px;color:var(--text2);font-size:12px;display:flex;justify-content:space-between;align-items:center">
-    <span>procure-it <!--VERSION-->26w34-b07<!--/VERSION--> · MIT License</span>
-    <a href="https://github.com/DarkyAndSparky" style="color:var(--text2);text-decoration:none">© DarkyAndSparky</a>
+  <h2>Обновление документации</h2>
+  <pre>git checkout dev
+# ... редактируешь docs/index.html ...
+git add docs/index.html
+git commit -m "docs: обновлена документация"
+git push origin dev</pre>
+  <p>GitHub Pages обновится автоматически через ~30 секунд после пуша.</p>
+
+  <h2>Правила коммит-сообщений</h2>
+  <table>
+    <tr><th>Префикс</th><th>Когда использовать</th><th>Пример</th></tr>
+    <tr><td><code>dev:</code></td><td>Новые фичи, изменения в dev</td><td><code>dev: добавлена фильтрация по дате</code></td></tr>
+    <tr><td><code>fix:</code></td><td>Исправление бага</td><td><code>fix: ошибка при импорте CSV с пустыми полями</code></td></tr>
+    <tr><td><code>test:</code></td><td>Изменения в тестах</td><td><code>test: добавлены тесты для history API</code></td></tr>
+    <tr><td><code>docs:</code></td><td>Обновление документации</td><td><code>docs: обновлено руководство пользователя</code></td></tr>
+    <tr><td><code>main:</code></td><td>Релиз в main</td><td><code>main: release beta-1-26w27-03</code></td></tr>
+  </table>
+</section>
+
+
+<!-- OVERVIEW -->
+<section id="overview" class="section active">
+  <div class="top-bar">
+    <div class="breadcrumb">Docs / <span>Обзор</span></div>
+    <div class="doc-meta"><strong>v</strong> beta-1-26w29-01 &nbsp;·&nbsp; Node.js · Express · SQLite · HTTPS</div>
   </div>
+  <h1>IT Assets — система учёта ИТ-оборудования</h1>
+  <p class="subtitle">Документация по системе IT Assets — для пользователей, IT-администраторов и разработчиков.</p>
+
+  <div class="cards-grid">
+    <div class="stat-card"><div class="label">Runtime</div><div class="value" style="color:var(--green)">Node.js</div></div>
+    <div class="stat-card"><div class="label">Фреймворк</div><div class="value" style="color:var(--accent)">Express 4</div></div>
+    <div class="stat-card"><div class="label">База данных</div><div class="value" style="color:var(--orange)">SQLite</div></div>
+    <div class="stat-card"><div class="label">Порты</div><div class="value">3000 → 3443 (HTTPS)</div></div>
+  </div>
+
+  <div class="alert info"><strong>Версия теперь читается из package.json.</strong> <code>APP_VERSION</code> в <code>server/index.js</code> — единый источник правды; человекочитаемое отображение (<code>β1 · 26w27·02</code>) генерируется из него автоматически (<code>alpha-N-</code> → <code>αN ·</code>, <code>beta-N-</code> → <code>βN ·</code>).</div>
+
+  <h2>Что делает система</h2>
+  <p>Веб-приложение для учёта ИТ-оборудования внутри организации. Ведёт реестр устройств (ноутбуки, ПК, принтеры, сетевое оборудование и др.), отслеживает перемещения, назначает ответственных, ведёт справочник сотрудников, генерирует инвентарные номера, экспортирует/импортирует данные в CSV, делает резервные копии и генерирует QR-коды для инвентарных номеров.</p>
+
+  <h2>Ключевые сущности</h2>
+  <table>
+    <tr><th>Сущность</th><th>Где хранится</th><th>Описание</th></tr>
+    <tr><td>Asset</td><td>it-assets.sqlite → assets</td><td>Единица оборудования</td></tr>
+    <tr><td>History</td><td>it-assets.sqlite → history</td><td>Лог всех действий (добавление, перемещение, списание, смена статуса, присвоение инв. номера...)</td></tr>
+    <tr><td>Organization</td><td>it-assets.sqlite → organizations + org_inv_rules</td><td>Юридическое лицо / организация</td></tr>
+    <tr><td>Filial</td><td>it-assets.sqlite → filials</td><td>Филиал / офис организации</td></tr>
+    <tr><td>Location</td><td>it-assets.sqlite → locations</td><td>Конкретное помещение внутри филиала</td></tr>
+    <tr><td>Employee</td><td>it-assets.sqlite → employees</td><td>Справочник сотрудников (ответственных за оборудование)</td></tr>
+    <tr><td>Account</td><td>it-assets.sqlite → accounts <span style="opacity:.6">(Фаза 7c: переведено с config.json на SQLite)</span></td><td>Справочник учётных записей внешних систем</td></tr>
+    <tr><td>User</td><td>it-assets.sqlite → users</td><td>Пользователи системы (роли: admin, operator, viewer)</td></tr>
+    <tr><td>InvRule</td><td>внутри Organization</td><td>Правило генерации инвентарных номеров</td></tr>
+  </table>
+  <p>Начиная со схемы v4, у Asset помимо строковых полей (<code>org</code>, <code>filial</code>, <code>location</code>) появились связи по ID — <code>org_id</code>, <code>filial_id</code>, <code>location_id</code>, <code>responsible_id</code> — на соответствующие справочники. Миграции проставляют их автоматически для старых записей.</p>
+
+  <h2>Вкладки (поле tab у Asset)</h2>
+  <table>
+    <tr><th>tab</th><th>Описание</th><th>Категории по умолчанию</th></tr>
+    <tr><td>os</td><td>Основные средства</td><td>Оборудование пользователей, Оргтехника, Мини ПК</td></tr>
+    <tr><td>small</td><td>Мелкий инвентарь</td><td>Периферия, Гарнитуры, Колонки</td></tr>
+    <tr><td>infra</td><td>Инфраструктура</td><td>Сетевое оборудование, Wi-Fi, Принтеры, Видеонаблюдение, ИБП, Серверы</td></tr>
+  </table>
+</section>
+
+<!-- ARCHITECTURE -->
+<section id="arch" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Архитектура</span></div></div>
+  <h1>Архитектура системы</h1>
+  <p class="subtitle">SPA-приложение на Node.js с SQLite (встроенный node:sqlite). Backend разбит на repo/routes слои после рефакторинга фаз 1–4d, база данных переведена с lowdb на SQLite в Фазе 7c.</p>
+
+  <h2>Схема компонентов</h2>
+  <div class="card">
+    <div class="arch-box" style="border-color:var(--accent); background:rgba(79,142,247,.05)">
+      <strong>🌐 Браузер — SPA</strong><br>
+      <span class="arch-label">JS разбирается на файлы (Фаза 5, в процессе: 4806 → 3428 строк, 13 файлов вынесено в <code>public/js/</code>). Это classic-скрипты (<code>&lt;script src&gt;</code>), НЕ <code>type="module"</code> — в конце index.html есть синхронный вызов <code>render()</code> до <code>DOMContentLoaded</code>, а ES-модули выполняются deferred. Стили — в <code>public/css/main.css</code>. Обращается к бэкенду через fetch/XHR.</span>
+    </div>
+    <div class="arch-arrow">↕ HTTPS (redirect с HTTP)</div>
+    <div class="arch-box" style="border-color:var(--green); background:rgba(34,197,94,.05)">
+      <strong>🖥 Express Server — <code>server/index.js</code></strong><br>
+      <span class="arch-label">Монтирует Router-ы из <code>server/routes/</code> + раздача статики из <code>public/</code>. HTTP на 3000 (редирект), HTTPS на 3443. После рефакторинга: ~548 строк вместо 1785.</span>
+    </div>
+    <div class="arch-arrow">↕ require()</div>
+    <div class="arch-box" style="border-color:var(--orange); background:rgba(249,115,22,.05)">
+      <strong>🗄 Database Layer — <code>server/database.js</code> + <code>server/db/sqlite.js</code></strong><br>
+      <span class="arch-label">С Фазы 7c: вся прикладная данные (активы, история, организации, филиалы, локации, сотрудники, пользователи, аккаунты, настройки, справочники) — в SQLite через встроенный <code>node:sqlite</code> (без нативных аддонов, ноль пересборки под платформу). lowdb (<code>db/store.js</code>) остался только для служебной <code>_meta.schema_version</code> — используется исключительно как источник для одноразовой автомиграции в SQLite при первом запуске.</span>
+    </div>
+    <div class="arch-arrow">↕ prepared statements (node:sqlite)</div>
+    <div class="arch-box">
+      <strong>📁 data/</strong><br>
+      <code>it-assets.sqlite</code> — вся прикладная база (assets, history, organizations, org_inv_rules, filials, locations, employees, users, accounts, settings, categories, type_codes) &nbsp;&nbsp; | &nbsp;&nbsp;
+      <code>db.json / config.json</code> — легаси lowdb-файлы, только служебные метаданные схемы &nbsp;&nbsp; | &nbsp;&nbsp;
+      <code>cert.pem / key.pem</code> — TLS &nbsp;&nbsp; | &nbsp;&nbsp; <code>backups/</code> — резервные копии (ZIP, включают все три файла) &nbsp;&nbsp; | &nbsp;&nbsp; <code>logs/</code> — структурированные JSON-логи с ротацией по дате
+    </div>
+  </div>
+
+  <h2>Структура файлов</h2>
+  <pre>it-assets/
+├── server/
+│   ├── index.js             — Express-приложение, сборка роутов (994 → 548 строк после рефакторинга)
+│   ├── database.js          — Композиция репозиториев (826 → 198 строк), db.config.* / db.getUser и т.д.,
+│   │                          + exportConfig/diffConfig/applyImport (кросс-инстанс синхронизация конфига)
+│   ├── db/
+│   │   ├── store.js         — lowdb-инстанс (db, cfg) — только служебные _meta/schema_version
+│   │   └── sqlite.js        — SQLite-подключение (node:sqlite, WAL), схемы всех таблиц,
+│   │                          автомиграция из lowdb при первом запуске
+│   ├── logger.js            — структурированные JSON-логи с ротацией по дате
+│   ├── middleware/          — auth.js (requireAuth/requireAdmin/changedBy), rateLimit.js (rateLimitLogin)
+│   ├── repositories/        — orgs, filials, locations, accounts, employees, users, settings,
+│   │                          assets, history, csv, stats — вся бизнес-логика по одному файлу на сущность,
+│   │                          все на SQLite (кроме stats/history — чистая агрегация без своих данных)
+│   ├── routes/               — express.Router() на каждую сущность, монтируются в index.js
+│   ├── migrate.js           — Одноразовая миграция lowdb-схемы (v1→v7), выполняется ДО SQLite-слоя,
+│   │                          затем no-op при каждом следующем запуске
+│   ├── cert.js               — Генерация самоподписанного TLS-сертификата (уважает IT_ASSETS_DATA_DIR)
+│   └── pin.js                — hashPin/verifyPin (bcrypt)
+├── public/
+│   ├── index.html            — SPA-оболочка (Фаза 5+6 завершена): разбита на модули
+│   ├── css/main.css          — Все стили (светлая/тёмная тема, CSS-переменные)
+│   └── js/
+│       ├── theme.js          — Тема (IIFE, toggleTheme, applyStoredStyles)
+│       ├── i18n.js           — Локализация EN/RU (I18N словарь, t(key), applyLang)
+│       ├── auth.js           — Авторизация (login, logout, canEdit, requireAuth)
+│       ├── ui-utils.js       — Утилиты UI (toast, modal, spinner, formatDate)
+│       ├── qr.js             — QR-генератор и печать карточки
+│       ├── meta-fields.js    — MAC/IP/hostname поля
+│       ├── global-search.js  — Глобальный поиск
+│       ├── router.js         — SPA-роутер (switchTab, renderTab)
+│       ├── event-delegation.js — Делегирование событий таблиц
+│       ├── settings-router.js  — Роутер раздела настроек
+│       └── views/            — Отдельный модуль на каждый экран
+│           ├── dashboard.js        — Дашборд со статистикой
+│           ├── asset-tab.js        — Реестры ОС / Мелочи / Инфра
+│           ├── asset-forms.js      — Формы создания и редактирования активов
+│           ├── history.js          — История изменений
+│           ├── employees.js        — Сотрудники
+│           ├── accounts.js         — Учётки (аккаунты)
+│           ├── alerts.js           — Раздел Внимание
+│           ├── inv-generator.js    — Генератор инв. номеров
+│           ├── qr-print.js         — Печать QR-карточки
+│           ├── settings-general.js — Общие настройки
+│           ├── settings-config.js  — Орги, филиалы, локации
+│           ├── settings-refdata.js — Справочники
+│           ├── types-admin.js      — Управление типами
+│           └── users-admin.js      — Управление пользователями
+├── data/                     — Создаётся автоматически при первом запуске (или в IT_ASSETS_DATA_DIR)
+│   ├── it-assets.sqlite      — Вся прикладная база (SQLite, node:sqlite) — активы, история,
+│   │                          организации, филиалы, локации, сотрудники, пользователи, аккаунты,
+│   │                          настройки, справочники
+│   ├── db.json / config.json — Легаси lowdb-файлы, только служебная _meta.schema_version
+│   ├── cert.pem / key.pem    — Самоподписанный TLS-сертификат (~825 дней)
+│   ├── logs/                 — Структурированные JSON-логи с ротацией по дате
+│   └── backups/              — ZIP/JSON бэкапы (авто раз в час + при старте, максимум 30 файлов,
+│                                ZIP включает it-assets.sqlite + db.json + config.json)
+├── tests/                    — 283 Jest-теста (supertest, реальная SQLite БД в изолированной
+│                                temp-директории через tests/helpers/makeDb.js — не мок)
+├── tests-e2e/
+│   ├── smoke.spec.js                 — 7 Playwright-сценариев (логин, вкладки, создание актива, логаут)
+│   ├── theme.spec.js                 — 37 тестов темы (CSS-переменные, переключение, утечки цветов, i18n)
+│   └── backup-import-export.spec.js  — 14 тестов бэкапов/CSV-импорта/конфиг-синхронизации в UI
+├── playwright.config.js      — изолированный запуск (отдельный порт, IT_ASSETS_DATA_DIR=.e2e-data)
+├── release.bat               — Скрипт релиза dev → main (без тестов и devDependencies)
+├── package.json
+├── start.sh / install.sh / test.sh / test-e2e.sh          — Запуск (Linux/macOS)
+├── START.bat / INSTALL.bat / TEST.bat / TEST-E2E.bat      — Запуск (Windows)
+└── README.md</pre>
+
+  <h2>Ключевые принципы</h2>
+  <div class="alert info"><strong>SQLite, WAL-режим.</strong> С Фазы 7c данные пишутся через <code>node:sqlite</code> (встроен в Node.js, без нативных аддонов). WAL (Write-Ahead Logging) даёт конкурентное чтение во время записи — важно при нескольких пользователях в LAN одновременно. Каждая мутация — отдельный `INSERT`/`UPDATE` через prepared statement; составные операции (например, ликвидация организации с переносом активов) обёрнуты в явную транзакцию (`BEGIN`/`COMMIT`/`ROLLBACK`), так как `node:sqlite` не имеет встроенного помощника наподобие `better-sqlite3`'s `.transaction()`.</div>
+  <div class="alert warning"><strong>Легаси lowdb-файлы.</strong> <code>db.json</code>/<code>config.json</code> остаются на диске, но с Фазы 7c несут только служебную <code>_meta.schema_version</code> — использовались как источник для одноразовой автомиграции в SQLite при первом запуске после обновления. Прикладной код их больше не читает и не пишет.</div>
+  <div class="alert info"><strong>Мягкое удаление.</strong> Assets не удаляются — им ставится <code>status: 'списан'</code>. Все выборки фильтруют <code>a.status !== 'списан'</code>. Сотрудники аналогично не удаляются, а деактивируются (<code>active:false</code>).</div>
+  <div class="alert info"><strong>Системные заглушки.</strong> В справочниках есть записи <code>sys-org-unk</code>, <code>sys-filial-unk</code>, <code>sys-location-unk</code> с флагом <code>system: true</code>. API их скрывает, они нужны для ассетов без привязки к орг/филиалу. Системный пользователь <code>sys-user-admin</code> нельзя удалить или сменить ему роль.</div>
+  <div class="alert warning"><strong>Версионируемая lowdb-схема (легаси).</strong> <code>server/migrate.js</code> запускается автоматически при каждом старте (внутри <code>server/db/store.js</code>) и последовательно применяет идемпотентные шаги миграции lowdb-данных до текущей версии — это происходит ДО того, как SQLite-слой (<code>server/db/sqlite.js</code>) читает эти данные для автомиграции, поэтому SQLite всегда получает уже нормализованные данные. После первого запуска на актуальной схеме — no-op при каждом следующем старте. Ручной перезапуск — <code>POST /api/migrate</code>.</div>
+  <div class="alert warning"><strong>HTTPS обязателен.</strong> С этой версии сервер поднимает HTTPS на 3443 с самоподписанным сертификатом (<code>server/cert.js</code>), а HTTP на 3000 отдаёт только 301-редирект на HTTPS. Если сертификат сгенерировать не удалось — фолбэк на обычный HTTP на 3000 (см. консольный вывод при старте).</div>
+
+  <h2>Авторизация (три режима)</h2>
+  <p>Middleware <code>requireAuth</code> поддерживает варианты входа:</p>
+  <table>
+    <tr><th>Режим</th><th>Заголовки / Body</th><th>Описание</th></tr>
+    <tr><td>Пользователь системы (PIN)</td><td><code>x-user-id: UUID</code> + <code>x-edit-password: PIN</code></td><td>Вход через Users API. Роль <code>viewer</code> не может мутировать данные (403).</td></tr>
+    <tr><td>Логин + пароль</td><td>POST <code>/api/users/login</code> — <code>{login, password}</code></td><td>Альтернативный вход по полю <code>login</code> пользователя (сверяется с <code>pin</code> как паролем). Возвращает того же пользователя, что и вход по PIN.</td></tr>
+    <tr><td>Единый пароль (legacy)</td><td><code>x-edit-password: пароль</code></td><td>Работает только в паре с существующим <code>x-user-id</code>. Отдельный эндпоинт <code>/api/auth</code> для проверки «сырого» пароля без пользователя удалён.</td></tr>
+  </table>
+  <p>Эндпоинты с <span class="admin-badge">👑 admin</span> дополнительно проверяются <code>requireAdmin</code> — нужна роль <code>admin</code>.</p>
+  <div class="alert warning"><strong>Rate limiting на вход.</strong> <code>/api/users/auth</code> и <code>/api/users/login</code> ограничены 10 неудачными попытками за 5 минут с одного IP; при превышении — блокировка на 15 минут (<code>429</code> + заголовок <code>Retry-After</code>). Успешный вход сбрасывает счётчик. IP берётся из TCP-соединения (<code>req.socket.remoteAddress</code>), а не из заголовка <code>X-Forwarded-For</code> — иначе клиент мог бы подделать заголовок и обойти лимит. Для деплоя за реверс-прокси см. <code>TRUST_PROXY</code> в разделе «Запуск и конфигурация».</div>
+  <div class="alert info"><strong>Security-заголовки и обработка ошибок.</strong> <code>X-Powered-By</code> отключён (<code>app.disable('x-powered-by')</code>). На каждый ответ проставляются <code>X-Content-Type-Options: nosniff</code>, <code>X-Frame-Options: DENY</code>, <code>Referrer-Policy: no-referrer</code>. CSP сознательно не выставлен — фронтенд активно использует inline-обработчики событий (<code>onclick</code> и т.п.), строгий CSP сломает его без рефакторинга фронтенда. В конце цепочки middleware стоит общий error-handler: любое необработанное исключение (например, синтаксически неверный JSON в теле запроса) логируется на сервере полностью, а клиенту отдаётся только краткое сообщение без stack trace и путей на диске.</div>
+</section>
+
+<!-- STACK -->
+<section id="stack" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Стек</span></div></div>
+  <h1>Стек и зависимости</h1>
+
+  <h2>Runtime зависимости</h2>
+  <table>
+    <tr><th>Пакет</th><th>Версия</th><th>Назначение</th></tr>
+    <tr><td>express</td><td>^4.18.2</td><td>HTTP-сервер, маршрутизация</td></tr>
+    <tr><td>lowdb</td><td>^1.0.0</td><td>Легаси: с Фазы 7c используется только для служебной <code>_meta.schema_version</code> и одноразовой автомиграции в SQLite. Важно: именно 1.x (CommonJS API)</td></tr>
+    <tr><td>uuid</td><td>11.1.1</td><td>Генерация UUID v7 (time-ordered — лучше для B-tree индексов SQLite, чем случайный v4) для всех ID. Зафиксировано на последней CJS-совместимой версии — с uuid@12 пакет стал ESM-only, а проект целиком на CommonJS</td></tr>
+    <tr><td>cors</td><td>^2.8.5</td><td>CORS-заголовки (нужен при dev с отдельным фронтом)</td></tr>
+    <tr><td>selfsigned</td><td>^5.5.0</td><td>Генерация самоподписанного TLS-сертификата (<code>server/cert.js</code>), без системного openssl</td></tr>
+    <tr><td>adm-zip</td><td>^0.5.10</td><td>ZIP-архивы для бэкапов (<code>it-assets.sqlite + db.json + config.json</code> в одном файле)</td></tr>
+    <tr><td>qrcode</td><td>^1.5.4</td><td>Генерация QR-кодов (SVG) для <code>/api/qr</code>. При отсутствии пакета сервер использует встроенный запасной генератор</td></tr>
+    <tr><td>bcryptjs</td><td>^2.4.3</td><td>Хеширование PIN-кодов пользователей (<code>server/pin.js</code>). Чистый JS, без нативной компиляции — не требует toolchain на машине пользователя</td></tr>
+  </table>
+
+  <div class="alert info"><strong>node:sqlite — встроенный, без записи в package.json.</strong> Основное хранилище данных с Фазы 7c — часть самого Node.js (модуль <code>node:sqlite</code>), а не npm-пакет. Выбран намеренно вместо <code>better-sqlite3</code>: ноль нативных аддонов, значит ни пересборки под платформу, ни проблем при развёртывании на Linux/Windows/в Docker. Требует Node.js 22.5+ (стабилизирован в 25.7/26 — на 22.x/24.x работает с <code>ExperimentalWarning</code> в консоли, это не ошибка).</div>
+
+  <h2>Dev / тесты</h2>
+  <table>
+    <tr><th>Пакет</th><th>Версия</th><th>Назначение</th></tr>
+    <tr><td>jest</td><td>^30.4.2</td><td>Тест-раннер</td></tr>
+    <tr><td>supertest</td><td>^7.2.2</td><td>HTTP-тесты Express без реального сервера</td></tr>
+    <tr><td>jimp</td><td>^0.22.12</td><td>Обработка изображений в тестах QR-кода (рендер/сравнение)</td></tr>
+    <tr><td>jsqr</td><td>^1.4.0</td><td>Декодирование QR-кода в тестах — проверка, что сгенерированный код читается</td></tr>
+  </table>
+
+  <div class="alert warning"><strong>⚠ Не обновлять lowdb до 2.x+.</strong> Он переехал на ESM и несовместим с текущим CommonJS <code>database.js</code>. Ставки ниже, чем до Фазы 7c (lowdb больше не основное хранилище, только служебная <code>_meta.schema_version</code>), но обновление всё равно сломает автомиграцию в SQLite при первом запуске на новых инсталляциях.</div>
+
+  <h2>Переменные окружения</h2>
+  <div class="alert warning"><strong>⚠ PORT больше не используется.</strong> Раньше <code>process.env.PORT</code> задавал HTTP-порт; с переходом на HTTPS порты захардкожены в <code>server/index.js</code>: <code>HTTP_PORT = 3000</code> (только 301-редирект на HTTPS) и <code>HTTPS_PORT = 3443</code> (основной трафик). Переменная <code>PORT</code> в коде объявлена, но нигде не читается при старте сервера — считать устаревшей до дальнейшего рефакторинга.</div>
+  <p>Файл <code>.env</code> не используется.</p>
+</section>
+
+<!-- DB FILES -->
+<section id="db" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Файлы данных</span></div></div>
+  <h1>Файлы данных</h1>
+
+  <h2>it-assets.sqlite — основное хранилище (с Фазы 7c)</h2>
+  <p>Таблицы (все — прикладные данные, никаких JSON-блобов):</p>
+  <pre>assets            — активы (id, tab, category, filial/filial_id, location/location_id,
+                    responsible/responsible_id, type, model, serial, status, org/org_id,
+                    note, inv, inv_prev, created_at, updated_at, meta_ip, meta_mac,
+                    meta_subnet, meta_hostname, ...14 колонок meta_* всего)
+history           — лог действий (id, asset_id, action_type, date, from_who, to_who,
+                    filial, location, equipment, model, type, serial, reason, changed_by)
+organizations     — организации (id, name, short_code, status, system, created_at,
+                    renamed_from, renamed_at, liquidated_at)
+org_inv_rules     — правила инв. номеров, дочерняя таблица (org_id FK ON DELETE CASCADE,
+                    type_code, type_name, counter, format, active, rule_order)
+filials           — филиалы (org_id — без FK, organizations и filials исторически без
+                    проверки ссылочной целостности между собой)
+locations         — локации/помещения (filial_id — аналогично без FK)
+employees         — справочник сотрудников
+users             — пользователи системы (роль, login, email, pin-хеш)
+accounts          — справочник внешних учёток (Wi-Fi, серверы — открытым текстом)
+settings          — key-value (key, value как JSON-строка)
+categories        — key-value по вкладке (tab, items как JSON-массив)
+type_codes        — справочник типов устройств (code, name, tab)</pre>
+  <div class="alert info"><strong>Почему не JSON-блобы в двух-трёх колонках.</strong> Каждая сущность — отдельная таблица с обычными колонками, а не вложенный JSON внутри одной строки (кроме <code>settings.value</code>/<code>categories.items</code> — они принципиально key-value, не relational). <code>meta_*</code>-поля Asset (ip/mac/hostname и т.п.) — тоже отдельные колонки, а не JSON-объект: список из 14 полей взят из канонического <code>public/js/meta-fields.js</code>, расширяем через <code>ALTER TABLE ADD COLUMN</code> без пересоздания таблицы.</div>
+
+  <h2>db.json / config.json — легаси (только служебные метаданные)</h2>
+  <pre>{
+  "_meta": { "version": 2, "created_at": "ISO", "schema_version": 7, "migrated_at": "ISO" }
+}</pre>
+  <p>После первой автомиграции в SQLite прикладной код эти файлы не читает и не пишет — они остаются на диске только как источник <code>_meta.schema_version</code> для <code>server/migrate.js</code> (см. «Ключевые принципы» выше).</p>
+
+  <div class="alert warning"><strong>⚠ Поля <code>settings.edit_password</code> больше нет.</strong> Единый (legacy) пароль полностью ушёл в PIN системного пользователя <code>sys-user-admin</code> (поле <code>pin</code> в таблице <code>users</code>, по умолчанию <code>admn0000</code>). Смена пароля через <code>PUT /api/settings/password</code> обновляет именно этот PIN.</div>
+  <div class="alert info"><strong>Новое в settings:</strong> <code>logo_svg</code> (пользовательский SVG-логотип) и <code>styles</code> (объект произвольных стилевых переопределений интерфейса) — редактируются через <code>PUT /api/settings/logo_svg</code> и <code>PUT /api/settings/styles</code>.</div>
+
+  <div class="alert success"><strong>Резервная копия</strong> = скопировать папку <code>data/</code>, либо использовать встроенный бэкап (см. раздел «Backup») — он также сохраняет TLS-сертификат вне ZIP-архива, но <code>it-assets.sqlite</code> + <code>db.json</code> + <code>config.json</code> упаковывает вместе (с WAL-чекпоинтом перед архивацией, чтобы ничего не осталось только в <code>-wal</code>-файле).</div>
+
+  <h2>API database.js</h2>
+  <p>Модуль экспортирует объект <code>db</code> (обёртка над lowdb-инстансом <code>db.json</code> — используется только для служебной <code>_meta.schema_version</code>) с расширенными методами, большинство из которых с Фазы 7c читают/пишут SQLite, а не lowdb:</p>
+  <div class="alert warning"><strong>⚠ db.get('assets') / db.get('history') больше не существуют.</strong> С Фазы 7c активы и история — в SQLite (<code>server/repositories/assets.repo.js</code>, <code>history.repo.js</code>). Эти repo-файлы НЕ подключены через <code>database.js</code> — роуты (<code>server/routes/assets.routes.js</code> и т.д.) требуют их напрямую (<code>require('../repositories/assets.repo')</code>), в отличие от orgs/filials/locations/users/employees/accounts/settings, которые остаются частью композиции <code>database.js</code> (<code>db.config.*</code>, <code>db.getUser</code> и т.д.).</div>
+  <table>
+    <tr><th>Метод / свойство</th><th>Описание</th></tr>
+    <tr><td>db.getSetting(key)</td><td>Читает настройку из it-assets.sqlite → settings (SQLite, с Фазы 7c)</td></tr>
+    <tr><td>db.setSetting(key, val)</td><td>Записывает настройку в it-assets.sqlite → settings</td></tr>
+    <tr><td>db.getCategories()</td><td>Объект {os, small, infra} из it-assets.sqlite → categories</td></tr>
+    <tr><td>db.setCategories(tab, arr)</td><td>Перезаписывает категории вкладки</td></tr>
+    <tr><td>db.getTypeCodes()</td><td>Массив [{code, name, tab}] из it-assets.sqlite → type_codes</td></tr>
+    <tr><td>db.setTypeCodes(arr)</td><td>Полностью перезаписывает набор кодов типов (в транзакции — clear + insert)</td></tr>
+    <tr><td>db.ORG_CODES</td><td>getter → {short_code: name} из organizations (живой SQL-запрос, не кешируется)</td></tr>
+    <tr><td>db.TYPE_CODES</td><td>getter → {code: name} из type_codes</td></tr>
+    <tr><td>db.config.*</td><td>Все CRUD-методы для справочников (orgs + inv-rules, filials, locations, accounts) — все на SQLite</td></tr>
+    <tr><td>db.config.exportConfig()</td><td>Полный снимок organizations/filials/locations/categories/type_codes/settings/users (без паролей) — для кросс-инстанс синхронизации</td></tr>
+    <tr><td>db.config.diffConfig(incoming)</td><td>Сравнивает входящий конфиг с текущим состоянием, возвращает {clean, conflicts} — конфликты трёх типов: same_code, same_id_diff_data, same_name</td></tr>
+    <tr><td>db.config.applyImport(clean, resolutions, incoming, changedBy)</td><td>Применяет чистые записи (upsert по id — сохраняет входящий id, не генерирует новый) + разрешения конфликтов (skip/replace/rename)</td></tr>
+    <tr><td>db.getUsers(activeOnly?)</td><td>Список пользователей. По умолч. только активные.</td></tr>
+    <tr><td>db.getUser(id)</td><td>Один пользователь по id или null (null и при falsy id — node:sqlite иначе кидает исключение на undefined)</td></tr>
+    <tr><td>db.authUser(userId, pin)</td><td>Проверяет PIN. Пустой PIN = вход без пароля. Возвращает user или null.</td></tr>
+    <tr><td>db.authByLogin(login, password)</td><td>Ищет активного пользователя по полю <code>login</code> (регистронезависимо) и сверяет <code>pin</code>. Возвращает user или null.</td></tr>
+    <tr><td>db.createUser({name, login, role, pin, email})</td><td>Создать пользователя. name — обязателен. Дубликат login → ошибка.</td></tr>
+    <tr><td>db.updateUser(id, fields)</td><td>Обновить поля name, login, role, pin, email, active. Нельзя сменить роль/деактивировать sys-user-admin (можно менять его name/login/pin/email).</td></tr>
+    <tr><td>db.deleteUser(id)</td><td>Удалить. sys-user-admin удалить нельзя.</td></tr>
+    <tr><td>db.getEmployees(activeOnly?)</td><td>Список сотрудников из it-assets.sqlite → employees. По умолч. только активные.</td></tr>
+    <tr><td>db.getEmployee(id)</td><td>Один сотрудник по id или null</td></tr>
+    <tr><td>db.createEmployee({name, dept, filial, phone, email, note})</td><td>Создать. name — обязателен.</td></tr>
+    <tr><td>db.updateEmployee(id, fields)</td><td>Обновить поля name, dept, filial, phone, email, note, active</td></tr>
+    <tr><td>db.deleteEmployee(id)</td><td>Мягкое удаление — деактивирует (active:false, deactivated_at), не удаляет. Возвращает связанные активы (через assets.repo.js), которых это касается.</td></tr>
+    <tr><td>db.searchEmployees(q)</td><td>Поиск по name/dept/phone (мин. 2 символа), макс. 15 результатов, только активные</td></tr>
+  </table>
+  <p>Активы и история — отдельно, через прямой require repo-файла в роутах: <code>const assetsRepo = require('../repositories/assets.repo')</code>, аналогично <code>history.repo.js</code>, <code>csv.repo.js</code>, <code>stats.repo.js</code>. Все методы синхронные (node:sqlite — синхронный API, как и было с lowdb, поэтому вызовы в остальном коде не изменились).</p>
+</section>
+
+<!-- SCHEMA ASSET -->
+<section id="schema-asset" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Схема: Asset</span></div></div>
+  <h1>Схема: Asset</h1>
+  <p class="subtitle">Единица оборудования. Хранится в <code>it-assets.sqlite → assets</code> (SQLite, с Фазы 7c).</p>
+
+  <div class="card">
+    <div class="schema-field"><div class="schema-key">id</div><div class="schema-type">uuid string</div><div class="schema-note">Первичный ключ. UUID v7 (time-ordered), генерируется сервером.</div></div>
+    <div class="schema-field"><div class="schema-key">tab</div><div class="schema-type">string</div><div class="schema-note">Вкладка: <code>os</code> | <code>small</code> | <code>infra</code>. По умолчанию <code>os</code>.</div></div>
+    <div class="schema-field"><div class="schema-key">category</div><div class="schema-type">string</div><div class="schema-note">Подкатегория (из it-assets.sqlite → categories).</div></div>
+    <div class="schema-field"><div class="schema-key">model <span class="badge-req">required</span></div><div class="schema-type">string</div><div class="schema-note">Модель устройства. Единственное обязательное поле при создании.</div></div>
+    <div class="schema-field"><div class="schema-key">type</div><div class="schema-type">string</div><div class="schema-note">Тип устройства — код из type_codes (NB, PC, MON, MFU, PR, TAB, TV, UPS, SW, RT, AP, CAM...).</div></div>
+    <div class="schema-field"><div class="schema-key">serial</div><div class="schema-type">string</div><div class="schema-note">Серийный номер. Используется для дедупликации при CSV-импорте.</div></div>
+    <div class="schema-field"><div class="schema-key">inv</div><div class="schema-type">string</div><div class="schema-note">Инвентарный номер. Формат: <code>{ORG}-{TYPE}-{NNNNN}</code> (напр. <code>LDV-NB-00042</code>).</div></div>
+    <div class="schema-field"><div class="schema-key">inv_prev</div><div class="schema-type">string</div><div class="schema-note">Предыдущий инв. номер (заполняется при ликвидации организации с перенумерацией).</div></div>
+    <div class="schema-field"><div class="schema-key">status</div><div class="schema-type">string</div><div class="schema-note"><code>используется</code> | <code>резерв</code> | <code>ремонт</code> | <code>списан</code>. Мягкое удаление через <code>списан</code>.</div></div>
+    <div class="schema-field"><div class="schema-key">responsible</div><div class="schema-type">string</div><div class="schema-note">ФИО ответственного. Может быть <code>?</code> или <code>—</code> для "без ответственного".</div></div>
+    <div class="schema-field"><div class="schema-key">responsible_id</div><div class="schema-type">uuid string</div><div class="schema-note">UUID сотрудника из справочника Employees (it-assets.sqlite → employees). Заполняется при создании/импорте, обновляется при увольнении/переносе через <code>/api/employees/:id/reassign-assets</code>.</div></div>
+    <div class="schema-field"><div class="schema-key">org</div><div class="schema-type">string</div><div class="schema-note">Название организации (строка). GET-эндпоинты подставляют её из org_id "на лету", если он задан.</div></div>
+    <div class="schema-field"><div class="schema-key">org_id</div><div class="schema-type">uuid string</div><div class="schema-note">UUID организации. Используется в новых записях и операции ликвидации орг.</div></div>
+    <div class="schema-field"><div class="schema-key">filial</div><div class="schema-type">string</div><div class="schema-note">Название филиала (строка).</div></div>
+    <div class="schema-field"><div class="schema-key">filial_id</div><div class="schema-type">uuid string</div><div class="schema-note">UUID филиала.</div></div>
+    <div class="schema-field"><div class="schema-key">location_id</div><div class="schema-type">uuid string</div><div class="schema-note">UUID локации/помещения.</div></div>
+    <div class="schema-field"><div class="schema-key">address</div><div class="schema-type">string</div><div class="schema-note">Физический адрес.</div></div>
+    <div class="schema-field"><div class="schema-key">location</div><div class="schema-type">string</div><div class="schema-note">Помещение / кабинет.</div></div>
+    <div class="schema-field"><div class="schema-key">note</div><div class="schema-type">string</div><div class="schema-note">Произвольное примечание.</div></div>
+    <div class="schema-field"><div class="schema-key">meta</div><div class="schema-type">object</div><div class="schema-note">Дополнительные поля устройства (см. ниже).</div></div>
+    <div class="schema-field"><div class="schema-key">created_at</div><div class="schema-type">ISO string</div><div class="schema-note">Дата создания (UTC).</div></div>
+    <div class="schema-field"><div class="schema-key">updated_at</div><div class="schema-type">ISO string</div><div class="schema-note">Дата последнего изменения (UTC).</div></div>
+  </div>
+  <div class="alert warning"><strong>org / category / address — уже не «чистый» legacy.</strong> Миграция схемы v6 однократно удаляла эти строковые поля у старых записей (в пользу *_id ссылок), но текущий код <code>POST/PUT /api/assets</code> и CSV-импорт по-прежнему пишут их как обычные поля наравне с *_id. На практике у ассета сосуществуют и строковые поля, и ссылки по ID — при работе с данными ориентируйтесь на оба.</div>
+
+  <h2>Поля meta</h2>
+  <div class="card">
+    <div class="schema-field"><div class="schema-key">meta.ip</div><div class="schema-type">string</div><div class="schema-note">IP-адрес устройства.</div></div>
+    <div class="schema-field"><div class="schema-key">meta.mac</div><div class="schema-type">string</div><div class="schema-note">MAC-адрес.</div></div>
+    <div class="schema-field"><div class="schema-key">meta.subnet</div><div class="schema-type">string</div><div class="schema-note">Подсеть.</div></div>
+    <div class="schema-field"><div class="schema-key">meta.hostname</div><div class="schema-type">string</div><div class="schema-note">Имя хоста.</div></div>
+    <div class="schema-field"><div class="schema-key">meta.login</div><div class="schema-type">string</div><div class="schema-note">Логин для доступа.</div></div>
+    <div class="schema-field"><div class="schema-key">meta.password</div><div class="schema-type">string</div><div class="schema-note">Пароль (хранится открытым текстом).</div></div>
+    <div class="schema-field"><div class="schema-key">meta.winbox / meta.controller</div><div class="schema-type">string</div><div class="schema-note">WinBox-адрес или URL контроллера (для сетевого обор.).</div></div>
+    <div class="schema-field"><div class="schema-key">meta.firmware</div><div class="schema-type">string</div><div class="schema-note">Версия прошивки.</div></div>
+    <div class="schema-field"><div class="schema-key">meta.cartridge</div><div class="schema-type">string</div><div class="schema-note">Тип картриджа (для принтеров и МФУ).</div></div>
+    <div class="schema-field"><div class="schema-key">meta.cabinet / meta.inv</div><div class="schema-type">string</div><div class="schema-note">Инв. номер шкафа (для инфра-устройств).</div></div>
+  </div>
+
+  <h2>Пример</h2>
+  <pre>{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "tab": "os",
+  "category": "Оборудование пользователей",
+  "model": "Lenovo ThinkPad E14 Gen4",
+  "type": "NB",
+  "serial": "SN12345678",
+  "inv": "LDV-NB-00042",
+  "status": "используется",
+  "responsible": "Иванов И.И.",
+  "responsible_id": "uuid-of-employee",
+  "org": "ООО Ладога",
+  "org_id": "uuid-of-org",
+  "filial": "Центральный офис",
+  "filial_id": "uuid-of-filial",
+  "location": "Кабинет 305",
+  "note": "",
+  "meta": { "ip": "192.168.1.100", "hostname": "PC-IVANOV", "mac": "AA:BB:CC:DD:EE:FF" },
+  "created_at": "2026-01-15T10:30:00.000Z",
+  "updated_at": "2026-03-20T08:15:00.000Z"
+}</pre>
+</section>
+
+<!-- SCHEMA HISTORY -->
+<section id="schema-history" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Схема: History</span></div></div>
+  <h1>Схема: HistoryEntry</h1>
+  <p class="subtitle">Запись в лог действий. Хранится в <code>it-assets.sqlite → history</code> (SQLite, с Фазы 7c). Только добавление, никогда не удаляется.</p>
+
+  <div class="card">
+    <div class="schema-field"><div class="schema-key">id</div><div class="schema-type">uuid</div><div class="schema-note">UUID v7.</div></div>
+    <div class="schema-field"><div class="schema-key">asset_id</div><div class="schema-type">string|null</div><div class="schema-note">UUID ассета. null для системных событий (переименование орг, импорт конфига).</div></div>
+    <div class="schema-field"><div class="schema-key">action_type</div><div class="schema-type">string</div><div class="schema-note"><code>add</code> | <code>move</code> | <code>status_change</code> | <code>retire</code> | <code>import</code> | <code>inv_assigned</code> | <code>reassign</code> | <code>org_renamed</code> | <code>org_transfer</code> | <code>config_imported</code></div></div>
+    <div class="schema-field"><div class="schema-key">date</div><div class="schema-type">ISO string</div><div class="schema-note">Дата события (UTC).</div></div>
+    <div class="schema-field"><div class="schema-key">from_who</div><div class="schema-type">string</div><div class="schema-note">Предыдущий ответственный / «от кого».</div></div>
+    <div class="schema-field"><div class="schema-key">to_who</div><div class="schema-type">string</div><div class="schema-note">Новый ответственный / «кому».</div></div>
+    <div class="schema-field"><div class="schema-key">filial</div><div class="schema-type">string</div><div class="schema-note">Название филиала на момент события (snapshot).</div></div>
+    <div class="schema-field"><div class="schema-key">location</div><div class="schema-type">string</div><div class="schema-note">Помещение на момент события (snapshot).</div></div>
+    <div class="schema-field"><div class="schema-key">equipment</div><div class="schema-type">string</div><div class="schema-note">Строка «{type} {model}» для поиска.</div></div>
+    <div class="schema-field"><div class="schema-key">model / type / serial</div><div class="schema-type">string</div><div class="schema-note">Денормализованные поля ассета — snapshot на момент события.</div></div>
+    <div class="schema-field"><div class="schema-key">reason</div><div class="schema-type">string</div><div class="schema-note">Причина или комментарий.</div></div>
+    <div class="schema-field"><div class="schema-key">changed_by</div><div class="schema-type">string</div><div class="schema-note">Имя пользователя из <code>req.currentUser.name</code>: <code>редактор</code> | <code>импорт</code> | <code>Иванов И.И.</code> | <code>system</code></div></div>
+  </div>
+</section>
+
+<!-- SCHEMA CONFIG -->
+<section id="schema-config" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Схема: Config</span></div></div>
+  <h1>Схема: Config-объекты</h1>
+
+  <h2>User (пользователь системы)</h2>
+  <div class="card">
+    <div class="schema-field"><div class="schema-key">id</div><div class="schema-type">uuid</div><div class="schema-note">UUID или <code>sys-user-admin</code> для системного администратора.</div></div>
+    <div class="schema-field"><div class="schema-key">name</div><div class="schema-type">string</div><div class="schema-note">Отображаемое имя. Обязательно при создании.</div></div>
+    <div class="schema-field"><div class="schema-key">login</div><div class="schema-type">string</div><div class="schema-note">Логин для входа через <code>POST /api/users/login</code>. Уникален (регистронезависимо). Может быть пустым для PIN-only пользователей.</div></div>
+    <div class="schema-field"><div class="schema-key">email</div><div class="schema-type">string</div><div class="schema-note">Email (не используется для входа, справочно).</div></div>
+    <div class="schema-field"><div class="schema-key">role</div><div class="schema-type">string</div><div class="schema-note"><code>admin</code> — полный доступ | <code>operator</code> — редактирование | <code>viewer</code> — только чтение (403 на все мутации).</div></div>
+    <div class="schema-field"><div class="schema-key">pin</div><div class="schema-type">string (bcrypt hash)</div><div class="schema-note">PIN-код для входа (используется и как «пароль» при входе по login). <strong>С schema_version 7</strong> хранится как bcrypt-хеш (<code>server/pin.js</code>), не открытым текстом. Пустая строка = вход без пароля (не хешируется — иначе неотличимо от хеша пустой строки). Существующие открытые PIN апгрейдятся автоматически миграцией v7 при первом запуске.</div></div>
+    <div class="schema-field"><div class="schema-key">active</div><div class="schema-type">boolean</div><div class="schema-note">Неактивный пользователь не может войти (401).</div></div>
+    <div class="schema-field"><div class="schema-key">created_at</div><div class="schema-type">ISO string</div><div class="schema-note">Дата создания.</div></div>
+  </div>
+  <div class="alert info"><strong>Дефолтный админ:</strong> <code>sys-user-admin</code>, <code>login: admin</code>, <code>pin: admn0000</code> (хешируется при первом запуске) — создаётся автоматически при первом запуске.</div>
+
+  <h2>Employee (сотрудник — справочник ответственных)</h2>
+  <div class="card">
+    <div class="schema-field"><div class="schema-key">id</div><div class="schema-type">uuid</div><div class="schema-note">UUID v7.</div></div>
+    <div class="schema-field"><div class="schema-key">name</div><div class="schema-type">string</div><div class="schema-note">ФИО. Обязательно при создании.</div></div>
+    <div class="schema-field"><div class="schema-key">dept</div><div class="schema-type">string</div><div class="schema-note">Отдел / подразделение.</div></div>
+    <div class="schema-field"><div class="schema-key">filial</div><div class="schema-type">string</div><div class="schema-note">Филиал (строка).</div></div>
+    <div class="schema-field"><div class="schema-key">phone</div><div class="schema-type">string</div><div class="schema-note">Телефон.</div></div>
+    <div class="schema-field"><div class="schema-key">email</div><div class="schema-type">string</div><div class="schema-note">Email (нормализуется в lowercase).</div></div>
+    <div class="schema-field"><div class="schema-key">note</div><div class="schema-type">string</div><div class="schema-note">Примечание.</div></div>
+    <div class="schema-field"><div class="schema-key">active</div><div class="schema-type">boolean</div><div class="schema-note">Уволенные/неактуальные сотрудники не удаляются, а деактивируются.</div></div>
+    <div class="schema-field"><div class="schema-key">deactivated_at</div><div class="schema-type">ISO|null</div><div class="schema-note">Дата деактивации (простановка <code>active:false</code> через DELETE).</div></div>
+    <div class="schema-field"><div class="schema-key">created_at</div><div class="schema-type">ISO string</div><div class="schema-note">Дата создания.</div></div>
+  </div>
+  <div class="alert warning"><strong>CSV-импорт создаёт сотрудников автоматически</strong> — поле <code>responsible</code> из строки CSV резолвится в существующего или нового Employee (если не указан <code>create_employees: false</code> в body импорта).</div>
+
+  <h2>Organization</h2>
+  <div class="card">
+    <div class="schema-field"><div class="schema-key">id</div><div class="schema-type">uuid</div><div class="schema-note">UUID или <code>sys-org-unk</code> для системной заглушки.</div></div>
+    <div class="schema-field"><div class="schema-key">name</div><div class="schema-type">string</div><div class="schema-note">Полное название. Уникально.</div></div>
+    <div class="schema-field"><div class="schema-key">short_code</div><div class="schema-type">string (CAPS)</div><div class="schema-note">Краткий код (автоматически в UPPERCASE). Используется в инвентарных номерах. Уникален.</div></div>
+    <div class="schema-field"><div class="schema-key">status</div><div class="schema-type">string</div><div class="schema-note"><code>active</code> | <code>liquidated</code></div></div>
+    <div class="schema-field"><div class="schema-key">system</div><div class="schema-type">boolean</div><div class="schema-note">Системная запись — нельзя изменить/удалить через API.</div></div>
+    <div class="schema-field"><div class="schema-key">inv_rules</div><div class="schema-type">InvRule[]</div><div class="schema-note">Правила генерации инвентарных номеров (вложены).</div></div>
+    <div class="schema-field"><div class="schema-key">renamed_from / renamed_at</div><div class="schema-type">string|null</div><div class="schema-note">История переименований.</div></div>
+    <div class="schema-field"><div class="schema-key">liquidated_at</div><div class="schema-type">ISO|null</div><div class="schema-note">Дата ликвидации.</div></div>
+  </div>
+
+  <h2>InvRule (вложен в Organization)</h2>
+  <div class="card">
+    <div class="schema-field"><div class="schema-key">type_code</div><div class="schema-type">string</div><div class="schema-note">Код типа (NB, PC, MON...). Уникален внутри организации.</div></div>
+    <div class="schema-field"><div class="schema-key">type_name</div><div class="schema-type">string</div><div class="schema-note">Название типа для отображения.</div></div>
+    <div class="schema-field"><div class="schema-key">counter</div><div class="schema-type">number</div><div class="schema-note">Текущий счётчик. Генерация берёт max(counter, max из БД) + 1. При >99999 выдаёт 6-значный номер.</div></div>
+    <div class="schema-field"><div class="schema-key">format</div><div class="schema-type">string</div><div class="schema-note">Шаблон: <code>{org}-{type}-{N:05}</code></div></div>
+    <div class="schema-field"><div class="schema-key">active</div><div class="schema-type">boolean</div><div class="schema-note">Отключённые правила не генерируют номера.</div></div>
+  </div>
+
+  <h2>Filial</h2>
+  <div class="card">
+    <div class="schema-field"><div class="schema-key">id</div><div class="schema-type">uuid</div><div class="schema-note">UUID.</div></div>
+    <div class="schema-field"><div class="schema-key">name</div><div class="schema-type">string</div><div class="schema-note">Название.</div></div>
+    <div class="schema-field"><div class="schema-key">address</div><div class="schema-type">string</div><div class="schema-note">Адрес.</div></div>
+    <div class="schema-field"><div class="schema-key">org_id</div><div class="schema-type">uuid|null</div><div class="schema-note">UUID организации.</div></div>
+    <div class="schema-field"><div class="schema-key">status</div><div class="schema-type">string</div><div class="schema-note"><code>active</code> | <code>closed</code></div></div>
+    <div class="schema-field"><div class="schema-key">closed_at</div><div class="schema-type">ISO|null</div><div class="schema-note">Дата закрытия.</div></div>
+  </div>
+
+  <h2>Location</h2>
+  <div class="card">
+    <div class="schema-field"><div class="schema-key">id</div><div class="schema-type">uuid</div><div class="schema-note">UUID.</div></div>
+    <div class="schema-field"><div class="schema-key">name</div><div class="schema-type">string</div><div class="schema-note">Название (Кабинет 101, Серверная...).</div></div>
+    <div class="schema-field"><div class="schema-key">type</div><div class="schema-type">string</div><div class="schema-note"><code>office</code> | <code>other</code></div></div>
+    <div class="schema-field"><div class="schema-key">filial_id</div><div class="schema-type">uuid</div><div class="schema-note">UUID родительского филиала.</div></div>
+    <div class="schema-field"><div class="schema-key">status</div><div class="schema-type">string</div><div class="schema-note"><code>active</code> | <code>closed</code></div></div>
+    <div class="schema-field"><div class="schema-key">closed_at</div><div class="schema-type">ISO|null</div><div class="schema-note">Дата закрытия.</div></div>
+  </div>
+</section>
+
+<!-- API AUTH -->
+<section id="api-auth" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Авторизация</span></div></div>
+  <h1>Авторизация</h1>
+
+  <div class="alert warning"><strong>Режим 1 — пользователи системы (PIN):</strong> <code>x-user-id: UUID</code> + <code>x-edit-password: PIN</code><br>
+  <strong>Режим 2 — логин + пароль:</strong> <code>POST /api/users/login</code> с <code>{login, password}</code><br>
+  <strong>Режим 3 — единый пароль (legacy):</strong> <code>x-edit-password: пароль</code> вместе с валидным <code>x-user-id</code></div>
+  <div class="alert warning"><strong>⚠ <code>POST /api/auth</code> удалён.</strong> Раньше он проверял «сырой» единый пароль без привязки к пользователю — в текущей версии такого эндпоинта нет. Проверка пароля всегда идёт через конкретного пользователя (<code>/api/users/auth</code> или <code>/api/users/login</code>).</div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/health</div><div class="endpoint-desc">Проверка доступности</div></div>
+    <div class="endpoint-body"><pre>{ "ok": true, "ts": 1718345600000 }</pre></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/settings</div><div class="endpoint-desc">Публичные настройки</div></div>
+    <div class="endpoint-body"><pre>{
+  "company_name": "ООО Рога и Копыта",
+  "logo_svg": "",
+  "styles": {},
+  "version": "beta-1-26w29-01"
+}</pre>
+    <p><code>version</code> — значение из <code>package.json</code>, отдаётся как есть (не человекочитаемый формат).</p>
+    </div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method PUT">PUT</div><div class="endpoint-path">/api/settings/company_name</div><div class="endpoint-desc">Сменить название компании <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4><pre>{ "company_name": "ООО Ромашка" }</pre>
+      <h4>200 OK</h4><pre>{ "ok": true, "company_name": "ООО Ромашка" }</pre>
+    </div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method PUT">PUT</div><div class="endpoint-path">/api/settings/styles</div><div class="endpoint-desc">Перезаписать пользовательские стили интерфейса <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4><pre>{ "styles": { "...": "..." } }</pre>
+      <p>Принимает произвольный объект — валидируется только тип (<code>object</code>). Хранится и отдаётся как есть.</p>
+    </div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method PUT">PUT</div><div class="endpoint-path">/api/settings/logo_svg</div><div class="endpoint-desc">Загрузить SVG-логотип <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4><pre>{ "svg": "&lt;svg&gt;...&lt;/svg&gt;" }</pre>
+      <p>Базовая проверка: строка должна содержать <code>&lt;svg</code> (или быть пустой, чтобы сбросить логотип). Иначе — <code>400</code>.</p>
+    </div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method PUT">PUT</div><div class="endpoint-path">/api/settings/password</div><div class="endpoint-desc">Сменить единый (legacy) пароль</div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4><pre>{ "newPassword": "newpass123" }</pre>
+      <p>Не требует <code>requireAuth</code> явно — сам ищет пользователя по <code>x-user-id</code>, либо (fallback) по текущему PIN, переданному в <code>x-edit-password</code>. По сути меняет PIN найденного пользователя. Проверки минимальной длины больше нет — единственное требование: непустая строка. Возвращает <code>{"ok":true}</code>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- API USERS -->
+<section id="api-users" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Users</span></div></div>
+  <h1>Users API</h1>
+  <p class="subtitle">Пользователи системы с ролями и PIN. Хранятся в <code>it-assets.sqlite → users</code> (SQLite, с Фазы 7c).</p>
+
+  <div class="alert info"><strong>Роли:</strong> <code>admin</code> — полный доступ, управление пользователями · <code>operator</code> — редактирование данных · <code>viewer</code> — только чтение (все мутирующие запросы → 403)</div>
+  <div class="alert warning"><strong>sys-user-admin</strong> — системный пользователь (<code>login: admin</code>, <code>pin: admn0000</code> по умолчанию). Нельзя удалить и нельзя сменить роль/деактивировать через API; менять name/login/pin/email — можно.</div>
+  <div class="alert warning"><strong>Rate limit на вход:</strong> <code>/api/users/auth</code> и <code>/api/users/login</code> — 10 неудачных попыток / 5 мин с одного IP, затем блокировка 15 мин (<code>429</code>).</div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/users/list</div><div class="endpoint-desc">Публичный список для экрана входа</div></div>
+    <div class="endpoint-body">
+      <p>Без авторизации. Возвращает только <code>id, name, role</code> — PIN не передаётся.</p>
+      <h4>200 OK</h4><pre>[{ "id": "UUID", "name": "Иванов И.И.", "role": "operator" }]</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/users/auth</div><div class="endpoint-desc">Аутентификация по PIN</div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4><pre>{ "user_id": "UUID", "pin": "1234" }</pre>
+      <h4>200 OK</h4><pre>{ "ok": true, "user": { "id": "UUID", "name": "Иванов И.И.", "role": "operator" } }</pre>
+      <h4>400</h4><pre>{ "error": "user_id required" }</pre>
+      <h4>401</h4><pre>{ "error": "Неверный PIN или пользователь не найден" }</pre>
+      <p>Пустой PIN (<code>""</code>) — разрешён, если у пользователя <code>pin === ""</code>. Ограничен rate limit'ом (см. выше).</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/users/login</div><div class="endpoint-desc">Аутентификация по логину и паролю</div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4><pre>{ "login": "admin", "password": "admn0000" }</pre>
+      <h4>200 OK</h4><pre>{ "ok": true, "user": { "id": "UUID", "name": "admin", "role": "admin" } }</pre>
+      <h4>400</h4><pre>{ "error": "login required" }</pre>
+      <h4>401</h4><pre>{ "error": "Неверный логин или пароль" }</pre>
+      <p>Ищет активного пользователя по полю <code>login</code> (регистронезависимо), сверяет <code>password</code> с его <code>pin</code>. Тот же rate limit, что и у <code>/api/users/auth</code>.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/users</div><div class="endpoint-desc">Список пользователей (без PIN) <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <p>Требует валидный <code>x-user-id</code> активного пользователя (не полноценный <code>requireAuth</code> — PIN здесь не проверяется, только сам факт, что пользователь существует и активен).</p>
+      <h4>200 OK</h4><pre>[{ "id": "UUID", "name": "...", "role": "operator", "active": true }]</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/users</div><div class="endpoint-desc">Создать пользователя <span class="admin-badge">👑 admin</span></div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4><pre>{ "name": "Петров П.П.", "login": "petrov", "role": "operator", "pin": "5678", "email": "" }</pre>
+      <p><code>name</code> обязателен. <code>role</code> по умолч. <code>operator</code>. <code>pin</code> по умолч. <code>""</code> (без пароля). Дубликат <code>login</code> → <code>400 "Логин уже занят"</code>. Присланный в body открытый PIN хешируется на сервере (bcrypt) перед сохранением — в ответе и в базе он уже в виде хеша.</p>
+      <h4>200 OK</h4><pre>{ "id": "UUID", "name": "...", "login": "petrov", "role": "operator", "pin": "$2b$10$...", "email": "", "active": true, "created_at": "ISO" }</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method PUT">PUT</div><div class="endpoint-path">/api/users/:id</div><div class="endpoint-desc">Обновить пользователя <span class="admin-badge">👑 admin</span></div></div>
+    <div class="endpoint-body">
+      <p>Разрешённые поля: <code>name, login, role, pin, email, active</code>. Для <code>sys-user-admin</code> разрешены только <code>name, login, pin, email</code> — нельзя сменить <code>role</code> и нельзя деактивировать (<code>active:false</code>).</p>
+      <h4>200 OK</h4><pre>{ "id": "UUID", "name": "...", "role": "...", "active": true }</pre>
+      <h4>400</h4><pre>{ "error": "Нельзя изменить роль системного администратора" }</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method DELETE">DELETE</div><div class="endpoint-path">/api/users/:id</div><div class="endpoint-desc">Удалить пользователя <span class="admin-badge">👑 admin</span></div></div>
+    <div class="endpoint-body">
+      <p><code>sys-user-admin</code> удалить нельзя → 400.</p>
+      <h4>200 OK</h4><pre>{ "ok": true }</pre>
+    </div>
+  </div>
+</section>
+
+<!-- API EMPLOYEES -->
+<section id="api-employees" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Employees</span></div></div>
+  <h1>Employees API</h1>
+  <p class="subtitle">Справочник сотрудников — источник значений поля <code>responsible</code> у Asset. Хранится в <code>it-assets.sqlite → employees</code> (SQLite, с Фазы 7c).</p>
+  <div class="alert info">Это не то же самое, что Users (пользователи системы с ролями). Employee — просто карточка сотрудника (ФИО, отдел, филиал, телефон), на которую ссылается оборудование.</div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/employees?q=...&active=...</div><div class="endpoint-desc">Список / поиск сотрудников</div></div>
+    <div class="endpoint-body">
+      <p>Без явного <code>requireAuth</code>, но проверяет, что <code>x-user-id</code> указывает на активного пользователя (401 иначе). Если передан <code>q</code> (мин. 2 символа) — возвращает результаты поиска по name/dept/phone (макс. 15). Иначе — полный список; <code>active=false</code> включает деактивированных.</p>
+    </div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/employees/:id</div><div class="endpoint-desc">Один сотрудник по ID</div></div>
+    <div class="endpoint-body"><p>404, если не найден.</p></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/employees</div><div class="endpoint-desc">Создать сотрудника <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4><pre>{ "name": "Иванов И.И.", "dept": "Бухгалтерия", "filial": "Центральный офис", "phone": "", "email": "", "note": "" }</pre>
+      <p><code>name</code> обязателен.</p>
+    </div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method PUT">PUT</div><div class="endpoint-path">/api/employees/:id</div><div class="endpoint-desc">Обновить <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body"><p>Разрешённые поля: <code>name, dept, filial, phone, email, note, active</code>.</p></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method DELETE">DELETE</div><div class="endpoint-path">/api/employees/:id</div><div class="endpoint-desc">Деактивировать (мягкое удаление) <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <p>Не удаляет запись — ставит <code>active:false</code> и <code>deactivated_at</code>. Возвращает список активов, у которых этот сотрудник был ответственным, чтобы UI предложил их перенести.</p>
+      <h4>200 OK</h4><pre>{ "ok": true, "deactivated": true, "employee": {...}, "linked_assets": 3, "assets": [...] }</pre>
+    </div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/employees/:id/reassign-assets</div><div class="endpoint-desc">Перенести оборудование при увольнении <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4><pre>{ "to_employee_id": "UUID" }</pre>
+      <p>Находит все не списанные ассеты с <code>responsible === сотрудник.name</code>. Если передан <code>to_employee_id</code> — переносит на него (записывает <code>action_type: 'reassign'</code> в history). Если не передан — просто снимает ответственного (<code>responsible: ''</code>), оставляя в той же организации/локации.</p>
+      <h4>200 OK</h4><pre>{ "ok": true, "moved": 3, "left_unassigned": 0 }</pre>
+    </div>
+  </div>
+</section>
+
+<!-- API ASSETS -->
+<section id="api-assets" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Assets</span></div></div>
+  <h1>Assets API</h1>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/assets</div><div class="endpoint-desc">Список ассетов с фильтрацией и пагинацией</div></div>
+    <div class="endpoint-body">
+      <h4>Query параметры</h4>
+      <table>
+        <tr><th>Параметр</th><th>Описание</th></tr>
+        <tr><td>tab</td><td>Фильтр по вкладке (os / small / infra)</td></tr>
+        <tr><td>category</td><td>Подкатегория (или "Все")</td></tr>
+        <tr><td>org</td><td>Название организации, разрешённое из org_id (или "Все")</td></tr>
+        <tr><td>filial</td><td>Название филиала (или "Все")</td></tr>
+        <tr><td>status</td><td>Статус (или "Все")</td></tr>
+        <tr><td>search</td><td>Полнотекстовый поиск по всем полям и meta</td></tr>
+        <tr><td>no_responsible</td><td>"1" — только без ответственного</td></tr>
+        <tr><td>no_inv</td><td>"1" — только без инвентарного номера</td></tr>
+        <tr><td>no_serial</td><td>"1" — только без серийного номера</td></tr>
+        <tr><td>stale_days</td><td>Только записи, не обновлявшиеся дольше N дней (по <code>updated_at</code>)</td></tr>
+        <tr><td>page</td><td>Номер страницы, по умолч. 1</td></tr>
+        <tr><td>limit</td><td>Размер страницы, по умолч. 50, максимум 200</td></tr>
+      </table>
+      <p>Всегда исключает <code>status === 'списан'</code>. Сортировка: filial → location → model.</p>
+      <h4>200 OK</h4>
+      <pre>{ "items": [ /* Asset[] c org, подставленным из org_id */ ], "total": 150, "page": 1, "pages": 3, "limit": 50 }</pre>
+      <div class="alert warning"><strong>⚠ Формат ответа изменился.</strong> Раньше эндпоинт возвращал «голый» массив Asset[]. Теперь — объект с пагинацией <code>{items, total, page, pages, limit}</code>. Клиенты, ожидающие массив напрямую, нужно обновить.</div>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/assets/search?q=...</div><div class="endpoint-desc">Глобальный поиск (≤100 результатов)</div></div>
+    <div class="endpoint-body">
+      <p>Параметр <code>q</code> обязателен, мин. 2 символа. Поля поиска: model, serial, inv, responsible, org, filial, location, type, note — плюс название организации через <code>org_id</code>.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/assets/:id</div><div class="endpoint-desc">Один ассет по ID</div></div>
+    <div class="endpoint-body"><p>Возвращает Asset или <code>404 {error: "Not found"}</code>.</p></div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/assets</div><div class="endpoint-desc">Создать ассет <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4>
+      <pre>{
+  "model":       "Lenovo ThinkPad E14",  // required
+  "tab":         "os",
+  "category":    "Оборудование пользователей",
+  "type":        "NB",
+  "serial":      "SN12345",
+  "inv":         "LDV-NB-00042",
+  "status":      "используется",
+  "responsible": "Иванов И.И.",
+  "org":         "ООО Ладога",
+  "filial":      "Центральный офис",
+  "address":     "ул. Ленина, 1",
+  "location":    "Кабинет 305",
+  "note":        "",
+  "meta":        { "ip": "192.168.1.100" }
+}</pre>
+      <h4>200 OK</h4><pre>{ "id": "UUID", "ok": true }</pre>
+      <p>Автоматически создаёт запись в history (<code>action_type: 'add'</code>). В <code>changed_by</code> попадает имя из <code>req.currentUser</code>. Поля <code>org_id/filial_id/location_id/responsible_id</code> этим эндпоинтом напрямую не резолвятся из строк — если нужна связь по ID, передавайте её явно.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method PUT">PUT</div><div class="endpoint-path">/api/assets/:id</div><div class="endpoint-desc">Обновить ассет <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <p>Разрешённые поля: <code>tab, category, filial, address, location, responsible, type, model, serial, status, org, note, inv, meta, org_id, filial_id, location_id, responsible_id</code>. Обновляет только переданные поля + <code>updated_at</code>.</p>
+      <p>Если передан новый <code>status</code> (кроме <code>'списан'</code>, для него используйте DELETE) — пишется дополнительная запись history с <code>action_type: 'status_change'</code>.</p>
+      <h4>200 OK</h4><pre>{ "ok": true }</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method DELETE">DELETE</div><div class="endpoint-path">/api/assets/:id</div><div class="endpoint-desc">Списать ассет <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body"><p>Мягкое удаление: <code>status = 'списан'</code>. Создаёт запись history (<code>action_type: 'retire'</code>). Физически запись остаётся.</p></div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/assets/:id/move</div><div class="endpoint-desc">Переместить (смена ответственного / локации) <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4>
+      <pre>{
+  "newResponsible": "Петров П.П.",
+  "newOrg":         "ООО Ладога",
+  "newFilial":      "Северный офис",
+  "newAddress":     "ул. Мира, 5",
+  "newLocation":    "Кабинет 102",
+  "reason":         "Перевод сотрудника"
+}</pre>
+      <p>Все поля опциональны. Пустые строки игнорируются — сохраняется старое значение. Создаёт history (<code>action_type: 'move'</code>) с описанием что изменилось.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/assets/bulk-move</div><div class="endpoint-desc">Массовое перемещение <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4>
+      <pre>{
+  "ids":            ["UUID", "UUID", ...],
+  "newResponsible": "Петров П.П.",
+  "newFilial":      "Северный офис",
+  "newAddress":     "ул. Мира, 5",
+  "newLocation":    "Кабинет 102",
+  "reason":         "Массовый перевод"
+}</pre>
+      <p><code>ids[]</code> обязателен. Не поддерживает смену организации (в отличие от одиночного move). Несуществующие ID попадают в <code>failed</code>, остальные обрабатываются как одиночный move — по одной записи history на каждый ассет.</p>
+      <h4>200 OK</h4><pre>{ "ok": 8, "failed": ["UUID-not-found"] }</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/assets/bulk-assign-inv</div><div class="endpoint-desc">Массовое присвоение инвентарных номеров <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4><pre>{ "ids": ["UUID", ...], "org_id": "UUID", "type_code": "NB" }</pre>
+      <p><code>org_id</code> и <code>type_code</code> обязательны. Пропускает ассеты, у которых <code>inv</code> уже заполнен. Каждому присвоенному пишется <code>action_type: 'inv_assigned'</code> в history.</p>
+      <h4>200 OK</h4><pre>{ "ok": true, "assigned": 5, "skipped": 2 }</pre>
+    </div>
+  </div>
+
+  <h2>Экспорт / импорт</h2>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/export/csv?tab=os</div><div class="endpoint-desc">Экспорт в CSV (UTF-8 BOM, разделитель ;)</div></div>
+    <div class="endpoint-body">
+      <p>Параметр <code>tab</code> — опционально. Без него — весь реестр. Filename: <code>IT_assets.csv</code> или <code>IT_assets_os.csv</code>.</p>
+      <h4>Колонки</h4>
+      <pre>Инв. номер; Вкладка; Коллекция; Филиал; Расположение; Ответственный; Тип; Модель;
+Серийный №; Статус; Организация; Примечание; IP; MAC; Подсеть; WinBox/URL;
+Логин; Пароль; Hostname; Картриджи; Прошивка; ИНВ шкаф</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/import/csv/preview</div><div class="endpoint-desc">Предпросмотр импорта — неизвестные организации <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4><pre>{ "rows": [ { "model": "...", "org": "...", ... } ] }</pre>
+      <p>Не изменяет данные. Возвращает организации из CSV, которых ещё нет в справочнике — чтобы UI мог показать предупреждение/подтверждение перед реальным импортом.</p>
+      <h4>200 OK</h4><pre>{ "ok": true, "unknown_orgs": [{"name":"ООО Незнакомая","count":4,"example":"NB ThinkPad"}], "total_rows": 40 }</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/import/csv</div><div class="endpoint-desc">Импорт из CSV <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4><pre>{ "rows": [ { "model": "...", "serial": "...", ... } ], "create_orgs": true, "create_employees": true }</pre>
+      <p>Дедупликация: по <code>serial</code> (если есть, кроме заглушек вроде «—»/«-») или по ключу <code>model|filial|location|responsible</code> (lowercase).</p>
+      <p>При импорте автоматически резолвятся/создаются: филиал и локация по названию (или системная заглушка при пустом значении), организация по названию (создаётся автоматически, если <code>create_orgs !== false</code>), сотрудник-ответственный (создаётся автоматически, если <code>create_employees !== false</code>). Для устройств без серийного номера — если у организации (или у резервной «ИТ»-организации, найденной по short_code <code>ИТ/IT/ИТ-СКЛАД/ITS</code>) настроены inv-rules — пытается сразу присвоить инвентарный номер.</p>
+      <h4>200 OK</h4><pre>{
+  "ok": true, "added": 12, "skipped": 3,
+  "skipReasons": { "dupe_serial": 1, "dupe_key": 1, "no_model": 1 },
+  "inv_assigned": 4,
+  "created_orgs": ["ООО Незнакомая"]
+}</pre>
+    </div>
+  </div>
+</section>
+
+<!-- API HISTORY -->
+<section id="api-history" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>History</span></div></div>
+  <h1>History API</h1>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/history</div><div class="endpoint-desc">Журнал событий с фильтрами</div></div>
+    <div class="endpoint-body">
+      <h4>Query параметры</h4>
+      <table>
+        <tr><th>Параметр</th><th>По умолч.</th><th>Описание</th></tr>
+        <tr><td>limit</td><td>500</td><td>Максимум записей в ответе (после фильтрации, не влияет на stats)</td></tr>
+        <tr><td>asset_id</td><td>—</td><td>История конкретного ассета</td></tr>
+        <tr><td>action_type</td><td>—</td><td>Тип события</td></tr>
+        <tr><td>filial</td><td>—</td><td>Фильтр по филиалу</td></tr>
+        <tr><td>org</td><td>—</td><td>Фильтр по организации (сверяется с <code>org_snapshot</code> либо <code>org</code>)</td></tr>
+        <tr><td>changed_by</td><td>—</td><td>Кто внёс изменение (точное совпадение имени)</td></tr>
+        <tr><td>search</td><td>—</td><td>Поиск по equipment, from_who, to_who, reason, serial</td></tr>
+        <tr><td>from_date</td><td>—</td><td>С даты (YYYY-MM-DD)</td></tr>
+        <tr><td>to_date</td><td>—</td><td>По дату (YYYY-MM-DD)</td></tr>
+      </table>
+      <h4>200 OK</h4>
+      <pre>{
+  "items": [ /* HistoryEntry[] — новые первыми */ ],
+  "total": 1234,
+  "stats": {
+    "total": 1234, "today": 5,
+    "moves": 900, "adds": 200, "retires": 50, "imports": 84
+  }
+}</pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/import/history</div><div class="endpoint-desc">Импорт истории из CSV/Excel <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <p>Body: <code>{ "rows": [...] }</code>. Поддерживает Excel-сериальные даты (44000+).</p>
+      <p><strong>Авто-сопоставление с активами по серийному номеру.</strong> Поле <code>equipment</code> в источнике часто описывает несколько предметов через запятую (реальный пример из исходных Excel-выгрузок: <code>"Ноутбук HUAWEI MCLF-X SN 28UBB..., Монитор XIAOMI ... SN 52756/..."</code>). Каждая позиция разбивается на отдельную запись истории. Серийник извлекается трёхуровневым фоллбеком (метка <code>SN</code>/<code>sn</code>/<code>SN:</code> → таб-разделённый последний сегмент → последнее «слово» в тексте, каждый кандидат проверяется на «похожесть на серийник»: без пробелов, есть цифра, 6–25 символов) и сверяется на точное совпадение с реальными активами в базе. Совпадение — <code>asset_id</code>/<code>model</code>/<code>type</code>/<code>filial</code>/<code>location</code> подтягиваются из актива, а не из текста. Без совпадения (или без серийника вовсе, например для аксессуаров) — запись всё равно сохраняется, просто без привязки.</p>
+      <p>Дедупликация — на уровне отдельной позиции (после разбивки), по ключу <code>date|позиция|from_who</code>, а не по исходной строке целиком.</p>
+      <h4>200 OK</h4><pre>{ "ok": true, "added": 10, "skipped": 2, "matched": 6 }</pre>
+      <p><code>added</code> считает отдельные позиции (может быть больше числа строк в исходном файле — одна строка с двумя предметами через запятую даёт 2 в <code>added</code>). <code>matched</code> — сколько из них успешно привязались к реальному активу по серийнику.</p>
+    </div>
+  </div>
+</section>
+
+<!-- API ORGS -->
+<section id="api-orgs" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Organizations</span></div></div>
+  <h1>Organizations API</h1>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/orgs?system=true</div><div class="endpoint-desc">Список организаций</div></div>
+    <div class="endpoint-body"><p>По умолчанию — без системных. <code>?system=true</code> — включая системные заглушки.</p></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/orgs/:id</div><div class="endpoint-desc">Одна организация с inv_rules</div></div>
+    <div class="endpoint-body"><p>Возвращает полный объект Organization включая массив <code>inv_rules</code>.</p></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/orgs</div><div class="endpoint-desc">Создать организацию <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <pre>{ "name": "ООО Ромашка", "short_code": "ROM", "inv_rules": [] }</pre>
+      <p>short_code автоматически в UPPERCASE. Дубликат по name или short_code → 400.</p>
+    </div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method PUT">PUT</div><div class="endpoint-path">/api/orgs/:id</div><div class="endpoint-desc">Обновить поля <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body"><p>Разрешённые поля: <code>name, short_code, status</code>.</p></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/orgs/:id/rename</div><div class="endpoint-desc">Переименовать <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <pre>{ "newName": "ООО Новое Название", "changedBy": "admin" }</pre>
+      <p>Записывает событие <code>org_renamed</code> в history.</p>
+    </div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/orgs/:id/liquidate</div><div class="endpoint-desc">Ликвидировать организацию <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <pre>{ "targetOrgId": "UUID", "changedBy": "admin", "renumberInv": true }</pre>
+      <p>Переносит все ассеты в целевую организацию. При <code>renumberInv: true</code> — перегенерирует инвентарные номера (старые сохраняются в <code>inv_prev</code>). Ликвидируемая → <code>status: liquidated</code>.</p>
+      <h4>200 OK</h4><pre>{ "transferred": 42, "renumbered": 15 }</pre>
+    </div>
+  </div>
+
+  <h2>Правила инвентарных номеров (inv-rules)</h2>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/orgs/:id/inv-rules</div><div class="endpoint-desc">Список правил</div></div>
+    <div class="endpoint-body"><p>Массив InvRule[].</p></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/orgs/:id/inv-rules</div><div class="endpoint-desc">Добавить правило <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <pre>{ "type_code": "NB", "type_name": "Ноутбук", "format": "{org}-{type}-{N:05}" }</pre>
+    </div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method PATCH">PATCH</div><div class="endpoint-path">/api/orgs/:id/inv-rules/:typeCode</div><div class="endpoint-desc">Вкл/выкл правило <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body"><pre>{ "active": false }</pre></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method PUT">PUT</div><div class="endpoint-path">/api/orgs/:id/inv-rules/:typeCode</div><div class="endpoint-desc">Переименовать правило <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body"><pre>{ "type_name": "Лэптоп" }</pre></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method DELETE">DELETE</div><div class="endpoint-path">/api/orgs/:id/inv-rules/:typeCode</div><div class="endpoint-desc">Удалить правило <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <p>Если есть ассеты с этими номерами → вернёт <code>{ "conflict": true, "count": N, "prefix": "LDV-NB-" }</code>.</p>
+      <h4>Принудительное удаление</h4>
+      <pre>POST /api/orgs/:id/inv-rules/:typeCode/delete-force
+
+// Обнулить инв. номера затронутых ассетов
+{ "action": "reset" }
+
+// Перенести на другой тип
+{ "action": "transfer", "targetTypeCode": "PC" }</pre>
+    </div>
+  </div>
+</section>
+
+<!-- API FILIALS -->
+<section id="api-filials" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Filials & Locations</span></div></div>
+  <h1>Filials & Locations API</h1>
+
+  <h2>Filials</h2>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/filials</div><div class="endpoint-desc">Список филиалов</div></div>
+    <div class="endpoint-body"><p><code>?system=true</code> — включить системные заглушки.</p></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/filials</div><div class="endpoint-desc">Создать <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body"><pre>{ "name": "Северный офис", "address": "ул. Мира, 5", "org_id": "UUID" }</pre></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method PUT">PUT</div><div class="endpoint-path">/api/filials/:id</div><div class="endpoint-desc">Обновить <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body"><p>Поля: name, address, org_id.</p></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/filials/:id/close</div><div class="endpoint-desc">Закрыть филиал <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <pre>{ "changedBy": "admin" }</pre>
+      <h4>200 OK</h4><pre>{ "closed": true, "affected_assets": 12 }</pre>
+      <p>Закрытый филиал не принимает новые ассеты при назначении.</p>
+    </div>
+  </div>
+
+  <h2>Locations</h2>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/locations?filial_id=UUID</div><div class="endpoint-desc">Список локаций</div></div>
+    <div class="endpoint-body"><p><code>?filial_id=UUID</code> — фильтр по филиалу. <code>?system=true</code> — включить системные.</p></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/locations</div><div class="endpoint-desc">Создать <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body"><pre>{ "name": "Серверная", "filial_id": "UUID", "type": "office" }</pre></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method PUT">PUT</div><div class="endpoint-path">/api/locations/:id</div><div class="endpoint-desc">Обновить <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body"><p>Поля: name, type, filial_id.</p></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/locations/:id/close</div><div class="endpoint-desc">Закрыть <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body"><pre>{ "changedBy": "admin" }</pre>
+    <h4>200 OK</h4><pre>{ "closed": true }</pre></div>
+  </div>
+</section>
+
+<!-- API INV -->
+<section id="api-inv" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Inv Numbers</span></div></div>
+  <h1>Инвентарные номера</h1>
+  <div class="alert info"><strong>Формат:</strong> <code>LDV-NB-00042</code> = <code>{org.short_code}-{type_code}-{NNNNN}</code>. Счётчик: max(rule.counter, max из БД) + 1 — защита от дырок при ручном вводе. При счётчике &gt;99999 выдаётся 6-значный номер (без ограничения сверху).</div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/inv/codes</div><div class="endpoint-desc">Словари кодов организаций и типов</div></div>
+    <div class="endpoint-body">
+      <pre>{
+  "orgs":  { "LDV": "ООО Ладога", "ROM": "ООО Ромашка" },
+  "types": { "NB": "Ноутбук", "PC": "Системный блок", "MON": "Монитор" }
+}</pre>
+    </div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/inv/next?org_id=UUID&amp;type=NB</div><div class="endpoint-desc">Следующий номер (инкрементирует счётчик!)</div></div>
+    <div class="endpoint-body">
+      <p>Параметры: <code>org_id</code> (UUID) или <code>org</code> (short_code), <code>type</code> (обязателен).</p>
+      <h4>200 OK</h4><pre>{ "inv": "LDV-NB-00043", "next": 43, "prefix": "LDV-NB-" }</pre>
+    </div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/inv/reserve</div><div class="endpoint-desc">Зарезервировать номер <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <pre>{ "org_id": "UUID", "type": "NB" }</pre>
+      <h4>200 OK</h4><pre>{ "ok": true, "inv": "LDV-NB-00043", "next": 43, "prefix": "LDV-NB-" }</pre>
+    </div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/orgs/:id/inv-next?type=NB</div><div class="endpoint-desc">Следующий для конкретной орг <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body"><p>Псевдоним для <code>/api/inv/next?org_id=:id&amp;type=NB</code>.</p></div>
+  </div>
+</section>
+
+<!-- API MISC -->
+<section id="api-misc" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Settings & Misc</span></div></div>
+  <h1>Прочие эндпоинты</h1>
+
+  <h2>Категории</h2>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/categories</div><div class="endpoint-desc">Все категории по вкладкам</div></div>
+    <div class="endpoint-body"><pre>{ "os": ["Оборудование пользователей", "Оргтехника", "Мини ПК"], "small": [...], "infra": [...] }</pre></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method PUT">PUT</div><div class="endpoint-path">/api/categories/:tab</div><div class="endpoint-desc">Перезаписать категории вкладки <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body"><pre>{ "categories": ["Оборудование пользователей", "Оргтехника"] }</pre></div>
+  </div>
+
+  <h2>Коды типов устройств</h2>
+  <table>
+    <tr><th>Код</th><th>Устройство</th><th>Код</th><th>Устройство</th></tr>
+    <tr><td>NB</td><td>Ноутбук</td><td>PC</td><td>Системный блок</td></tr>
+    <tr><td>MON</td><td>Монитор</td><td>MFU</td><td>МФУ</td></tr>
+    <tr><td>PR</td><td>Принтер</td><td>TAB</td><td>Планшет</td></tr>
+    <tr><td>TV</td><td>Телевизор</td><td>UPS</td><td>ИБП</td></tr>
+    <tr><td>MPC</td><td>Мини ПК</td><td>SRV</td><td>Сервер</td></tr>
+    <tr><td>SW</td><td>Коммутатор</td><td>RT</td><td>Маршрутизатор</td></tr>
+    <tr><td>AP</td><td>Точка доступа</td><td>CAM</td><td>Камера</td></tr>
+    <tr><td>DVR</td><td>Видеорегистратор</td><td>TSD</td><td>ТСД</td></tr>
+    <tr><td>SCN</td><td>Сканер</td><td>RBR</td><td>Радиомост</td></tr>
+    <tr><td>SPK</td><td>Спикерфон</td><td>SPB</td><td>Колонки</td></tr>
+    <tr><td>CPB</td><td>Вызывная панель</td><td>VDI</td><td>Видеодомофон</td></tr>
+    <tr><td>MOU</td><td>Мышь</td><td>KB</td><td>Клавиатура</td></tr>
+    <tr><td>HS</td><td>Гарнитура</td><td>CAB</td><td>Кабель/Патч-корд</td></tr>
+    <tr><td>POE</td><td>PoE инжектор</td><td>HUB</td><td>USB-hub</td></tr>
+    <tr><td>SSD</td><td>SSD/HDD</td><td>PHN</td><td>Смартфон</td></tr>
+    <tr><td>WEB</td><td>Web камера</td><td>SPF</td><td>Сетевой фильтр</td></tr>
+    <tr><td>BRC</td><td>Кронштейн</td><td></td><td></td></tr>
+  </table>
+  <div class="alert info">Каждый type_code теперь хранит и поле <code>tab</code> (os/small/infra) — проставлено миграцией v2, используется при авто-определении категории во время импорта.</div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/type-codes</div><div class="endpoint-desc">Получить коды типов</div></div>
+    <div class="endpoint-body"><pre>[{ "code": "NB", "name": "Ноутбук", "tab": "os" }, ...]</pre></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/type-mapping</div><div class="endpoint-desc">Быстрый словарь «название типа → вкладка»</div></div>
+    <div class="endpoint-body">
+      <p>Используется парсером CSV на фронтенде для определения вкладки по названию типа устройства.</p>
+      <pre>{ "ноутбук": "os", "коммутатор": "infra", "гарнитура": "small", ... }</pre>
+    </div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method PUT">PUT</div><div class="endpoint-path">/api/type-codes</div><div class="endpoint-desc">Перезаписать <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body"><pre>{ "codes": [{ "code": "NB", "name": "Ноутбук", "tab": "os" }, ...] }</pre></div>
+  </div>
+
+  <h2>Учётные записи (справочник внешних систем)</h2>
+  <div class="alert warning">Это НЕ система аутентификации. Справочник логинов/паролей для внешних систем (Wi-Fi, серверы). Хранится в it-assets.sqlite → accounts (SQLite, с Фазы 7c). Пароли — открытым текстом.</div>
+  <table>
+    <tr><th>Метод</th><th>URL</th><th>Auth</th><th>Описание</th></tr>
+    <tr><td>GET</td><td>/api/accounts</td><td>🔐</td><td>Список. Body fields: name, login, password, note, category</td></tr>
+    <tr><td>POST</td><td>/api/accounts</td><td>🔐</td><td>Создать (name обязателен)</td></tr>
+    <tr><td>PUT</td><td>/api/accounts/:id</td><td>🔐</td><td>Обновить</td></tr>
+    <tr><td>DELETE</td><td>/api/accounts/:id</td><td>🔐</td><td>Удалить</td></tr>
+  </table>
+
+  <h2>Статистика</h2>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/stats</div><div class="endpoint-desc">Агрегированная статистика</div></div>
+    <div class="endpoint-body">
+      <pre>{
+  "total": 150, "active": 130, "reserve": 18, "noResp": 2,
+  "noInv": 12, "noSerial": 8,
+  "byFilial":   [{ "filial": "Центр", "n": 80 }],
+  "byOrg":      [{ "org": "ООО Ладога", "n": 90 }],
+  "byType":     [{ "type": "NB", "n": 45 }],   // топ 10, сортировка по убыванию
+  "byTab":      [{ "tab": "os", "n": 100 }],
+  "byCategory": [{ "category": "...", "n": 50 }]
+}</pre>
+      <p>Всегда исключает списанные ассеты. <code>noResp</code> — без ответственного (responsible пустой, <code>?</code> или <code>—</code>). <code>noInv</code>/<code>noSerial</code> — без инв. номера / серийного номера. <code>byOrg</code> разрешает название организации через <code>org_id</code> (с фолбэком на строковое поле <code>org</code>), исключает записи без организации.</p>
+    </div>
+  </div>
+
+  <h2>Диагностика</h2>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/diag</div><div class="endpoint-desc">Проверка файла БД, прав записи и бэкапов</div></div>
+    <div class="endpoint-body">
+      <pre>{
+  "dbPath": "/path/to/data/db.json", "writable": true, "writeOk": true,
+  "fileSize": 524601, "lastWrite": "ISO",
+  "schema_version": 7,
+  "assets": 150, "history": 1234,
+  "backup": { "last": { "file": "backup_...", "mtime": "ISO", "size": 123, "full": true }, "count": 12, "dir": "/path/to/data/backups" }
+}</pre>
+      <p>Выполняет тестовую запись (<code>_meta.diag_ping</code>) и проверяет количество записей на диске vs в памяти. Теперь также отдаёт текущую версию схемы (<code>_meta.schema_version</code> из config.json) и сводку по бэкапам.</p>
+    </div>
+  </div>
+
+  <h2>Миграции схемы</h2>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/migrate</div><div class="endpoint-desc">Принудительно перезапустить миграции <span class="admin-badge">👑 admin</span></div></div>
+    <div class="endpoint-body">
+      <h4>Body</h4><pre>{ "from_version": 0 }</pre>
+      <p>Сбрасывает <code>_meta.schema_version</code> в config.json на <code>from_version</code> (по умолч. 0) и запускает <code>server/migrate.js</code> заново — все шаги идемпотентны, повторный прогон безопасен. Используется для ручного пересчёта категорий/связей после ручной правки JSON.</p>
+      <div class="alert warning">⚠ Не требует подтверждения кроме роли admin — сбрасывать версию на бою стоит только понимая, что все шаги идемпотентны и не потеряют данные, но пересчитают производные поля.</div>
+      <h4>200 OK</h4><pre>{ "ok": true, "schema_version": 7 }</pre>
+    </div>
+  </div>
+
+  <h2>QR-коды</h2>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/qr?text=...</div><div class="endpoint-desc">Сгенерировать QR-код (SVG)</div></div>
+    <div class="endpoint-body">
+      <p>Без авторизации. <code>text</code> обязателен (обычно — инвентарный номер или ссылка на карточку ассета). Возвращает <code>image/svg+xml</code>, кэшируется на сутки (<code>Cache-Control: public, max-age=86400</code>).</p>
+      <p>Если в зависимостях установлен пакет <code>qrcode</code> — используется он (уровень коррекции ошибок M). Если нет — сервер использует собственный встроенный генератор QR (Рид-Соломон + маскирование по спецификации, версии 1–10, UTF-8), чтобы функциональность работала даже без установки доп. пакета. Слишком длинный текст (не помещается в версию 10) → <code>400</code>.</p>
+    </div>
+  </div>
+
+  <h2>Конфиг: экспорт / импорт с diff</h2>
+  <table>
+    <tr><th>Метод</th><th>URL</th><th>Описание</th></tr>
+    <tr><td>GET 🔐</td><td>/api/config/export</td><td>Снимок organizations/filials/locations/categories/type_codes/settings/users из SQLite (JSON, не буквально файл config.json)</td></tr>
+    <tr><td>POST 🔐</td><td>/api/config/import/diff</td><td>Рассчитать diff. Body: <code>{"config": {...}}</code>. Возвращает <code>{clean, conflicts}</code></td></tr>
+    <tr><td>POST 🔐</td><td>/api/config/import/apply</td><td>Применить с разрешением конфликтов. Body: <code>{clean, resolutions, incoming, changedBy}</code></td></tr>
+  </table>
+</section>
+
+<!-- API BACKUP -->
+<section id="api-backup" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / API / <span>Backup</span></div></div>
+  <h1>Backup API</h1>
+  <p class="subtitle">Резервное копирование <code>it-assets.sqlite + db.json + config.json</code> в <code>data/backups/</code>.</p>
+
+  <div class="alert info"><strong>Автоматически:</strong> раз в час (<code>setInterval</code>, тег <code>auto</code>) и один раз через 10 секунд после старта сервера (тег <code>startup</code>). Плюс автоматический бэкап перед восстановлением из другого файла (тег <code>pre-restore</code>). <strong>Отключено при <code>NODE_ENV=test</code></strong> (Jest выставляет это значение автоматически) — иначе таймеры реально писали бы zip-файлы на диск при каждом прогоне тестов.</div>
+  <div class="alert warning"><strong>Ротация:</strong> хранится не более 30 последних файлов (<code>pruneBackups(30)</code>) — старые удаляются автоматически при каждом создании нового.</div>
+  <div class="alert info"><strong>Формат:</strong> если установлен пакет <code>adm-zip</code> — единый ZIP-архив с <code>it-assets.sqlite</code>, <code>db.json</code> и <code>config.json</code> внутри (<code>backup_&lt;tag&gt;_&lt;timestamp-с-мс&gt;_&lt;rnd6&gt;.zip</code>). Перед архивацией SQLite делает <code>PRAGMA wal_checkpoint(TRUNCATE)</code> — иначе часть данных могла бы остаться только в <code>-wal</code>-файле, который в бэкап не попадает. Без adm-zip — fallback на пару JSON-файлов (<code>db.json</code> + одноимённый <code>.config.json</code>; в этом режиме <code>it-assets.sqlite</code> не бэкапится — известное ограничение fallback-режима). Штамп времени включает миллисекунды, плюс добавлен случайный 6-символьный суффикс — раньше штамп обрезался до секунд, и два бэкапа в одну секунду молча перезаписывали друг друга.</div>
+  <div class="alert warning"><strong>Расположение:</strong> <code>&lt;IT_ASSETS_DATA_DIR или data/&gt;/backups/</code> — путь читается напрямую из файловой системы (<code>fs.*</code>), в обход <code>database.js</code>. См. переменную <code>IT_ASSETS_DATA_DIR</code> в разделе «Запуск и конфигурация» — важно для тестов и для нестандартного расположения данных.</div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/backup/list</div><div class="endpoint-desc">Список бэкапов <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <h4>200 OK</h4><pre>[{ "name": "backup_manual_2026-07-06T10-00-00-123_a1b2c3.zip", "size": 123456, "mtime": "ISO", "full": true }]</pre>
+      <p><code>full: true</code> — бэкап содержит it-assets.sqlite + db.json + config.json (ZIP всегда full, для legacy JSON-пар full зависит от наличия парного .config.json, а it-assets.sqlite в JSON-fallback режиме не входит никогда). Сортировка — новые первыми.</p>
+    </div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/backup/create</div><div class="endpoint-desc">Создать бэкап вручную <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body"><h4>200 OK</h4><pre>{ "ok": true, "file": "backup_manual_....zip", "size": 123456, "format": "zip" }</pre></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method GET">GET</div><div class="endpoint-path">/api/backup/download/:name</div><div class="endpoint-desc">Скачать файл бэкапа <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body"><p><code>name</code> нормализуется через <code>path.basename</code> (защита от path traversal). <code>404</code>, если файла нет.</p></div>
+  </div>
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggle(this)"><div class="method POST">POST</div><div class="endpoint-path">/api/backup/restore/:name</div><div class="endpoint-desc">Восстановить из бэкапа <span class="auth-badge">🔐 auth</span></div></div>
+    <div class="endpoint-body">
+      <p>Перед восстановлением автоматически создаёт бэкап текущего состояния (тег <code>pre-restore</code>) — на случай ошибки. Для ZIP — распаковывает <code>it-assets.sqlite</code>, <code>db.json</code> и <code>config.json</code> прямо в <code>data/</code> (старые бэкапы без <code>it-assets.sqlite</code> — до Фазы 7c — восстанавливают только db.json/config.json, это нормально). Устаревшие <code>-wal</code>/<code>-shm</code>-файлы предыдущей сессии удаляются, чтобы SQLite не попытался применить их поверх восстановленного файла. Для legacy JSON — копирует <code>db.json</code>, и если найден парный <code>.config.json</code> — восстанавливает и его.</p>
+      <div class="alert danger">⚠ Перезаписывает текущие данные немедленно, без промежуточного подтверждения на сервере. Сервер не перечитывает файлы «на лету» — после restore рекомендуется перезапустить процесс, чтобы и SQLite-, и lowdb-соединения подхватили новое содержимое.</div>
+      <h4>200 OK</h4><pre>{ "ok": true, "restored": "backup_....zip", "full": true }</pre>
+    </div>
+  </div>
+</section>
+
+<!-- RUN -->
+<section id="run" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Запуск</span></div></div>
+  <h1>Запуск и конфигурация</h1>
+
+  <h2>Команды npm</h2>
+  <pre>npm install          # установка зависимостей
+npm start            # запуск (node server/index.js)
+npm run dev          # то же самое</pre>
+  <div class="alert info"><strong>Настройка портов через переменные окружения:</strong> используйте <code>PORT</code> и <code>HTTPS_PORT</code> при запуске: <code>HTTPS_PORT=8443 node server/index.js</code></div>
+
+  <h2>Скрипты запуска</h2>
+  <table>
+    <tr><th>Файл</th><th>ОС</th><th>Что делает</th></tr>
+    <tr><td>start.sh</td><td>Linux / macOS</td><td>Проверяет Node.js, npm install при первом запуске, запускает сервер, открывает браузер</td></tr>
+    <tr><td>install.sh</td><td>Linux / macOS</td><td>Только npm install с инструкцией по установке Node.js</td></tr>
+    <tr><td>test.sh</td><td>Linux / macOS</td><td>jest --runInBand --forceExit, корректный exit-код</td></tr>
+    <tr><td>START.bat</td><td>Windows</td><td>То же: npm install при первом запуске, запуск сервера + браузер</td></tr>
+    <tr><td>INSTALL.bat</td><td>Windows</td><td>npm install (однократно)</td></tr>
+    <tr><td>TEST.bat</td><td>Windows</td><td>jest --runInBand --forceExit</td></tr>
+  </table>
+
+  <h2>Первый запуск</h2>
+  <p>Если папка <code>data/</code> отсутствует — создаётся автоматически. Оба JSON-файла инициализируются дефолтами: системные заглушки, категории, коды типов, системный пользователь <code>sys-user-admin</code> (login <code>admin</code>, PIN <code>admn0000</code>). При первом старте также генерируется самоподписанный TLS-сертификат (<code>data/cert.pem</code>, <code>data/key.pem</code>, через <code>server/cert.js</code>, ~825 дней срок действия) — процесс может занять пару секунд.</p>
+
+  <h2>HTTPS и сертификат</h2>
+  <p>Сервер поднимает два листенера:</p>
+  <table>
+    <tr><th>Порт</th><th>Протокол</th><th>Назначение</th></tr>
+    <tr><td>3000</td><td>HTTP</td><td>Только 301-редирект на <code>https://&lt;host&gt;:3443&lt;path&gt;</code></td></tr>
+    <tr><td>3443</td><td>HTTPS</td><td>Основной трафик — самоподписанный сертификат из <code>data/cert.pem/key.pem</code></td></tr>
+  </table>
+  <p>Сертификат генерируется один раз при первом запуске и переиспользуется дальше (<code>server/cert.js → ensureCert()</code>). Браузер покажет предупреждение о недоверенном сертификате — это ожидаемо для самоподписанного TLS, нужно нажать «Дополнительно» → «Перейти на localhost» (Chrome/Edge) или «Принять риск и продолжить» (Firefox).</p>
+  <div class="alert warning"><strong>Фолбэк без TLS.</strong> Если сертификат сгенерировать не удалось (например, нет прав на запись в <code>data/</code>), сервер откатывается на обычный HTTP на порту 3000 без редиректа — с предупреждением в консоли.</div>
+
+  <h2>Консольный вывод при старте</h2>
+  <pre>=== IT ASSETS β1 · 26w27·02 ===
+DB path: /home/user/it-assets/data/db.json
+DB size: 512.3 KB  | modified: 06.07.2026, 12:00:00
+DB write: OK (150 assets, 1234 history)
+Assets: 150
+
+HTTP  (redirect to HTTPS):
+  http://localhost:3000
+
+HTTPS (main):
+  https://localhost:3443
+  https://192.168.1.50:3443  &lt;-- для коллег
+
+  [WARNING] Self-signed certificate
+  Chrome:  click "Advanced" -&gt; "Proceed to localhost"
+  Firefox: click "Accept the Risk and Continue"
+  Edge:    click "Advanced" -&gt; "Continue to localhost"</pre>
+  <div class="alert warning"><strong>⚠ Больше не выводится пароль в консоли.</strong> Раньше стартовый лог включал <code>Password: admin123</code> (единый пароль). Сейчас пароля как такового нет — есть PIN пользователя <code>sys-user-admin</code>, он в консоль не выводится.</div>
+
+  <h2>Переменные окружения</h2>
+  <table>
+    <tr><th>Переменная</th><th>По умолчанию</th><th>Назначение</th></tr>
+    <tr><td><code>PORT</code></td><td>3000</td><td>HTTP-порт (только редирект на HTTPS).</td></tr>
+    <tr><td><code>HTTPS_PORT</code></td><td>3443</td><td>Основной HTTPS-порт приложения.</td></tr>
+    <tr><td><code>CORS_ORIGINS</code></td><td>(пусто)</td><td>Список разрешённых origin через запятую для кросс-origin запросов из браузера. Пусто = кросс-origin запросы блокируются (обычному использованию — открыть приложение по своему адресу — не мешает, т.к. фронтенд и API на одном origin).</td></tr>
+    <tr><td><code>IT_ASSETS_DATA_DIR</code></td><td><code>&lt;repo&gt;/data</code></td><td>Путь к папке с <code>it-assets.sqlite</code> / <code>db.json</code> / <code>config.json</code> / <code>backups/</code>. Используется и в <code>server/database.js</code>, и в <code>server/index.js</code> (backup-роуты) — важно, что оба места читают одну и ту же переменную, иначе бэкапы и БД разъедутся по разным папкам.</td></tr>
+    <tr><td><code>TRUST_PROXY</code></td><td>(не задан)</td><td>При <code>1</code> — rate-limit на логине (<code>rateLimitLogin</code>) берёт IP клиента из <code>X-Forwarded-For</code> (для деплоя за реверс-прокси). По умолчанию используется реальный TCP-адрес соединения — иначе клиент мог бы подделать заголовок и обойти ограничение попыток входа.</td></tr>
+    <tr><td><code>NODE_ENV</code></td><td>(не задан)</td><td>При <code>test</code> (выставляется автоматически Jest'ом) отключены фоновые таймеры автобэкапа — см. раздел «Тесты».</td></tr>
+  </table>
+
+  <div class="alert danger"><strong>Критично (Windows):</strong> не размещать папку проекта на Рабочем столе — путь с кириллицей ломает Node.js. Рекомендуется <code>C:\it-assets\</code>.</div>
+
+  <h2>Фронтенд</h2>
+  <p>JS-логика разбирается на файлы (Фаза 5, в процессе, см. дорожную карту): 13 файлов уже вынесены
+  в <code>public/js/</code> (<code>ui-utils.js</code>, <code>qr.js</code>, <code>theme.js</code>, <code>i18n.js</code>,
+  <code>auth.js</code>, <code>meta-fields.js</code>, <code>global-search.js</code>, <code>router.js</code>,
+  <code>views/{dashboard,alerts,accounts,asset-tab}.js</code>) — это <b>classic-скрипты</b>
+  (<code>&lt;script src&gt;</code>), не ES-модули: в конце <code>index.html</code> есть синхронный
+  <code>render();</code> до <code>DOMContentLoaded</code>, а модули выполняются deferred, поэтому
+  функции вроде <code>esc()</code>/<code>toast()</code> были бы <code>undefined</code> в момент
+  первого рендера. Файлы делят один глобальный scope с оставшимся кодом — имена резолвятся в
+  момент вызова, не объявления. Ещё в <code>index.html</code>: <code>renderHistory</code>,
+  <code>renderSettings</code> (крупнейший экран — orgs/filials/locations/users/type-codes/backup),
+  формы создания/редактирования актива. Стили — отдельно, <code>public/css/main.css</code>.
+  Express раздаёт <code>public/</code> как статику. Fallback-роут <code>GET *</code> тоже отдаёт
+  index.html (SPA-режим).</p>
+
+  <h2>Лимит тела запроса</h2>
+  <p>Express настроен на <code>10mb</code> для JSON и URL-encoded. Релевантно для больших CSV-импортов.</p>
+</section>
+
+<!-- TESTS -->
+<section id="tests" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>Тесты</span></div></div>
+  <h1>Тесты</h1>
+
+  <h2>Команды (Jest)</h2>
+  <pre>npm test                 # все тесты (--runInBand --forceExit)
+npm run test:watch       # watch-режим
+npm run test:coverage    # с покрытием
+./test.sh                # Linux/macOS
+TEST.bat                 # Windows</pre>
+
+  <div class="alert info"><strong>283/283</strong> — актуальный baseline (было 237 после фаз 1–4d, выросло на Фазе 7c — миграция на SQLite потребовала честного тестового покрытия вместо мока, плюс новые тесты на CSV-импорт/экспорт, синхронизацию конфига и бэкапы). Это число не должно меняться без намеренного добавления тестов.</div>
+
+  <h2>Файлы тестов</h2>
+  <table>
+    <tr><th>Файл</th><th>Что тестирует</th></tr>
+    <tr><td>tests/api.test.js</td><td>HTTP-эндпоинты через supertest. Мокает database.js на in-memory версию.</td></tr>
+    <tr><td>tests/assets.test.js</td><td>CRUD ассетов, move, экспорт и импорт CSV.</td></tr>
+    <tr><td>tests/employees.test.js</td><td>CRUD сотрудников, поиск (<code>?q=</code>), деактивация вместо удаления, перенос активов при увольнении (<code>reassign-assets</code>).</td></tr>
+    <tr><td>tests/backup.test.js</td><td>Backup API: список/создание/скачивание/восстановление, path traversal, авто pre-restore бэкап. Изолирован от реальной <code>data/</code> через <code>IT_ASSETS_DATA_DIR</code> (временная папка в <code>os.tmpdir()</code>, выставляется <strong>до</strong> <code>require('../server/index')</code>, так как путь читается один раз при загрузке модуля).</td></tr>
+    <tr><td>tests/integrity.test.js</td><td>Целостность данных: связь assets ↔ history, корректность полей. При отсутствии <code>data/db.json</code>/<code>config.json</code> (чистый чекаут) сам поднимает реальный <code>database.js</code>, который создаёт файлы с дефолтами — тест самодостаточен и не требует предварительного запуска сервера.</td></tr>
+    <tr><td>tests/invRules.test.js</td><td>Генерация инвентарных номеров, ликвидация орг, перенумерация.</td></tr>
+    <tr><td>tests/config.test.js</td><td>Методы db.config: CRUD для orgs, filials, locations, accounts.</td></tr>
+    <tr><td>tests/edge.test.js</td><td>Граничные случаи: счётчик &gt;99999 (6-значные номера), liquidate без ассетов, closeFilial — новые ассеты не назначаются на закрытый.</td></tr>
+    <tr><td>tests/history.test.js</td><td>Журнал событий: фильтры, лимит, импорт истории, дедупликация, Excel-даты.</td></tr>
+    <tr><td>tests/settings.test.js</td><td>Настройки (пароль, company_name, logo_svg, styles), категории, type-codes, accounts через HTTP.</td></tr>
+    <tr><td>tests/qr.test.js</td><td>Генерация QR-кода: корректный SVG, обязательность text, декодирование через jsqr для проверки читаемости.</td></tr>
+    <tr><td>tests/helpers/makeDb.js</td><td>Фабрика in-memory мока БД, включая employees и users с login/email. PIN хешируется через <code>server/pin.js</code> (bcrypt) так же, как в реальном <code>database.js</code>. Используется во всех тестах.</td></tr>
+  </table>
+
+  <h2>Архитектура тестов</h2>
+  <pre>jest.mock('../server/database', () => mockDb);</pre>
+  <p><code>makeDb()</code> создаёт полный in-memory аналог <code>database.js</code> с теми же методами и реальным <code>server/pin.js</code> для хеширования PIN. В тестах по умолч. используется PIN <code>test123</code> у системного пользователя <code>sys-user-admin</code> (роль admin).</p>
+  <div class="alert warning"><strong>Backup API — исключение из правила «реальные файлы не затрагиваются».</strong> Роуты <code>/api/backup/*</code> в <code>server/index.js</code> работают с файловой системой напрямую (<code>fs.*</code>), в обход мока <code>database.js</code>. <code>tests/backup.test.js</code> изолирует их через <code>IT_ASSETS_DATA_DIR</code>, указывая на временную папку — без этой переменной тест писал бы zip-файлы в реальный <code>data/backups</code> проекта.</div>
+
+  <div class="alert info"><strong>--runInBand</strong> — последовательный запуск. Обязателен: некоторые тесты изменяют общее состояние мока.</div>
+
+  <div class="alert warning"><strong>Авторизация в тестах:</strong> используется PIN <code>test123</code> вместе с <code>x-user-id</code> системного администратора из makeDb — единого «сырого» пароля (как раньше) в системе больше нет. Заголовки: <code>{ 'x-user-id': ADMIN_ID, 'x-edit-password': 'test123' }</code>.</div>
+
+  <h2>Конфигурация Jest</h2>
+  <pre>{
+  "testEnvironment": "node",
+  "testMatch": ["**/tests/**/*.test.js"],
+  "verbose": true,
+  "testTimeout": 10000
+}</pre>
+</section>
+
+<!-- TESTS E2E -->
+<section id="tests-e2e" class="section">
+  <div class="top-bar"><div class="breadcrumb">Docs / <span>E2E тесты (Playwright)</span></div></div>
+  <h1>E2E тесты (Playwright)</h1>
+
+  <p>Jest-тесты (283 шт.) бьют только по API — ни один не проверяет, что реально рисуется в браузере.
+  Playwright закрывает этот пробел: открывает настоящий Chromium, кликает по интерфейсу, проверяет
+  видимое поведение. Это подстраховка специально для Фазы 5 (разбор <code>public/index.html</code> на файлы) —
+  правило то же, что и с Jest: гоняем после каждого вынесенного JS-модуля, число прошедших сценариев
+  не должно меняться.</p>
+
+  <h2>Команды</h2>
+  <pre>npm install
+npx playwright install chromium   # один раз, скачивает браузер
+npm run test:e2e                  # все сценарии
+npm run test:e2e:ui               # с UI-раннером Playwright
+./test-e2e.sh                     # Linux/macOS
+TEST-E2E.bat                      # Windows (сам поставит зависимости и браузер при первом запуске)</pre>
+
+  <div class="alert info"><strong>7/7</strong> — текущий baseline. Как и с Jest, число не должно меняться без намеренного добавления сценариев.</div>
+
+  <h2>Изоляция</h2>
+  <p><code>playwright.config.js</code> сам поднимает сервер (<code>node server/index.js</code>) на отдельном
+  порту (3543) с изолированной data-директорией <code>.e2e-data/</code> через <code>IT_ASSETS_DATA_DIR</code> —
+  та же переменная окружения, которую уважают <code>server/db/store.js</code> и <code>server/cert.js</code>.
+  Реальные данные и сертификат проекта не трогаются. Каждый прогон стартует с чистого состояния
+  (админ <code>admin</code> / <code>admn0000</code> — дефолтный PIN).</p>
+
+  <h2>Сценарии (tests-e2e/smoke.spec.js)</h2>
+  <table>
+    <tr><th>Сценарий</th><th>Что проверяет</th></tr>
+    <tr><td>страница логина открывается</td><td>Вкладки скрыты до входа, форма логина видна.</td></tr>
+    <tr><td>логин под admin/admn0000</td><td>После входа появляются защищённые вкладки (<code>.nav-auth</code>).</td></tr>
+    <tr><td>переключение между вкладками</td><td>Нет JS-ошибок в консоли при обходе всех вкладок подряд.</td></tr>
+    <tr><td>дашборд</td><td>Карточки статистики отрисовались (значит <code>/api/stats</code> отработал).</td></tr>
+    <tr><td>вкладка "ОС"</td><td>Реестр активов отрисовался.</td></tr>
+    <tr><td>полный цикл создания актива</td><td>Открыть модалку → заполнить модель → сохранить → актив появился в списке.</td></tr>
+    <tr><td>логаут</td><td>Защищённые вкладки скрываются обратно.</td></tr>
+  </table>
+
+  <h2>tests-e2e/backup-import-export.spec.js (14 сценариев)</h2>
+  <div class="alert warning"><strong>⚠ Не прогонялся в реальном браузере.</strong> Написан по коду UI (<code>settings-general.js</code>, <code>settings-config.js</code>, <code>csv-import.js</code>) с точными селекторами, синтаксически проверен и распознаётся как 14 тестов (<code>playwright test --list</code>), но среда, в которой он писался, не имела доступа к <code>cdn.playwright.dev</code> для скачивания Chromium. Прогнать локально перед тем, как считать частью зелёного билда: <code>npm run test:e2e -- backup-import-export</code>.</div>
+  <table>
+    <tr><th>Группа</th><th>Что покрывает</th></tr>
+    <tr><td>Настройки → Общие: бэкапы</td><td>Панель отрисовывается, создание бэкапа (тост + строка в списке), кнопка восстановления вызывает нативный <code>confirm()</code> с ожидаемым текстом, ссылки экспорта CSV (Всё/ОС/Мелочи/Инфра) с правильными <code>href</code> и реальным скачиванием</td></tr>
+    <tr><td>Настройки → Общие: импорт CSV</td><td>Кнопка недоступна без файла, авто-определение типа (оборудование vs история) по заголовкам колонок, полный цикл импорта с результатом</td></tr>
+    <tr><td>Настройки → Конфиг</td><td>Экспорт/импорт config.json, обработка отсутствующего файла и невалидного JSON без падения, самоэкспорт → самоимпорт без конфликтов</td></tr>
+  </table>
+
+  <h2>Найденные при подготовке E2E грабли (для будущих сценариев)</h2>
+  <div class="alert warning"><strong>Неоднозначные селекторы по тексту.</strong> <code>button:has-text("Войти")</code>
+  совпадает сразу с несколькими кнопками на странице (<code>#auth-btn</code>, кнопка в модалке и т.д.) —
+  Playwright молча берёт первую попавшуюся. Использовать точные <code>id</code> или <code>onclick</code>-атрибут
+  (например, <code>button[onclick="doLogin()"]</code>), не текст.</div>
+  <div class="alert warning"><strong>Nag-модалка "Смените пароль".</strong> При входе под настоящим дефолтным
+  PIN (<code>admn0000</code>) через 600мс сама система показывает модалку смены пароля
+  (<code>_showDefaultPinWarning</code>), которая перехватывает все последующие клики. Хелпер <code>login()</code>
+  в тесте её закрывает («Напомнить позже»), если она появилась.</div>
+  <div class="alert warning"><strong>Логаут — мгновенный, без модалки.</strong> <code>toggleAuth()</code> при
+  активной сессии делает выход сразу же (<code>if (canEdit()) { ...; render(); return; }</code>), а не
+  открывает форму логина заново — проверять нужно скрытие вкладок, не появление <code>#m-login</code>.</div>
+
+  <div class="alert info"><strong>Известный (не наш) баг, найденный при переносе кода в Фазе 5:</strong>
+  битый <code>onclick</code> у кнопки "→" в результатах глобального поиска
+  (<code>public/js/global-search.js</code>) — похоже, <code>event.stopPropagation()</code> был случайно
+  разорван вставкой <code>showDetail(...)</code>. Перенесён как есть при рефакторинге (без изменения
+  поведения), почему чинить нужно отдельным PR, не смешивая с рефакторингом.</div>
+</section>
 
 </main>
-</div>
 
 <script>
-  // Scrollspy
-  const links = document.querySelectorAll('.nav-link');
-  const sections = document.querySelectorAll('.section, .hero');
-
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(e => {
-      if (e.isIntersecting) {
-        links.forEach(l => l.classList.remove('active'));
-        const active = document.querySelector(`.nav-link[href="#${e.target.id}"]`);
-        if (active) active.classList.add('active');
-      }
-    });
-  }, { rootMargin: '-20% 0px -70% 0px' });
-
-  sections.forEach(s => observer.observe(s));
-
-  // Smooth scroll
-  links.forEach(l => {
-    l.addEventListener('click', e => {
-      e.preventDefault();
-      const id = l.getAttribute('href').slice(1);
-      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+function show(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  const sec = document.getElementById(id);
+  if (sec) sec.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(i => {
+    if (i.getAttribute('onclick') && i.getAttribute('onclick').includes("'" + id + "'")) {
+      i.classList.add('active');
+    }
   });
+  window.scrollTo(0, 0);
+}
+function toggle(header) {
+  const body = header.nextElementSibling;
+  if (body) body.classList.toggle('open');
+}
 </script>
 </body>
 </html>

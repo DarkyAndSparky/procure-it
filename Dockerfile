@@ -1,51 +1,47 @@
-FROM node:20-alpine
+# IT Assets — Docker image
+#
+# Требует Node.js >= 22.5.0 (см. package.json engines) — версия нужна
+# встроенному node:sqlite, отдельный better-sqlite3 не используется.
 
-# OCI image labels
-LABEL org.opencontainers.image.title="procure-it" \
-      org.opencontainers.image.description="IT procurement request management — local web app with HTTPS, SQLite, Excel/DOCX export" \
-      org.opencontainers.image.url="https://github.com/DarkyAndSparky/procure-it" \
-      org.opencontainers.image.source="https://github.com/DarkyAndSparky/procure-it" \
-      org.opencontainers.image.documentation="https://darkyAndsparky.github.io/procure-it" \
-      org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.version="26w34-b07"
-
-# Install openssl (cert generation) + su-exec (privilege drop in entrypoint)
-RUN apk add --no-cache openssl su-exec
+FROM node:22-slim
 
 WORKDIR /app
 
-# Copy package files first for layer caching
+# Сначала только манифесты — слой с зависимостями кешируется отдельно от
+# кода, пересборка после правки кода не тянет npm install заново.
 COPY package.json package-lock.json ./
-# scripts/ нужен ДО npm ci: "prepare"-хук в package.json запускает
-# scripts/install-hooks.js, а npm ci выполняет prepare-скрипты. Без этой
-# строки сборка образа падает на первом же RUN npm ci — Cannot find module
-# 'scripts/install-hooks.js' (найдено при аудите перед первым релизом;
-# сам install-hooks.js уже написан безопасно для этого случая — тихо
-# завершается, если нет .git, — но найти отсутствующий ФАЙЛ раньше самого
-# require он не может).
-COPY scripts/ ./scripts/
+# --ignore-scripts: без него npm ci запускает lifecycle-скрипт "prepare"
+# (см. INFRA-3, scripts/install-hooks.js — ставит git pre-commit хук), а на
+# этом шаге ещё не скопирована папка scripts/ — сборка упала бы с "Cannot
+# find module". Внутри Docker-образа git-хуки и не нужны (нет .git и
+# самого репозитория, только собранный код) — пропускаем осознанно, а не
+# просто чиним порядок COPY, чтобы деплой-контекст не зависел от scripts/.
+RUN npm ci --omit=dev --ignore-scripts
 
-# Install production deps only
-RUN npm ci --omit=dev
+COPY server ./server
+COPY public ./public
+# VERSION — источник правды по версии (см. INFRA-4), CHANGELOG.md — читается
+# рантаймом для карточки «О системе» (см. INFRA-8, parseChangelogSummary).
+# Без них /api/settings/system-info просто покажет "unknown"/пустой список
+# изменений — не критично, но лучше скопировать.
+COPY VERSION CHANGELOG.md ./
 
-# Copy app source
-COPY server.js ./
-COPY src/ ./src/
-COPY public/ ./public/
-COPY .env.example ./
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# Данные (db.json/config.json/it-assets.sqlite/бэкапы/TLS-сертификат)
+# живут в одном каталоге — IT_ASSETS_DATA_DIR, монтируется как volume
+# в docker-compose.yml, чтобы не потерять их при пересборке образа.
+ENV IT_ASSETS_DATA_DIR=/data
+RUN mkdir -p /data && \
+    addgroup --system --gid 1001 itassets && \
+    adduser --system --uid 1001 --gid 1001 itassets && \
+    chown -R itassets:itassets /data /app
+USER itassets
 
-# Create runtime dirs — owned by root initially, entrypoint fixes ownership at runtime
-# This allows volume mounts to work regardless of host UID
-RUN mkdir -p data/certs data/backups data/signed_specs logs
+EXPOSE 3000 3443
 
-# Expose HTTPS + HTTP redirect ports
-EXPOSE 9111 9112
+# INFRA (взято на заметку из atlas-server): используем уже существующий
+# публичный GET /api/health (без авторизации, см. server/index.js) —
+# ничего нового добавлять не пришлось, эндпоинт уже был.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>{if(r.status!==200)process.exit(1)}).catch(()=>process.exit(1))"
 
-# Health check — wget is built into alpine
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD wget -qO- --no-check-certificate https://localhost:9111/health || exit 1
-
-# Entrypoint runs as root, fixes volume ownership, then drops to node (UID 1000)
-ENTRYPOINT ["docker-entrypoint.sh"]
-CMD ["node", "server.js"]
+CMD ["node", "server/index.js"]

@@ -1,31 +1,31 @@
 services:
-  procure-it:
+  it-assets:
     build: .
-    image: procure-it:26w34-b07  # версия синхронизируется автоматически: npm run version:sync
-    container_name: procure-it
+    container_name: it-assets
     restart: unless-stopped
     ports:
-      - "9111:9111"   # HTTPS
-      - "9112:9112"   # HTTP → HTTPS redirect
+      - "3000:3000"   # HTTP — редиректит на HTTPS
+      - "3443:3443"   # HTTPS — основной, самоподписанный сертификат
     volumes:
-      - ./data:/app/data     # БД, сертификаты, бэкапы, подписанные спецификации
-      - ./logs:/app/logs     # Access logs
+      # Все данные (db.json, config.json, it-assets.sqlite, backups/,
+      # cert.pem/key.pem) — в одном каталоге, переживают пересборку
+      # и обновление образа.
+      - it-assets-data:/data
     environment:
-      - NODE_ENV=production
-      - PORT=9111
-      - PROCURE_PASSWORD=${PROCURE_PASSWORD:-}
-      - BACKUP_INTERVAL_MS=${BACKUP_INTERVAL_MS:-21600000}
+      # Можно переопределить порты/лимит бэкапов без пересборки образа:
+      # - PORT=3000
+      # - HTTPS_PORT=3443
+      # - IT_ASSETS_BACKUP_MAX_MB=2048
+      NODE_ENV: production
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "--no-check-certificate", "https://localhost:9111/health"]
+      # Тот же HEALTHCHECK, что и в Dockerfile — дублируется явно, чтобы
+      # статус был виден прямо в `docker compose ps` (образ мог быть собран
+      # где-то ещё и не содержать HEALTHCHECK, если Dockerfile правили).
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>{if(r.status!==200)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
+      start_period: 15s
       retries: 3
-      start_period: 60s   # time for first TLS cert generation
-    # Give server time to flush WAL and close SQLite on stop
-    stop_grace_period: 15s
-    # Resource limits (optional — uncomment if needed)
-    # deploy:
-    #   resources:
-    #     limits:
-    #       memory: 512m
-    #       cpus: '1.0'
+
+volumes:
+  it-assets-data:

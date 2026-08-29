@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Конвертер в it-assets</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0f172a; --card:#1e293b; --card2:#111827; --border:#334155;
+    --text:#e2e8f0; --muted:#94a3b8; --accent:#059669; --accent2:#10b981;
+    --warn:#f59e0b; --err:#ef4444;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--bg); color:var(--text); min-height:100vh;
+    display:flex; align-items:flex-start; justify-content:center; padding:40px 16px;
+  }
+  .wrap{width:100%; max-width:640px}
+  h1{font-size:20px; margin:0 0 4px}
+  .sub{color:var(--muted); font-size:13px; margin:0 0 24px}
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:14px;
+    padding:24px; margin-bottom:16px;
+  }
+  #drop{
+    border:2px dashed var(--border); border-radius:12px; padding:36px 20px;
+    text-align:center; cursor:pointer; transition:.15s; background:var(--card2);
+  }
+  #drop.drag{border-color:var(--accent2); background:#052e22}
+  #drop b{color:var(--text)}
+  #drop .hint{color:var(--muted); font-size:12px; margin-top:6px}
+  input[type=file]{display:none}
+  .filename{font-size:13px; color:var(--accent2); margin-top:10px; word-break:break-all}
+  .result{margin-top:18px}
+  .row{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--card2); border:1px solid var(--border); border-radius:10px;
+    padding:12px 14px; margin-bottom:10px;
+  }
+  .row .info b{display:block; font-size:14px}
+  .row .info span{font-size:12px; color:var(--muted)}
+  a.btn{
+    background:var(--accent); color:#fff; text-decoration:none; font-size:13px;
+    padding:8px 14px; border-radius:8px; font-weight:600; white-space:nowrap;
+  }
+  a.btn:hover{background:var(--accent2)}
+  .warn{
+    background:#3f2d0d; border:1px solid var(--warn); color:#fcd34d;
+    border-radius:8px; padding:10px 12px; font-size:12px; margin-top:10px;
+  }
+  .err{
+    background:#3f1414; border:1px solid var(--err); color:#fca5a5;
+    border-radius:8px; padding:10px 12px; font-size:13px; margin-top:14px;
+  }
+  .steps{color:var(--muted); font-size:12px; line-height:1.6}
+  .steps b{color:var(--text)}
+  code{background:var(--card2); padding:1px 5px; border-radius:4px; font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Конвертер оборудования → it-assets</h1>
+  <p class="sub">Загрузите .xlsm/.xlsx с листами «ОС», «Мелочи», «История» — получите готовые CSV для импорта. Всё работает прямо в браузере, файл никуда не отправляется.</p>
+
+  <div class="card">
+    <div id="drop">
+      <div><b>Перетащите файл сюда</b> или нажмите, чтобы выбрать</div>
+      <div class="hint">.xlsm / .xlsx</div>
+      <input type="file" id="file" accept=".xlsm,.xlsx,.xls">
+      <div class="filename" id="fname"></div>
+    </div>
+    <div id="output"></div>
+  </div>
+
+  <div class="card steps">
+    <b>Как импортировать в it-assets:</b><br>
+    1. Настройки → Импорт → загрузите <code>itassets_import_assets.csv</code> (оборудование)<br>
+    2. Затем загрузите <code>itassets_import_history.csv</code> (история перемещений)<br>
+    Тип файла приложение определяет само по заголовкам.
+  </div>
+</div>
+
+<script>
+const ASSET_HEADERS = ['филиал','расположение','ответственный','тип','модель','серийный №','статус','организация','примечание','mac'];
+const HISTORY_HEADERS = ['дата','от кого','кому','оборудование','причина'];
+
+const drop = document.getElementById('drop');
+const fileInput = document.getElementById('file');
+const fnameEl = document.getElementById('fname');
+const output = document.getElementById('output');
+
+drop.addEventListener('click', () => fileInput.click());
+['dragover','dragenter'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+drop.addEventListener('drop', e => { if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
+
+function handleFile(file){
+  fnameEl.textContent = file.name;
+  output.innerHTML = '';
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array', cellDates: true });
+      const assets = [];
+      const missingSheets = [];
+      ['ОС','Мелочи'].forEach(name => {
+        if (wb.Sheets[name]) assets.push(...readEquipmentSheet(wb.Sheets[name]));
+        else missingSheets.push(name);
+      });
+      let history = [];
+      if (wb.Sheets['История']) history = readHistorySheet(wb.Sheets['История']);
+      else missingSheets.push('История');
+
+      renderResult(assets, history, missingSheets);
+    } catch(err) {
+      output.innerHTML = `<div class="err">Не удалось прочитать файл: ${err.message}</div>`;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function sheetToRows(sheet){
+  return XLSX.utils.sheet_to_json(sheet, { header:1, raw:false, defval:'' });
+}
+
+function findHeaderRowIdx(rows, marker){
+  for (let i=0;i<rows.length;i++){
+    if (String(rows[i][0]||'').trim() === marker) return i;
+  }
+  return -1;
+}
+
+function readEquipmentSheet(sheet){
+  const rows = sheetToRows(sheet);
+  const hIdx = findHeaderRowIdx(rows, 'Филиал');
+  if (hIdx === -1) return [];
+  const header = rows[hIdx].map(h => String(h||'').trim());
+  const col = {};
+  header.forEach((h,i) => { if (h) col[h] = i; });
+  const get = (row, name) => {
+    const i = col[name];
+    if (i === undefined || row[i] === undefined) return '';
+    return String(row[i]).trim();
+  };
+  const result = [];
+  for (let i=hIdx+1;i<rows.length;i++){
+    const row = rows[i];
+    if (!row || row.every(c => String(c||'').trim()==='')) continue;
+    const model = get(row,'модель');
+    if (!model) continue;
+    result.push({
+      'филиал': get(row,'Филиал'),
+      'расположение': get(row,'Расположение'),
+      'ответственный': get(row,'ФИО(Отвественный)') || get(row,'ФИО(Ответственный)'),
+      'тип': get(row,'оборудование'),
+      'модель': model,
+      'серийный №': get(row,'серийный'),
+      'статус': get(row,'статус') || 'используется',
+      'организация': get(row,'Организация'),
+      'примечание': get(row,'Примечание'),
+      'mac': get(row,'mac'),
+    });
+  }
+  return result;
+}
+
+function excelDateToISO(v){
+  if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+  const s = String(v||'').trim();
+  if (/^\d{4,5}$/.test(s)){
+    const epoch = new Date(Date.UTC(1899,11,30));
+    epoch.setUTCDate(epoch.getUTCDate()+parseInt(s,10));
+    return epoch.toISOString().slice(0,10);
+  }
+  return s;
+}
+
+function readHistorySheet(sheet){
+  const rows = sheetToRows(sheet);
+  if (!rows.length) return [];
+  const header = rows[0].map(h => String(h||'').trim());
+  const col = {};
+  header.forEach((h,i) => { if (h) col[h] = i; });
+  const get = (row, name) => {
+    const i = col[name];
+    if (i === undefined || row[i] === undefined) return '';
+    return row[i];
+  };
+  const result = [];
+  for (let i=1;i<rows.length;i++){
+    const row = rows[i];
+    if (!row || row.every(c => String(c||'').trim()==='')) continue;
+    const date = excelDateToISO(get(row,'Дата'));
+    const equipment = String(get(row,'монитор')||'').trim();
+    if (!date && !equipment) continue;
+    result.push({
+      'дата': date,
+      'от кого': String(get(row,'Перемещаем  с') || get(row,'Перемещаем с') || '').trim(),
+      'кому': String(get(row,'Перемещаем на')||'').trim(),
+      'оборудование': equipment,
+      'причина': String(get(row,'Причина')||'').trim(),
+    });
+  }
+  return result;
+}
+
+function toCSV(headers, rows){
+  const esc = (v) => {
+    v = v===undefined||v===null ? '' : String(v);
+    if (/[;"\n]/.test(v)) v = '"' + v.replace(/"/g,'""') + '"';
+    return v;
+  };
+  const lines = [headers.map(esc).join(';')];
+  rows.forEach(r => lines.push(headers.map(h => esc(r[h])).join(';')));
+  return '\uFEFF' + lines.join('\r\n');
+}
+
+function download(filename, content){
+  const blob = new Blob([content], { type:'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function renderResult(assets, history, missingSheets){
+  const assetsCSV = toCSV(ASSET_HEADERS, assets);
+  const historyCSV = toCSV(HISTORY_HEADERS, history);
+
+  let html = '<div class="result">';
+  html += row('Оборудование', `${assets.length} строк`, 'itassets_import_assets.csv');
+  html += row('История перемещений', `${history.length} строк`, 'itassets_import_history.csv');
+  if (missingSheets.length){
+    html += `<div class="warn">⚠️ Не найдены листы: ${missingSheets.join(', ')} — соответствующий CSV будет пустой.</div>`;
+  }
+  html += '</div>';
+  output.innerHTML = html;
+
+  document.getElementById('dl-assets').onclick = () => download('itassets_import_assets.csv', assetsCSV);
+  document.getElementById('dl-history').onclick = () => download('itassets_import_history.csv', historyCSV);
+}
+
+function row(title, subtitle, filename){
+  const id = filename.includes('_history') ? 'dl-history' : 'dl-assets';
+  return `<div class="row">
+    <div class="info"><b>${title}</b><span>${subtitle}</span></div>
+    <a class="btn" id="${id}" href="#">Скачать CSV</a>
+  </div>`;
+}
+</script>
+</body>
+</html>

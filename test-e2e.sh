@@ -1,41 +1,79 @@
-#!/bin/bash
-# Прогон e2e-тестов (Playwright). Отдельно от test.sh намеренно — e2e
-# требует установленный браузер Chromium (не входит в npm install) и
-# реально поднимает сервер на изолированной БД (см. playwright.config.js:
-# PROCURE_DATA_DIR/webServer), это тяжелее и медленнее обычных unit-тестов
-# из test.sh, поэтому держим их отдельными командами, а не одной общей.
+#!/usr/bin/env bash
+# ============================================
+#  IT Assets — запуск E2E-тестов (Playwright)
+# ============================================
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Версия из package.json
+APP_VER=$(node -e "try{process.stdout.write(require('./package.json').version)}catch(e){process.stdout.write('unknown')}" 2>/dev/null || echo "unknown")
+
+echo ""
+echo " ============================================"
+echo "  IT Assets $APP_VER — Running E2E tests..."
+echo " ============================================"
+echo ""
+
+# Проверка Node.js
+if ! command -v node &>/dev/null; then
+    echo " [ERROR] Node.js не найден!"
+    echo " Установите Node.js: https://nodejs.org"
+    echo ""
+    exit 1
+fi
+
+# Автоустановка зависимостей
+if [ ! -d "node_modules" ]; then
+    echo " [INFO] Устанавливаю зависимости..."
+    echo ""
+    npm install
+    echo ""
+fi
+
+if [ ! -d "node_modules/@playwright/test" ]; then
+    echo " [INFO] Устанавливаю Playwright..."
+    echo ""
+    npm install
+    echo ""
+fi
+
+# Проверка, скачан ли браузер (первый запуск)
+if [ ! -d "$HOME/.cache/ms-playwright" ]; then
+    echo " [INFO] Скачиваю Chromium для Playwright (только при первом запуске)..."
+    echo ""
+    npx playwright install chromium
+    echo ""
+fi
+
+PLAYWRIGHT_BIN="node_modules/.bin/playwright"
+
+if [ ! -f "$PLAYWRIGHT_BIN" ]; then
+    echo " [ERROR] playwright не найден в node_modules."
+    echo " Попробуйте: npm install"
+    exit 1
+fi
+
+echo " [RUN] Запускаю E2E-тесты (реальный браузер)..."
+echo " ----------------------------------------"
+echo ""
+
+set +e
+"$PLAYWRIGHT_BIN" test
+TEST_RESULT=$?
 set -e
 
-cd "$(dirname "$0")"
-
 echo ""
-echo "══════════════════════════════════════════"
-echo "  procure-it — E2E-тесты (Playwright)"
-echo "══════════════════════════════════════════"
+echo " ----------------------------------------"
+if [ "$TEST_RESULT" -eq 0 ]; then
+    echo " [OK] Все E2E-тесты прошли успешно."
+else
+    echo " [FAIL] Часть E2E-тестов завершилась с ошибками (код: $TEST_RESULT)."
+    echo " [TIP] Смотрите test-results/ и playwright-report/, либо:"
+    echo "       npx playwright show-report"
+fi
 echo ""
 
-# Зависимости и рабочие директории — та же логика, что для сервера/unit-
-# тестов, переиспользуем install.sh вместо третьей копии проверок.
-./install.sh --from-start
-
-# install.sh проверяет базовую runtime-зависимость Express. Для E2E этого
-# недостаточно: production-установка (`npm ci --omit=dev`) может быть свежей,
-# но не содержать @playwright/test. В таком случае ставим полный, строго
-# зафиксированный по package-lock.json набор прежде чем запускать тесты.
-if [ ! -d "node_modules/@playwright/test" ]; then
-  echo "[INFO] Устанавливаю зафиксированные dev-зависимости для E2E-тестов..."
-  npm ci
-fi
-
-# Браузер Chromium для Playwright не входит в npm install и качается
-# отдельно (~150-300MB) — проверяем, стоит ли он уже (по кэшу Playwright),
-# чтобы не тянуть заново на каждый прогон.
-if [ ! -d "$HOME/.cache/ms-playwright" ] || [ -z "$(find "$HOME/.cache/ms-playwright" -maxdepth 1 -iname 'chromium-*' -print -quit 2>/dev/null)" ]; then
-  echo "[INFO] Браузер Chromium для Playwright ещё не установлен. Устанавливаю..."
-  echo "Это может занять несколько минут при первом запуске — не закрывайте окно."
-  echo ""
-  npx playwright install chromium
-  echo ""
-fi
-
-npm run test:e2e
+exit "$TEST_RESULT"

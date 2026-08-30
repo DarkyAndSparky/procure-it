@@ -2,123 +2,125 @@
 /**
  * scripts/sync-version.js
  *
- * INFRA-4: единственный источник правды по версии — файл VERSION в корне
- * репозитория (plain text, формат <alpha|beta>-N-YYwWW-NN). Раньше
- * источником был package.json.version — переехали на отдельный файл по
- * образцу соседнего проекта atlas-server: plain-text проще редактировать
- * руками, чем лезть внутрь JSON, и не требует валидного синтаксиса вокруг.
+ * package.json → "version" — единственный источник правды для номера версии
+ * во всём проекте. Этот скрипт подставляет его во все остальные места, где
+ * версия отображается человеку, чтобы их не приходилось (и не забывалось)
+ * править руками при каждом релизе.
  *
- * Раскидывает версию по местам, где она дублируется как отображаемый текст:
- *   - package.json (версия пакета — для npm/консистентности с остальным
- *     инструментарием, которому нужен package.json.version)
- *   - README.md — бейдж версии (shields.io)
- *   - docs/index.html — версия в сайдбаре
+ * Формат версии: YYwWW-СТАДИЯNN
+ *   YY      — год, 2 цифры                      (26)
+ *   wWW     — ISO-номер недели                   (w31)
+ *   СТАДИЯ  — a (alpha) | b (beta) | rc | r (release)
+ *   NN      — порядковый номер сборки на неделе  (01)
+ * Примеры: 26w31-b01, 26w31-rc01, 26w31-r01, 26w32-a01
  *
- * server/index.js и server/routes/settings.routes.js версию НЕ дублируют —
- * они читают VERSION напрямую в рантайме, синхронизировать там нечего.
+ * Куда подставляется:
+ *   - README.md               — бейдж версии (shields.io, "-" экранируется как "--")
+ *   - docs/index.html         — версия в шапке, hero-бейдж, футер
+ *   - public/zakupki.html     — не трогаем: там версия подтягивается live через
+ *                               fetch('/api/version') на клиенте (см. public/js/config.js)
+ *   - docker-compose.yml      — тег Docker-образа (image: procure-it:X)
+ *   - Dockerfile              — LABEL org.opencontainers.image.version
  *
- * Запуск: node scripts/sync-version.js или npm run sync-version
+ * Как использовать: поменяли package.json → version, затем
+ *   npm run version:sync
+ * Иллюстративные примеры формата (в разделах "Версионирование" докой/README)
+ * скрипт НЕ трогает — только реальные плейсхолдеры "текущая версия",
+ * помеченные <!--VERSION-->…<!--/VERSION--> / <!--VERSION_SHIELDS-->…<!--/VERSION_SHIELDS-->.
  */
-'use strict';
 
-const fs   = require('fs');
+const fs = require('fs');
 const path = require('path');
 
-const ROOT         = path.join(__dirname, '..');
-const VERSION_FILE = path.join(ROOT, 'VERSION');
-const PKG_PATH     = path.join(ROOT, 'package.json');
-const README_PATH  = path.join(ROOT, 'README.md');
-const DOCS_PATH    = path.join(ROOT, 'docs', 'index.html');
+const ROOT = path.join(__dirname, '..');
 
-const VERSION_RE = /^(alpha|beta)-(\d+)-(\d{2}w\d{2})-(\d+)$/;
-
-function toDisplay(version) {
-  const m = version.match(VERSION_RE);
-  if (!m) return version; // неизвестный формат — отдаём как есть, не пытаемся угадать
-  const [, stage, n, week, seq] = m;
-  const stageChar = stage === 'alpha' ? 'α' : 'β';
-  return `${stageChar}${n} · ${week}·${seq}`;
-}
-
-function updatePackageJson(version, content) {
-  let pkg;
-  try { pkg = JSON.parse(content); }
-  catch (e) {
-    console.warn('[sync-version] package.json: не удалось распарсить как JSON — пропускаю.');
-    return { content, changed: false };
-  }
-  if (pkg.version === version) return { content, changed: false };
-  pkg.version = version;
-  return { content: JSON.stringify(pkg, null, 2) + '\n', changed: true };
-}
-
-function updateReadmeBadge(version, content) {
-  // ![Version](.../версия-<текст>-blue?...)
-  const re = /(!\[Version\]\(https:\/\/img\.shields\.io\/badge\/версия-)([^-]+(?:%C2%B7[^-]+)*)(-blue[^)]*\))/;
-  if (!re.test(content)) {
-    console.warn('[sync-version] README.md: бейдж версии не найден по ожидаемому паттерну — пропускаю.');
-    return { content, changed: false };
-  }
-  const display = toDisplay(version).replace(/ /g, '');
-  const next = content.replace(re, `$1${display}$3`);
-  return { content: next, changed: next !== content };
-}
-
-function updateDocsVersion(version, content) {
-  // <div class="version">...</div> в сайдбаре
-  const re = /(<div class="version">)([^<]*)(<\/div>)/;
-  if (!re.test(content)) {
-    console.warn('[sync-version] docs/index.html: блок .version не найден — пропускаю.');
-    return { content, changed: false };
-  }
-  const display = toDisplay(version);
-  const next = content.replace(re, `$1${display}$3`);
-  return { content: next, changed: next !== content };
-}
+const VERSION_FORMAT = /^\d{2}w\d{1,2}-(a|b|rc|r)\d{2}$/;
 
 function main() {
-  if (!fs.existsSync(VERSION_FILE)) {
-    console.error('[sync-version] Файл VERSION не найден в корне репозитория.');
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  const version = pkg.version;
+
+  if (!VERSION_FORMAT.test(version)) {
+    console.error(`✗ package.json version "${version}" не соответствует формату YYwWW-{a|b|rc|r}NN (пример: 26w31-b01)`);
     process.exit(1);
   }
-  const version = fs.readFileSync(VERSION_FILE, 'utf8').trim();
-  if (!version) {
-    console.error('[sync-version] Файл VERSION пуст.');
-    process.exit(1);
+
+  let changedFiles = 0;
+
+  changedFiles += syncMarked(path.join(ROOT, 'README.md'), version);
+  changedFiles += syncMarked(path.join(ROOT, 'docs', 'index.html'), version);
+  changedFiles += syncDockerCompose(path.join(ROOT, 'docker-compose.yml'), version);
+  changedFiles += syncDockerfile(path.join(ROOT, 'Dockerfile'), version);
+
+  console.log(`\n✓ Версия ${version} синхронизирована. Файлов изменено: ${changedFiles}.`);
+  if (changedFiles === 0) {
+    console.log('  (все места уже были в актуальном состоянии)');
   }
+}
 
-  if (!VERSION_RE.test(version)) {
-    console.warn(`[sync-version] Версия "${version}" не соответствует формату <alpha|beta>-N-YYwWW-NN — отображение может быть некорректным.`);
+// Заменяет содержимое между <!--VERSION-->…<!--/VERSION--> и
+// <!--VERSION_SHIELDS-->…<!--/VERSION_SHIELDS--> (последний — с "-" → "--"
+// для корректного отображения в бейдже shields.io) на текущую версию.
+function syncMarked(filePath, version) {
+  if (!fs.existsSync(filePath)) {
+    console.warn(`  ⚠ Файл не найден, пропущен: ${path.relative(ROOT, filePath)}`);
+    return 0;
   }
+  const original = fs.readFileSync(filePath, 'utf8');
+  let updated = original;
 
-  let anyChanged = false;
+  updated = updated.replace(
+    /<!--VERSION-->[\s\S]*?<!--\/VERSION-->/g,
+    `<!--VERSION-->${version}<!--/VERSION-->`
+  );
+  updated = updated.replace(
+    /<!--VERSION_SHIELDS-->[\s\S]*?<!--\/VERSION_SHIELDS-->/g,
+    `<!--VERSION_SHIELDS-->${version.replace(/-/g, '--')}<!--/VERSION_SHIELDS-->`
+  );
 
-  if (fs.existsSync(PKG_PATH)) {
-    const pkgRaw = fs.readFileSync(PKG_PATH, 'utf8');
-    const { content, changed } = updatePackageJson(version, pkgRaw);
-    if (changed) { fs.writeFileSync(PKG_PATH, content); console.log('[sync-version] package.json обновлён.'); anyChanged = true; }
-  } else {
-    console.warn('[sync-version] package.json не найден.');
+  if (updated !== original) {
+    fs.writeFileSync(filePath, updated);
+    console.log(`  ✓ ${path.relative(ROOT, filePath)}`);
+    return 1;
   }
+  return 0;
+}
 
-  if (fs.existsSync(README_PATH)) {
-    const readme = fs.readFileSync(README_PATH, 'utf8');
-    const { content, changed } = updateReadmeBadge(version, readme);
-    if (changed) { fs.writeFileSync(README_PATH, content); console.log('[sync-version] README.md обновлён.'); anyChanged = true; }
-  } else {
-    console.warn('[sync-version] README.md не найден.');
+// docker-compose.yml — не HTML, маркеры-комментарии там неуместны (не валидный
+// YAML), поэтому матчим саму строку с тегом образа напрямую.
+function syncDockerCompose(filePath, version) {
+  if (!fs.existsSync(filePath)) return 0;
+  const original = fs.readFileSync(filePath, 'utf8');
+  const updated = original.replace(
+    /image: procure-it:[^\s]+/,
+    `image: procure-it:${version}`
+  );
+  if (updated !== original) {
+    fs.writeFileSync(filePath, updated);
+    console.log(`  ✓ ${path.relative(ROOT, filePath)}`);
+    return 1;
   }
+  return 0;
+}
 
-  if (fs.existsSync(DOCS_PATH)) {
-    const docs = fs.readFileSync(DOCS_PATH, 'utf8');
-    const { content, changed } = updateDocsVersion(version, docs);
-    if (changed) { fs.writeFileSync(DOCS_PATH, content); console.log('[sync-version] docs/index.html обновлён.'); anyChanged = true; }
-  } else {
-    console.warn('[sync-version] docs/index.html не найден.');
+// Dockerfile — LABEL org.opencontainers.image.version. Раньше правился
+// руками при каждом бампе версии (пункт из ROADMAP.md backlog) — легко
+// забыть, что и происходило: несколько релизов подряд эта строка не
+// синхронизировалась автоматически, только вручную теми же руками, что
+// правили package.json.
+function syncDockerfile(filePath, version) {
+  if (!fs.existsSync(filePath)) return 0;
+  const original = fs.readFileSync(filePath, 'utf8');
+  const updated = original.replace(
+    /org\.opencontainers\.image\.version="[^"]*"/,
+    `org.opencontainers.image.version="${version}"`
+  );
+  if (updated !== original) {
+    fs.writeFileSync(filePath, updated);
+    console.log(`  ✓ ${path.relative(ROOT, filePath)}`);
+    return 1;
   }
-
-  console.log(`[sync-version] Текущая версия (из VERSION): ${version} (${toDisplay(version)})`);
-  if (!anyChanged) console.log('[sync-version] Всё уже синхронизировано, изменений не потребовалось.');
+  return 0;
 }
 
 main();

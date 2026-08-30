@@ -1,45 +1,34 @@
-#!/bin/sh
+#!/usr/bin/env bash
+# Pre-commit хук procure-it.
+# Ставится автоматически при `npm install` (см. package.json -> "prepare"
+# -> scripts/install-hooks.js). Не блокирует коммит намертво - только
+# напоминает и просит подтверждения.
 #
-# scripts/hooks/pre-commit
-#
-# INFRA-3: неблокирующее напоминание — если в коммите тронут код
-# (server/, public/js/, public/*.html), но не тронут CHANGELOG.md —
-# спрашиваем подтверждение перед коммитом. CHANGELOG.md выбран, а не
-# внешний ROADMAP-CONSOLIDATED.md, потому что роадмап ведётся вне
-# репозитория (обновляется отдельно, не коммитится) — git diff его
-# никогда не увидит, хук требовал бы его при каждом коммите без
-# возможности когда-либо это условие выполнить. Тот же паттерн, что в
-# procure-it: не хранится в .git/ (папка не коммитится сама по себе),
-# устанавливается заново через scripts/install-hooks.js (см. npm install
-# → prepare-скрипт), поэтому свежий clone/распакованный zip без .git
-# просто не получит хук — install-hooks.js это тоже безопасно
-# обрабатывает (тихо выходит, если .git нет).
-#
-# Неинтерактивный git (CI, git commit -m в скрипте без TTY) — хук молча
-# пропускает проверку, чтобы не блокировать автоматизацию.
+# Логика: если в коммите меняются файлы в src/, public/js/ или
+# public/*.html (то есть реальная функциональность), но CHANGELOG.md в этом
+# же коммите не тронут - просим подтверждения. Отвечаешь "n" - коммит
+# отменяется, идёшь дописывать запись в CHANGELOG.md. Отвечаешь "y" -
+# коммит проходит как есть (например, чисто рефакторинг без видимого эффекта).
 
-CHANGELOG_FILE="CHANGELOG.md"
+staged=$(git diff --cached --name-only)
 
-CHANGED=$(git diff --cached --name-only)
+touches_code=$(echo "$staged" | grep -E '^(src/|public/js/|public/.*\.html)' | grep -v -E '^(src/changelog\.js|test/)')
+touches_changelog=$(echo "$staged" | grep -E '^CHANGELOG\.md$')
 
-# Если CHANGELOG и так в этом коммите — всё ок, ничего не спрашиваем.
-echo "$CHANGED" | grep -q "^$CHANGELOG_FILE$" && exit 0
+if [ -n "$touches_code" ] && [ -z "$touches_changelog" ]; then
+  echo ""
+  echo "WARNING: В коммите есть изменения в коде, но CHANGELOG.md не тронут:"
+  echo "$touches_code" | sed 's/^/    /'
+  echo ""
+  if [ ! -t 1 ]; then
+    echo "    (не интерактивный терминал - коммит пропущен без подтверждения)"
+    exit 0
+  fi
+  read -p "Продолжить коммит без записи в CHANGELOG.md? [y/N] " answer < /dev/tty
+  case "$answer" in
+    [Yy]*) exit 0 ;;
+    *) echo "Коммит отменён - допиши запись в CHANGELOG.md."; exit 1 ;;
+  esac
+fi
 
-# Если код (server/, public/js/, public/*.html) не тронут — тоже ок,
-# нет смысла требовать роадмап на правку, скажем, README или CI-конфига.
-echo "$CHANGED" | grep -qE '^(server/|public/js/|public/.*\.html$)' || exit 0
-
-# Неинтерактивный терминал — не можем спросить, пропускаем молча.
-[ -t 1 ] || exit 0
-
-echo ""
-echo "⚠️  Код изменён (server/ или public/js/), а $CHANGELOG_FILE — нет."
-printf "   Продолжить коммит без обновления CHANGELOG.md? [y/N] "
-read -r ANSWER < /dev/tty
-case "$ANSWER" in
-  [yY]|[yY][eE][sS]) exit 0 ;;
-  *)
-    echo "   Коммит отменён. Обновите $CHANGELOG_FILE или используйте --no-verify."
-    exit 1
-    ;;
-esac
+exit 0

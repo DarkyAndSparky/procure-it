@@ -1,251 +1,239 @@
-<div align="center">
+# procure-it
 
-# 🖥️ IT Assets — Dev
+> Web-based IT asset procurement tool — manage purchase requests, generate Excel calculation sheets and specifications.
 
-**Ветка разработки**
+[![Version](https://img.shields.io/badge/version-<!--VERSION_SHIELDS-->26w35--b01<!--/VERSION_SHIELDS-->-blue)](#)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-brightgreen)](https://nodejs.org/)
+[![SQLite](https://img.shields.io/badge/Database-SQLite-blue)](https://www.sqlite.org/)
+[![Branch](https://img.shields.io/badge/default%20branch-dev-orange)](https://github.com/DarkyAndSparky/procure-it/tree/dev)
 
-![Version](https://img.shields.io/badge/версия-β1·26w35·01-blue?style=flat-square)
-![Tests](https://img.shields.io/badge/тесты-283%20passed-brightgreen?style=flat-square&logo=jest)
-![E2E](https://img.shields.io/badge/E2E-44%20verified%20%2B%2014%20new-yellow?style=flat-square&logo=playwright)
-![Node](https://img.shields.io/badge/Node.js-v22.5%2B-brightgreen?style=flat-square&logo=node.js)
-![Branch](https://img.shields.io/badge/ветка-dev%20(разработка)-orange?style=flat-square)
-
-> Это ветка активной разработки. Здесь ведутся эксперименты, пишутся тесты, отлаживаются фичи.
-> Стабильный production-код находится в ветке **[`main`](https://github.com/DarkyAndSparky/it-assets/tree/main)**.
-
-📚 **[Документация проекта](https://darkyandsparky.github.io/it-assets/)** — архитектура, API, руководство пользователя, установка
-
-</div>
+**[📖 Documentation](https://darkyAndsparky.github.io/procure-it)** · **[🐳 Docker](#docker)** · **[🐛 Issues](https://github.com/DarkyAndSparky/procure-it/issues)**
 
 ---
 
-## 📦 Что есть в dev, чего нет в main
+## What it does
 
-| Файл / папка           | Назначение                                      |
-|------------------------|-------------------------------------------------|
-| `tests/`               | 283 теста (Jest + Supertest)                    |
-| `tests-e2e/`           | 58 E2E тестов (Playwright) — 44 проверены, 14 новых ещё не прогонялись (см. ниже) |
-| `TEST.bat`             | Запуск Jest тестов на Windows                   |
-| `TEST-E2E.bat`         | Запуск E2E тестов на Windows                    |
-| `test.sh`              | Запуск тестов на Linux / macOS                  |
-| `test-e2e.sh`          | Запуск E2E тестов на Linux / macOS              |
-| `release.bat`          | Автоматический релиз из dev в main (без тестов) |
-| `playwright.config.js` | Конфигурация Playwright                         |
-| `package-lock.json`    | Зафиксированные версии зависимостей             |
-| `devDependencies`      | Jest, Supertest, Playwright, jimp, jsqr         |
-| `tools/itassets_converter.html` | Автономный HTML-конвертер старых Excel-выгрузок оборудования в CSV для импорта |
+`procure-it` is a self-hosted LAN tool for IT procurement specialists. It replaces manual Excel tracking and reduces repetitive data entry when creating equipment purchase requests.
+
+**Core workflow:**
+1. Fill in a request form (organization, items, prices, links)
+2. Tool calculates sell prices (purchase + delivery share + markup %)
+3. Export a 2-sheet Excel workbook: _расчёты_ + _спецификация_ (with formulas)
+4. Print specification as PDF or download as .docx
+5. Optionally send request to Bitrix24 CRM via webhook
+6. All data in a local SQLite database, accessible from any LAN device
+
+**Also included:** drag & drop row reordering · position templates · Excel import · audit log with field-level diff · auto-backup every 6h (including attached files) · role-based auth (viewer/operator/admin) · Docker support
 
 ---
 
-## 🚀 Быстрый старт (разработка)
+## Quick start
+
+### Windows
+```
+Double-click start.bat
+```
+
+### Linux / macOS
+```bash
+chmod +x start.sh && ./start.sh
+```
+
+First run installs npm dependencies (~1 min) and generates a self-signed TLS certificate.
+
+**Open:** https://localhost:9111
+
+> First visit shows a browser certificate warning — click **Advanced → Proceed**.
+
+---
+
+## Requirements
+
+- **Node.js 18+** — https://nodejs.org/
+
+---
+
+## Branches
+
+| Branch | Purpose |
+|--------|---------|
+| `main` | Stable releases only |
+| `dev`  | Active development (default) |
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the release workflow.
+
+---
+
+## Configuration
 
 ```bash
-git clone https://github.com/DarkyAndSparky/it-assets.git
-cd it-assets
-git checkout dev
-npm install
-npm start
+cp .env.example .env
 ```
 
-Приложение: **`https://localhost:3443`**
-
-Требуется **Node.js 22.5+** (используется встроенный `node:sqlite`, стабилизированный в Node 25.7/26 — на более ранних 22.x/24.x работает с предупреждением `ExperimentalWarning`, это не ошибка).
+```env
+PORT=9111                        # HTTPS port (default 9111); HTTP redirect = PORT+1 (9112)
+# PROCURE_PASSWORD=yourpassword  # legacy fallback only — see "Authentication" below
+BACKUP_INTERVAL_MS=21600000      # auto-backup interval (default 6 h)
+```
 
 ---
 
-## 🧪 Тесты
+## Authentication
 
-```bash
-npm test                  # все тесты Jest (283)
-npm run test:watch        # watch-режим
-npm run test:coverage     # с отчётом покрытия
-npm run test:e2e          # E2E тесты Playwright (58)
-npm run test:e2e:ui       # E2E с UI-интерфейсом
-```
+The app has a built-in multi-user system with three roles:
 
-**Windows:** `TEST.bat` / `TEST-E2E.bat`
+| Role | Can do |
+|------|--------|
+| `viewer` | Read-only — no login needed at all |
+| `operator` | Create/edit requests, orgs, upload files |
+| `admin` | Everything operator can, plus users, settings, restore |
 
-**Linux / macOS:**
-```bash
-chmod +x test.sh && ./test.sh
-chmod +x test-e2e.sh && ./test-e2e.sh
-```
+On first run a default admin account is created automatically — **login `admin` / password `admin0000`** — and the app forces a password change on first login. Manage additional users from the sidebar (admin only).
 
-### Результат (Jest)
-
-```
-Test Suites: 14 passed, 14 total
-Tests:       283 passed, 283 total
-```
-
-### Результат (Playwright)
-
-```
-smoke.spec.js                    —  7 passed
-theme.spec.js                    — 37 passed
-backup-import-export.spec.js     — 14 тестов, написаны по коду UI, но ЕЩЁ НЕ ПРОГНАНЫ
-                                     в реальном браузере (см. примечание в самом файле) —
-                                     нужен локальный npm run test:e2e перед тем как считать
-                                     их частью зелёного билда
-```
-
-### Покрытие Jest
-
-| Файл                        | Что тестируется                                              |
-|------------------------------|--------------------------------------------------------------|
-| `api.test.js`               | CRUD активов, фильтры, поиск, пагинация                      |
-| `assets.test.js`            | Создание, перемещение, списание                              |
-| `backup.test.js`            | Создание/скачивание/восстановление, path traversal, обратная совместимость со старыми (до SQLite) бэкапами, сквозной цикл с реальными данными |
-| `config.test.js`            | Орги, филиалы, локации, инициализация БД                     |
-| `configExportImport.test.js`| Экспорт/сравнение/импорт config.json между инстансами (кросс-инстанс синхронизация) |
-| `csvImportExport.test.js`   | Экспорт активов в CSV, импорт CSV (дедупликация, авто-создание орг/филиалов/локаций/сотрудников) |
-| `csvImportHistory.test.js`  | Импорт истории перемещений с авто-сопоставлением по серийному номеру |
-| `edge.test.js`              | Граничные случаи, невалидные данные                           |
-| `employees.test.js`         | Сотрудники, увольнение с переносом активов                    |
-| `history.test.js`           | История, фильтры, сортировка                                  |
-| `integrity.test.js`         | Целостность схемы, уникальность id/инв. номеров                |
-| `invRules.test.js`          | Правила инвентаризации, генерация номеров                     |
-| `qr.test.js`                | Генерация QR-кодов                                            |
-| `settings.test.js`          | Настройки, смена пароля, warn_default_pin                     |
-
-### Покрытие E2E (Playwright)
-
-| Файл                            | Тестов | Что покрывает                                                   |
-|----------------------------------|--------|-------------------------------------------------------------------|
-| `smoke.spec.js`                 | 7      | Логин, вкладки, создание актива, логаут                          |
-| `theme.spec.js`                 | 37     | CSS-переменные, переключение темы, утечки цветов, i18n            |
-| `backup-import-export.spec.js`  | 14     | Бэкапы (создание/восстановление/confirm-диалог), CSV импорт/экспорт в UI, синхронизация config.json — **не прогонялся в реальном браузере**, нужна проверка перед доверием |
+`PROCURE_PASSWORD` is a **legacy fallback**, not the primary auth mechanism: it only takes effect if the `users` table is still empty (e.g. a fresh install where you haven't logged in via the UI yet). Once any user exists, `PROCURE_PASSWORD` is ignored — manage access through the UI instead.
 
 ---
 
-## 🔁 Рабочий процесс
-
-### Ежедневная разработка
-
-```bash
-git checkout dev              # убедиться что ты на dev
-# ... редактируешь файлы в VS Code ...
-git add .                     # добавить изменения
-git commit -m "описание"      # сохранить
-git push origin dev           # отправить на GitHub
-```
-
-### Релиз в production (dev → main)
-
-Когда dev стабилен и все тесты проходят — запусти `release.bat` двойным кликом.
-
-Скрипт автоматически:
-1. Проверит что ты на `dev` и нет незакоммиченных изменений
-2. Переключится на `main`
-3. Скопирует только нужные файлы (`server/`, `public/`, скрипты запуска)
-4. Обновит `package.json` — уберёт тесты и devDependencies
-5. Сделает коммит и запушит в `main`
-6. Вернётся обратно в `dev`
-
----
-
-## 🗂️ Структура проекта
+## Project structure
 
 ```
-it-assets/
-├── server/
-│   ├── index.js              # веб-сервер (Express + HTTPS)
-│   ├── database.js           # композиция репозиториев + config export/diff/apply
+procure-it/
+├── server.js                    # Entry point: Express app assembly, middleware, mount routers, listen
+├── src/
+│   ├── config.js                 # Paths, ports, default settings
+│   ├── certs.js                  # Self-signed TLS cert generation (openssl → selfsigned fallback)
 │   ├── db/
-│   │   ├── store.js          # lowdb-инстанс (только служебные _meta/schema_version)
-│   │   └── sqlite.js         # SQLite-подключение (node:sqlite) + автомиграция из lowdb
-│   ├── middleware/           # auth.js, rateLimit.js
-│   ├── repositories/         # orgs, filials, locations, assets, employees, users,
-│   │                         # accounts, settings, history, csv, stats — все на SQLite
-│   ├── routes/               # Express Router на каждую сущность
-│   ├── migrate.js            # одноразовая миграция lowdb-схемы (v1→v7), выполняется
-│   │                         # до SQLite-слоя, затем становится no-op
-│   ├── logger.js             # структурированные JSON-логи с ротацией по дате
-│   ├── cert.js                # TLS-сертификат
-│   └── pin.js                # bcrypt PIN
+│   │   ├── connection.js         # sql.js instance, query()/run()/saveDb(), rowToRequest()
+│   │   ├── schema.js             # CREATE TABLE + all migrations
+│   │   └── audit.js              # audit_log writer
+│   ├── auth/
+│   │   ├── crypto.js             # Password hashing (PBKDF2 + legacy migration), token generation
+│   │   ├── users.js              # User lookup / credential check
+│   │   ├── sessions.js           # Session create/lookup/delete
+│   │   └── middleware.js         # Role-based route guards (viewer/operator/admin)
+│   ├── services/
+│   │   ├── docxService.js        # Specification .docx generation
+│   │   ├── fileLayoutService.js  # Network folder / WebDAV file layout
+│   │   ├── backupService.js      # Scheduled DB backup + attached-files mirror sync
+│   │   └── bitrixService.js      # Bitrix24 deal creation + status webhook
+│   ├── utils/
+│   │   └── docFormat.js          # RU month names, currency formatting, number-to-words
+│   └── routes/                   # One Express router per resource — thin, delegate to services/db
+│       ├── auth.js, orgs.js, requests.js, files.js,
+│       └── backup.js, settings.js, docx.js, bitrix.js
 ├── public/
-│   ├── index.html            # SPA-оболочка
-│   ├── css/main.css          # все стили (светлая/тёмная тема)
-│   └── js/
-│       ├── theme.js          # тема (подключается в <head>)
-│       ├── i18n.js           # локализация EN/RU
-│       ├── auth.js           # авторизация
-│       ├── ui-utils.js       # утилиты UI
-│       ├── qr.js             # QR-генератор
-│       ├── meta-fields.js    # MAC/IP/hostname поля (канонический список meta-ключей)
-│       ├── global-search.js  # глобальный поиск
-│       ├── router.js         # SPA-роутер
-│       ├── event-delegation.js  # делегирование событий
-│       ├── settings-router.js   # роутер настроек
-│       └── views/            # модуль на каждый экран
-│           ├── dashboard.js, asset-tab.js, asset-forms.js
-│           ├── history.js, employees.js, accounts.js, alerts.js
-│           ├── inv-generator.js, qr-print.js, csv-import.js
-│           └── settings-general.js, settings-config.js,
-│               settings-refdata.js, types-admin.js, users-admin.js
-├── tools/
-│   └── itassets_converter.html   # автономный конвертер старых Excel-выгрузок в CSV
-├── tests/                    # Jest + Supertest (283 теста)
-├── tests-e2e/                # Playwright E2E (58 тестов: 44 проверены, 14 новых нет)
-│   ├── smoke.spec.js
-│   ├── theme.spec.js
-│   ├── backup-import-export.spec.js
-│   └── fixtures/             # тестовые CSV/JSON для E2E-импорта
-├── docs/                     # Документация (GitHub Pages)
-├── data/                     # в git не попадает — db.json, config.json, it-assets.sqlite
-├── playwright.config.js
-├── package.json
-├── release.bat               # скрипт релиза dev → main
-├── START.bat / start.sh
-├── INSTALL.bat / install.sh
-├── TEST.bat / test.sh
-└── TEST-E2E.bat / test-e2e.sh
+│   ├── zakupki.html              # Markup only — no inline styles/scripts
+│   ├── css/style.css
+│   └── js/                       # Loaded as plain <script src> (shared global scope, no bundler)
+│       ├── auth.js, positions.js, request-form.js, users.js, save-export.js,
+│       ├── request-detail.js, registry.js, files.js, modals-misc.js,
+│       ├── helpers.js, export-templates.js, config.js
+│       └── main.js               # Bootstrap — must load last
+├── docs/
+│   └── index.html                # Project documentation site
+├── data/                          # Runtime data (gitignored, Docker volume)
+│   ├── zakupki.db
+│   ├── certs/                    # TLS cert (auto-generated)
+│   ├── backups/                  # .db snapshots (30-day retention) + files_mirror/ (attached-file mirror)
+│   ├── signed_specs/              # Uploaded signed specification PDFs
+│   └── invoices/                  # Uploaded invoice files
+├── start.bat                      # Windows launcher (install + run)
+├── start.sh                       # Linux/macOS launcher (install + run)
+├── install.bat / install.sh       # Install deps only, no server start
+├── test.bat / test.sh             # Run test suite only (not needed in prod)
+├── .env.example
+├── CONTRIBUTING.md
+└── LICENSE
 ```
 
----
-
-## ⚙️ Переменные окружения
-
-| Переменная                     | По умолчанию | Описание                                                        |
-|----------------------------------|--------------|-------------------------------------------------------------------|
-| `PORT`                          | `3000`       | HTTP-порт (редирект на HTTPS)                                   |
-| `HTTPS_PORT`                    | `3443`       | HTTPS-порт приложения                                           |
-| `IT_ASSETS_DATA_DIR`            | `./data`     | Путь к папке с данными (db.json, config.json, it-assets.sqlite) |
-| `IT_ASSETS_LOG_RETENTION_DAYS`  | `14`         | Сколько дней хранить файлы логов в `data/logs/`                 |
-| `TRUST_PROXY`                   | —            | Установите `1` при работе за nginx/reverse proxy                |
-| `CORS_ORIGINS`                  | —            | Разрешённые origins через запятую                               |
-| `NODE_ENV`                      | —            | Jest выставляет `test` автоматически, отключает фоновые таймеры/логи |
+**Layering rule:** `routes/` handle HTTP concerns (validation, status codes) and delegate everything else; `services/` hold the actual business logic (docx building, file layout, backups); `db/connection.js` is the only module that touches the live sql.js instance directly — everything else goes through `query()`/`run()`/`saveDb()`. Frontend JS files share one global scope on purpose (loaded in dependency order, `main.js` last) so the many `onclick="..."` handlers in the markup keep working without a bundler.
 
 ---
 
-## 🌿 Ветки и релизы
+## Keyboard shortcuts
 
-| Ветка  | Назначение                                         |
-|--------|----------------------------------------------------|
-| `main` | Production — чистый билд без тестов                |
-| `dev`  | Разработка — полный код с тестами и инструментами  |
-
-**Текущая версия:** `beta-1-26w29-01`
-
----
-
-## 🛠️ Технологии
-
-| Слой             | Стек                                                                 |
-|------------------|------------------------------------------------------------------------|
-| Сервер           | Node.js 22.5+ + Express                                              |
-| База данных      | SQLite (встроенный `node:sqlite`, без нативных аддонов) — вся прикладная данные (активы, история, орг-структура, справочники, пользователи). lowdb остаётся только для служебной версии схемы |
-| Аутентификация   | Header-based, bcrypt PIN                                              |
-| TLS              | selfsigned (авто-генерация)                                           |
-| Логирование      | Структурированные JSON-логи с ротацией по дате (`server/logger.js`)   |
-| Фронтенд         | Vanilla JS, SPA, 20+ модулей, EN/RU                                  |
-| Тесты            | Jest + Supertest (283) + Playwright E2E (44 проверены + 14 новых)    |
+| Key | Action |
+|-----|--------|
+| `Ctrl+S` | Save request |
+| `Ctrl+N` | New request |
+| `Ctrl+R` | Open registry |
+| `Ctrl+Enter` | Add position row |
+| `Escape` | Close modal / cancel edit |
+| `?` | Shortcut reference |
 
 ---
 
-<div align="center">
+## Bitrix24
 
-Разработано для внутреннего учёта ИТ-оборудования
-Автор: **[DarkyAndSparky](https://github.com/DarkyAndSparky)**
+Set a webhook URL in **Конфиг → Интеграция Bitrix24**. The **🔗 Bitrix24** button on the request form sends the request as a CRM deal. Webhook URL is never included in backups.
 
-</div>
+---
+
+## License
+
+[MIT](LICENSE) © [DarkyAndSparky](https://github.com/DarkyAndSparky)
+
+*Node.js · Express · SQLite · Vanilla JS · No build step*
+
+---
+
+## Docker
+
+### Быстрый старт
+
+```bash
+git clone https://github.com/DarkyAndSparky/procure-it.git
+cd procure-it
+
+# Запуск (без пароля — используется встроенная система ролей)
+docker compose up -d
+
+# Первый вход: admin / admin0000  — система сразу попросит сменить пароль
+```
+
+Откройте **https://localhost:9111** (примите предупреждение о самоподписанном сертификате).
+
+> **Права на файлы:** контейнер запускается через `docker-entrypoint.sh` — он автоматически устанавливает нужные права на `./data` и `./logs` при старте, поэтому `sudo` не требуется.
+
+### Переменные окружения
+
+```bash
+# Создайте .env файл (docker compose подхватит автоматически):
+PORT=9111                        # HTTPS порт (HTTP redirect = PORT+1)
+PROCURE_PASSWORD=                # legacy single-password режим (оставьте пустым — используйте UI)
+BACKUP_INTERVAL_MS=21600000      # интервал автобэкапа (6 часов)
+```
+
+### Данные на хосте
+
+```
+data/zakupki.db               # База данных (SQLite)
+data/certs/                   # TLS сертификат (генерируется автоматически)
+data/backups/                 # Автобэкапы .db каждые 6 часов, хранятся 30 дней
+data/backups/files_mirror/    # Зеркало прикреплённых файлов (см. ниже) — актуально всегда, не версионируется
+data/signed_specs/            # Подписанные спецификации (PDF)
+data/invoices/                # Приложенные файлы счетов
+logs/access.log                # Логи запросов (morgan combined)
+```
+
+> **О бэкапах прикреплённых файлов:** сами PDF (подписанные спецификации, счета) хранятся на диске отдельно от SQLite, поэтому `.db`-снапшот их не содержит. При каждом автобэкапе `data/backups/files_mirror/` синхронизируется с текущим содержимым `signed_specs/`/`invoices/` (копируются только новые/изменённые файлы). При восстановлении (`POST /api/restore`) сервер сначала пытается найти файл на месте, а если его нет — берёт из `files_mirror/`.
+
+### Команды
+
+```bash
+docker compose ps              # статус контейнера
+docker compose logs -f         # логи в реальном времени
+docker compose down            # остановить
+docker compose up -d --build   # пересобрать после обновления кода
+docker compose restart         # перезапустить без пересборки
+```
+
+### Обновление
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+Данные в `./data` сохраняются между обновлениями.

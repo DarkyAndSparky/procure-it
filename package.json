@@ -1,52 +1,54 @@
 {
-  "name": "it-assets",
-  "version": "beta-1-26w35-01",
-  "description": "IT Assets Management — beta 1",
-  "author": "DarkyAndSparky",
-  "license": "UNLICENSED",
+  "name": "procure-it",
+  "version": "26w35-b01",
+  "description": "IT Asset Procurement Tool — web-based tool for managing IT equipment purchase requests, generating specifications and calculation sheets",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/*.test.js",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
+    "prepare": "node scripts/install-hooks.js",
+    "version:sync": "node scripts/sync-version.js"
+  },
+  "keywords": [
+    "procurement",
+    "it-assets",
+    "equipment",
+    "specifications",
+    "xlsx",
+    "sqlite"
+  ],
+  "author": "DarkyAndSparky <https://github.com/DarkyAndSparky>",
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/DarkyAndSparky/it-assets"
+    "url": "https://github.com/DarkyAndSparky/procure-it.git"
   },
-  "main": "server/index.js",
+  "homepage": "https://github.com/DarkyAndSparky/procure-it#readme",
+  "bugs": {
+    "url": "https://github.com/DarkyAndSparky/procure-it/issues"
+  },
   "engines": {
-    "node": ">=22.5.0"
-  },
-  "scripts": {
-    "prepare": "node scripts/install-hooks.js",
-    "sync-version": "node scripts/sync-version.js",
-    "start": "node server/index.js",
-    "dev": "node server/index.js",
-    "test": "jest --runInBand --forceExit",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage --forceExit",
-    "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "node": ">=18.0.0"
   },
   "dependencies": {
-    "adm-zip": "^0.6.0",
-    "bcryptjs": "^3.0.3",
+    "compression": "^1.7.4",
+    "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
+    "docx": "^8.5.0",
     "express": "^4.18.2",
-    "lowdb": "^1.0.0",
-    "qrcode": "^1.5.4",
-    "selfsigned": "^5.5.0",
-    "uuid": "11.1.1",
-    "zod": "^4.4.3"
+    "express-rate-limit": "^7.0.0",
+    "helmet": "^8.0.0",
+    "morgan": "^1.10.0",
+    "nodemailer": "^9.0.5",
+    "selfsigned": "^2.4.1",
+    "sql.js": "^1.10.3"
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.0",
-    "jest": "^30.4.2",
-    "jimp": "^0.22.12",
-    "jsqr": "^1.4.0",
-    "supertest": "^7.2.2"
-  },
-  "jest": {
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/tests/**/*.test.js"
-    ],
-    "verbose": true,
-    "testTimeout": 10000
+    "@playwright/test": "^1.62.1",
+    "playwright": "^1.62.1"
   }
 }

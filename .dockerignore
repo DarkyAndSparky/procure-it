@@ -1,20 +1,36 @@
-node_modules
+# Dependencies — reinstalled inside image via npm ci
+node_modules/
+
+# Runtime data — mounted as volumes, must not bake into image
 data/
-*.pem
-tests/
-tests-e2e/
-docs/
-tools/
-coverage/
-test-results/
-.e2e-data/
+logs/
+
+# Dev / repo files
 .git/
-.gitignore
+.github/
+docs/
 *.md
-!CHANGELOG.md
-*.bat
-*.sh
-playwright.config.js
-npm-debug.log*
+.env
+.env.*
+!.env.example
+
+# Start / install / test scripts — dev-инструменты, не нужны внутри
+# контейнера (Dockerfile сам делает npm ci --omit=dev + явный COPY нужных
+# директорий; test/ и так не копируется, но явное правило — для ясности и
+# на случай, если COPY когда-нибудь заменят на `COPY . .`)
+start.bat
+start.sh
+install.bat
+install.sh
+test.bat
+test.sh
+test/
+
+# OS noise
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
+
+# entrypoint is explicitly needed — do NOT ignore it
+# docker-entrypoint.sh is included via COPY in Dockerfile

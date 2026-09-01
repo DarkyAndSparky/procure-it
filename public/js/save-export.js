@@ -148,7 +148,10 @@ function buildAndDownloadExcel(req, existingWb) {
     const deliveryShare = pricing.deliveryShare;
     const ppWithDel     = pricing.ppWithDelivery;
     const sellPerUnit   = round2(p.sellPerUnit || pricing.sellPerUnit);
-    const sellSum       = round2(p.sellSum || sellPerUnit * p.qty);
+    // Сумма — из pricing.sellSum, посчитанной как (purchaseSum+deliveryShare)*(1+markup),
+    // а НЕ sellPerUnit*p.qty: так же, как в pricing-core.js, чтобы избежать копеечного
+    // расхождения от округления цены за единицу. См. комментарий в pricing-core.js.
+    const sellSum       = round2(p.sellSum || pricing.sellSum);
 
     const r = dataStartRow + i + 1; // Excel row (1-based)
 
@@ -167,7 +170,11 @@ function buildAndDownloadExcel(req, existingWb) {
       { f: `ROUND(K${r}*E${r},2)`, v: round2(ppWithDel * p.qty), t: 'n' },          // L: Итого с доставкой
       { v: '', t: 's' },                             // M: пусто
       { f: `ROUND(K${r}*(1+R2/100),2)`, v: sellPerUnit, t: 'n' },           // N: Цена продажи за ед (R2=markup)
-      { f: `ROUND(N${r}*E${r},2)`, v: sellSum, t: 'n' },      // O: Стоимость продажи
+      // Формула считает от (H+J) — Цена закупа + Доля доставки, обе уже готовые суммы
+      // по строке без деления на qty — а не от K/N (цена ЗА ЕДИНИЦУ), умноженной на E.
+      // Деление доли доставки на кол-во (для цены за ед. в K/N) само по себе теряет
+      // копейки при нецелых долях, и умножение обратно их не возвращает. См. pricing-core.js.
+      { f: `ROUND((H${r}+J${r})*(1+R2/100),2)`, v: sellSum, t: 'n' },      // O: Стоимость продажи
     ]);
   });
 
@@ -262,7 +269,9 @@ function buildAndDownloadExcel(req, existingWb) {
       specPositions.forEach((p, i) => {
         const sr = i + 2; // Excel row (1-based, header=1)
         const sellUnit = round2(p.sellPerUnit || p.purchasePrice * (1 + markup / 100));
-        const sellSum  = round2(p.sellSum    || sellUnit * p.qty);
+        // Сумма — от неокруглённой цены за ед., не от sellUnit*qty (см. pricing-core.js):
+        // так же убираем копеечное расхождение при двойном округлении.
+        const sellSum  = round2(p.sellSum || (p.purchasePrice * (1 + markup / 100) * p.qty));
         specTotal += sellSum;
         specRows.push([
           { v: i + 1, t: 'n' },

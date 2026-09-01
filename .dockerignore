@@ -14,8 +14,23 @@ docs/
 .env.*
 !.env.example
 
+# Start / install / test scripts — dev-инструменты, не нужны внутри
+# контейнера (Dockerfile сам делает npm ci --omit=dev + явный COPY нужных
+# директорий; test/ и так не копируется, но явное правило — для ясности и
+# на случай, если COPY когда-нибудь заменят на `COPY . .`)
+start.bat
+start.sh
+install.bat
+install.sh
+test.bat
+test.sh
+test/
+
 # OS noise
 .DS_Store
 Thumbs.db
 *.swp
 *.swo
+
+# entrypoint is explicitly needed — do NOT ignore it
+# docker-entrypoint.sh is included via COPY in Dockerfile

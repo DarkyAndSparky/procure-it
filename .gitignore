@@ -10,6 +10,8 @@ data/**
 !data/certs/.gitkeep
 !data/signed_specs/
 !data/signed_specs/.gitkeep
+!data/invoices/
+!data/invoices/.gitkeep
 *.db
 *.db-wal
 *.db-shm
@@ -36,3 +38,10 @@ logs/**
 npm-debug.log*
 
 # Note: docs/ is intentionally NOT ignored — GitHub Pages reads docs/index.html
+
+# Playwright e2e
+e2e/.auth/
+playwright-report/
+test-results/
+blob-report/
+

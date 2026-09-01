@@ -28,7 +28,7 @@ When `dev` is stable and tested:
 ```bash
 git checkout main
 git merge dev
-git tag v26w31-b01        # use current build number
+git tag v26w31-b01        # matches package.json → version, prefixed with v
 git push origin main --tags
 git checkout dev           # always return to dev
 ```
@@ -48,14 +48,24 @@ Types:
 
 ## Version format
 
-`YYwWW-bNN` — year (2 digits) · ISO week number · build number on that week
+`YYwWW-STAGENN` — year (2 digits) · ISO week number · stage · build number on that week+stage
 
-Examples: `26w31-b01`, `26w31-b02`, `26w32-b01`
+| Stage | Meaning |
+|-------|---------|
+| `a`   | Alpha — early, potentially unstable, active work in `dev` |
+| `b`   | Beta — feature-complete, being tested |
+| `rc`  | Release candidate — final check before merging into `main` |
+| `r`   | Release — final, merged into `main` |
 
-Bump the version in:
-- `package.json` → `version`
-- `README.md` → version badge
-- Git tag on `main`
+Examples: `26w31-b01`, `26w31-rc01`, `26w31-r01`, `26w32-a01`
+
+**`package.json` → `version` is the single source of truth.** Bump it there, then run:
+
+```bash
+npm run version:sync
+```
+
+This rewrites every other place the version is displayed (README badge, docs site header/footer, Docker image tag) automatically — you no longer need to hunt them down and edit them by hand. Commit the resulting changes together with the version bump, then tag as shown above.
 
 ## Pull requests
 

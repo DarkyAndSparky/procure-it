@@ -1,0 +1,20 @@
+# Windows batch/cmd files MUST use CRLF line endings, or cmd.exe can
+# misparse them (especially with chcp 65001 + multi-byte UTF-8 text),
+# causing "'...' is not recognized as an internal or external command" errors.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Everything else: normalize to LF in the repo, let Git convert on checkout
+# per the user's core.autocrlf setting.
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
+
+# Avoid line-ending conversion issues with binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary

@@ -61,7 +61,24 @@ First run installs npm dependencies (~1 min) and generates a self-signed TLS cer
 | `main` | Stable releases only |
 | `dev`  | Active development (default) |
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the release workflow.
+### What's in each branch
+
+| | `dev` | `main` |
+|-|-------|--------|
+| Application source (`src/`, `server.js`, `public/`) | ✅ | ✅ |
+| Install & start scripts (`install.*`, `start.*`) | ✅ | ✅ |
+| Docker (`Dockerfile`, `docker-compose.yml`, `docker-entrypoint.sh`) | ✅ | ✅ |
+| Build scripts (`scripts/`) | ✅ | ✅ |
+| Documentation (`README.md`, `docs/`, `CHANGELOG.md`, `LICENSE`) | ✅ | ✅ |
+| Unit tests (`test/`) | ✅ | ❌ stripped on release |
+| E2e tests (`e2e/`, `playwright.config.js`) | ✅ | ❌ stripped on release |
+| Test scripts (`test.bat`, `test.sh`, `test-e2e.*`) | ✅ | ❌ stripped on release |
+| Release tooling (`tools/release/`) | ✅ | ❌ stripped on release |
+| Dev docs (`CONTRIBUTING.md`, `ROADMAP.md`) | ✅ | ❌ stripped on release |
+
+> Stripping is handled automatically by `tools/release/release.bat` (Windows) or `tools/release/release.sh` (Linux/macOS).
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full release workflow.
 
 ---
 
@@ -132,6 +149,22 @@ procure-it/
 │       └── main.js               # Bootstrap — must load last
 ├── docs/
 │   └── index.html                # Project documentation site
+├── tools/                         # Dev-only tooling (not included in main branch releases)
+│   └── release/
+│       ├── release.bat           # Windows release helper — run from repo root: tools\release\release.bat 26w36-r01
+│       ├── release.sh            # Linux/macOS release helper
+│       ├── release-validate.js   # Version format validator (used by release.bat/.sh)
+│       └── release-bump.js       # package.json version writer (used by release.bat/.sh)
+├── scripts/                       # Build-time helpers (included in releases — used by install scripts and Dockerfile)
+│   ├── sync-version.js           # npm run version:sync — propagates package.json version to README/docs/Docker
+│   ├── check-node-version.js     # Node.js version check (used by install.bat/.sh)
+│   ├── check-deps-fresh.js       # Decides whether npm install is needed (used by install.bat/.sh)
+│   ├── install-hooks.js          # Copies scripts/hooks/* into .git/hooks/ on npm install (prepare script)
+│   └── hooks/pre-commit          # Reminds to update CHANGELOG.md when src/ or public/js/ changes
+├── test/                          # Unit tests — dev only, not in main branch releases
+│   └── *.test.js                 # node --test (npm test)
+├── e2e/                           # Playwright e2e tests — dev only, not in main branch releases
+│   └── *.spec.js
 ├── data/                          # Runtime data (gitignored, Docker volume)
 │   ├── zakupki.db
 │   ├── certs/                    # TLS cert (auto-generated)
@@ -141,7 +174,6 @@ procure-it/
 ├── start.bat                      # Windows launcher (install + run)
 ├── start.sh                       # Linux/macOS launcher (install + run)
 ├── install.bat / install.sh       # Install deps only, no server start
-├── test.bat / test.sh             # Run test suite only (not needed in prod)
 ├── .env.example
 ├── CONTRIBUTING.md
 └── LICENSE

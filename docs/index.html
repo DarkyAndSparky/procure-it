@@ -420,31 +420,43 @@
     <h2>Структура проекта</h2>
     <div class="tree">
       <span class="dir">procure-it/</span><br>
-      ├── <span class="file">server.js</span>         <span class="comment"># Сборка приложения: middleware, роуты, запуск сервера</span><br>
+      ├── <span class="file">server.js</span>              <span class="comment"># Сборка приложения: middleware, роуты, запуск сервера</span><br>
       ├── <span class="dir">src/</span><br>
       │   ├── <span class="file">config.js</span>, <span class="file">certs.js</span><br>
-      │   ├── <span class="dir">db/</span>            <span class="comment"># connection.js, schema.js, audit.js</span><br>
-      │   ├── <span class="dir">auth/</span>          <span class="comment"># crypto.js, users.js, sessions.js, middleware.js</span><br>
-      │   ├── <span class="dir">services/</span>      <span class="comment"># docxService.js, fileLayoutService.js, backupService.js, bitrixService.js</span><br>
-      │   ├── <span class="dir">utils/</span>         <span class="comment"># docFormat.js</span><br>
-      │   └── <span class="dir">routes/</span>        <span class="comment"># auth, orgs, requests, files, backup, settings, docx, bitrix</span><br>
-      ├── <span class="file">package.json</span><br>
-      ├── <span class="file">start.bat</span>          <span class="comment"># Запуск Windows</span><br>
-      ├── <span class="file">start.sh</span>           <span class="comment"># Запуск Linux/macOS</span><br>
-      ├── <span class="file">.env.example</span>       <span class="comment"># Шаблон переменных</span><br>
-      ├── <span class="file">CONTRIBUTING.md</span><br>
-      ├── <span class="file">LICENSE</span><br>
+      │   ├── <span class="dir">db/</span>               <span class="comment"># connection.js, schema.js, audit.js</span><br>
+      │   ├── <span class="dir">auth/</span>             <span class="comment"># crypto.js, users.js, sessions.js, middleware.js</span><br>
+      │   ├── <span class="dir">services/</span>         <span class="comment"># docxService.js, fileLayoutService.js, backupService.js, bitrixService.js</span><br>
+      │   ├── <span class="dir">utils/</span>            <span class="comment"># docFormat.js</span><br>
+      │   └── <span class="dir">routes/</span>           <span class="comment"># auth, orgs, requests, files, backup, settings, docx, bitrix</span><br>
       ├── <span class="dir">public/</span><br>
-      │   ├── <span class="file">zakupki.html</span>   <span class="comment"># Только разметка</span><br>
-      │   ├── <span class="dir">css/</span>            <span class="comment"># style.css</span><br>
-      │   └── <span class="dir">js/</span>             <span class="comment"># auth.js…main.js — обычные &lt;script src&gt;, без сборщика</span><br>
+      │   ├── <span class="file">zakupki.html</span>      <span class="comment"># Только разметка</span><br>
+      │   ├── <span class="dir">css/</span>              <span class="comment"># style.css</span><br>
+      │   └── <span class="dir">js/</span>               <span class="comment"># auth.js…main.js — обычные &lt;script src&gt;, без сборщика</span><br>
+      ├── <span class="dir">scripts/</span>           <span class="comment"># Утилиты сборки — входят в релиз (нужны install-скриптам и Dockerfile)</span><br>
+      │   ├── <span class="file">sync-version.js</span>   <span class="comment"># npm run version:sync</span><br>
+      │   ├── <span class="file">check-node-version.js</span>, <span class="file">check-deps-fresh.js</span>, <span class="file">install-hooks.js</span><br>
+      │   └── <span class="dir">hooks/</span>            <span class="comment"># pre-commit — напоминает обновить CHANGELOG.md</span><br>
+      ├── <span class="dir dim">tools/</span>             <span class="comment dim"># Dev-only — не входит в релизы ветки main</span><br>
+      │   └── <span class="dir dim">release/</span>          <span class="comment dim"># Скрипты выпуска релиза</span><br>
+      │       ├── <span class="dim">release.bat</span>   <span class="comment dim"># Windows: tools
+elease
+elease.bat 26w36-r01</span><br>
+      │       ├── <span class="dim">release.sh</span>    <span class="comment dim"># Linux/macOS: ./tools/release/release.sh 26w36-r01</span><br>
+      │       ├── <span class="dim">release-validate.js</span>, <span class="dim">release-bump.js</span><br>
+      ├── <span class="dir dim">test/</span>              <span class="comment dim"># Unit-тесты (node --test) — dev only, не в main</span><br>
+      ├── <span class="dir dim">e2e/</span>               <span class="comment dim"># Playwright e2e-тесты — dev only, не в main</span><br>
+      ├── <span class="file">package.json</span><br>
+      ├── <span class="file">start.bat</span>, <span class="file">start.sh</span>  <span class="comment"># Запуск (Windows / Linux/macOS)</span><br>
+      ├── <span class="file">install.bat</span>, <span class="file">install.sh</span> <span class="comment"># Только установка зависимостей</span><br>
+      ├── <span class="file">.env.example</span>       <span class="comment"># Шаблон переменных</span><br>
+      ├── <span class="file">LICENSE</span><br>
       ├── <span class="dir">docs/</span><br>
-      │   └── <span class="file">index.html</span>     <span class="comment"># Эта страница</span><br>
+      │   └── <span class="file">index.html</span>        <span class="comment"># Эта страница</span><br>
       └── <span class="dir dim">data/</span>              <span class="comment dim"># git-ignored, создаётся автоматически</span><br>
-          ├── <span class="dim">zakupki.db</span>     <span class="comment dim"># SQLite база данных</span><br>
-          ├── <span class="dir dim">certs/</span>         <span class="comment dim"># TLS сертификат</span><br>
+          ├── <span class="dim">zakupki.db</span>        <span class="comment dim"># SQLite база данных</span><br>
+          ├── <span class="dir dim">certs/</span>            <span class="comment dim"># TLS сертификат</span><br>
           ├── <span class="dir dim">signed_specs/</span>, <span class="dir dim">invoices/</span> <span class="comment dim"># Прикреплённые файлы</span><br>
-          └── <span class="dir dim">backups/</span>       <span class="comment dim"># .db-снапшоты + зеркало прикреплённых файлов</span><br>
+          └── <span class="dir dim">backups/</span>          <span class="comment dim"># .db-снапшоты + зеркало прикреплённых файлов</span><br>
     </div>
   </section>
 
@@ -864,6 +876,25 @@ docker exec -it procure-it sh # войти в контейнер</pre>
       <li>Когда <code>dev</code> стабилен и проверен — merge в <code>main</code> + тег</li>
       <li>Дефолтная ветка на GitHub — <code>dev</code></li>
     </ul>
+
+    <h3>Что есть в каждой ветке</h3>
+    <div class="table-wrap"><table>
+      <tr><th></th><th><code>dev</code></th><th><code>main</code></th></tr>
+      <tr><td>Исходный код приложения (<code>src/</code>, <code>server.js</code>, <code>public/</code>)</td><td>✅</td><td>✅</td></tr>
+      <tr><td>Скрипты запуска и установки (<code>install.*</code>, <code>start.*</code>)</td><td>✅</td><td>✅</td></tr>
+      <tr><td>Docker (<code>Dockerfile</code>, <code>docker-compose.yml</code>, <code>docker-entrypoint.sh</code>)</td><td>✅</td><td>✅</td></tr>
+      <tr><td>Build-утилиты (<code>scripts/</code>)</td><td>✅</td><td>✅</td></tr>
+      <tr><td>Документация (<code>README.md</code>, <code>docs/</code>, <code>CHANGELOG.md</code>, <code>LICENSE</code>)</td><td>✅</td><td>✅</td></tr>
+      <tr><td>Unit-тесты (<code>test/</code>)</td><td>✅</td><td style="color:var(--red)">❌ удаляются при релизе</td></tr>
+      <tr><td>E2e-тесты (<code>e2e/</code>, <code>playwright.config.js</code>)</td><td>✅</td><td style="color:var(--red)">❌ удаляются при релизе</td></tr>
+      <tr><td>Скрипты тестов (<code>test.bat</code>, <code>test.sh</code>, <code>test-e2e.*</code>)</td><td>✅</td><td style="color:var(--red)">❌ удаляются при релизе</td></tr>
+      <tr><td>Release-хелпер (<code>tools/release/</code>)</td><td>✅</td><td style="color:var(--red)">❌ удаляется при релизе</td></tr>
+      <tr><td>Dev-документация (<code>CONTRIBUTING.md</code>, <code>ROADMAP.md</code>)</td><td>✅</td><td style="color:var(--red)">❌ удаляется при релизе</td></tr>
+    </table></div>
+    <div class="alert alert-info">
+      Удаление dev-only файлов из <code>main</code> выполняется автоматически release-хелпером:<br>
+      <code>toolseleaseelease.bat 26w36-r01</code> (Windows) &nbsp;·&nbsp; <code>./tools/release/release.sh 26w36-r01</code> (Linux/macOS)
+    </div>
   </section>
 
   <!-- Versioning -->
@@ -943,16 +974,17 @@ npm run test:e2e</pre>
       <div class="step">
         <div class="step-num">3</div>
         <div class="step-body">
-          <strong>Релиз в main</strong>
-          <pre>git checkout main
-git merge dev
-git tag v26w31-b01
-git push origin main --tags
-git checkout dev</pre>
+          <strong>Релиз в main — через release-хелпер</strong>
+          <pre># Windows (из корня репозитория):
+tools\release\release.bat 26w36-r01
+
+# Linux / macOS:
+./tools/release/release.sh 26w36-r01</pre>
+          <p>Хелпер автоматически: бампит версию → <code>npm run version:sync</code> → коммит в dev → merge в main → удаляет test/, e2e/, tools/, CONTRIBUTING.md, ROADMAP.md из main → тег → push → возвращается в dev.</p>
         </div>
       </div>
     </div>
-    <a href="https://github.com/DarkyAndSparky/procure-it/blob/main/CONTRIBUTING.md" class="gh-link" target="_blank">Полный CONTRIBUTING.md →</a>
+    <a href="https://github.com/DarkyAndSparky/procure-it/blob/dev/CONTRIBUTING.md" class="gh-link" target="_blank">Полный CONTRIBUTING.md (ветка dev) →</a>
   </section>
 
   <div style="border-top:1px solid var(--border);margin-top:48px;padding-top:24px;color:var(--text2);font-size:12px;display:flex;justify-content:space-between;align-items:center">

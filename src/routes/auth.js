@@ -3,16 +3,23 @@ const router = express.Router();
 
 const { getDb, saveDb, run } = require('../db/connection');
 const { getUsers, findUserByCredentials } = require('../auth/users');
-const { sessionCreate, sessionDelete, sessionGetUser } = require('../auth/sessions');
+const { sessionCreate, sessionDelete, sessionGetUser, SESSION_TTL_MS } = require('../auth/sessions');
 const { generateToken, generateSalt, hashPassword, timingSafeStringEqual } = require('../auth/crypto');
 const { adminOnly } = require('../auth/middleware');
-const { LEGACY_PASSWORD } = require('../config');
+const { LEGACY_PASSWORD, TRUST_PROXY } = require('../config');
+const { getToken } = require('../auth/middleware');
 const { isSmtpConfigured, sendPasswordResetEmail, getSmtpConfig } = require('../services/emailService');
+
+// Общие опции cookie для сессии/CSRF. secure: true требует HTTPS — сервер
+// в этом проекте всегда поднимается по HTTPS (см. server.js), так что это
+// безопасно по умолчанию.
+const COOKIE_OPTS_AUTH = { httpOnly: true, secure: true, sameSite: 'strict', maxAge: SESSION_TTL_MS };
+const COOKIE_OPTS_CSRF = { httpOnly: false, secure: true, sameSite: 'strict', maxAge: SESSION_TTL_MS };
 
 // strictLimiter применяется на login/change-password (передаётся из server.js при монтировании)
 module.exports = (strictLimiter) => {
   router.get('/auth/status', (req, res) => {
-    const token = req.headers['x-auth-token'] || (req.cookies && req.cookies['auth-token']);
+    const token = getToken(req);
     const user  = token ? sessionGetUser(token) : null;
     const users = getUsers();
     res.json({
@@ -31,20 +38,29 @@ module.exports = (strictLimiter) => {
     if (!username || !password) return res.status(400).json({ error: 'Логин и пароль обязательны' });
     const user = findUserByCredentials(username, password);
     if (!user) return res.status(401).json({ error: 'Неверный логин или пароль' });
-    const token = generateToken();
+    const token    = generateToken();
+    const csrfToken = generateToken();
     sessionCreate(token, user.id);
-    res.json({ ok: true, token, role: user.role, username: user.username, mustChangePassword: user.mustChangePassword });
+    // Токен сессии — только в httpOnly cookie (недоступен из JS, поэтому
+    // недоступен XSS-скрипту). csrf-token — в обычной cookie специально:
+    // фронтенд должен прочитать её и продублировать в заголовке
+    // X-CSRF-Token на каждый небезопасный запрос (double-submit pattern).
+    res.cookie('auth-token', token, COOKIE_OPTS_AUTH);
+    res.cookie('csrf-token', csrfToken, COOKIE_OPTS_CSRF);
+    res.json({ ok: true, role: user.role, username: user.username, mustChangePassword: user.mustChangePassword, csrfToken });
   });
 
   router.post('/auth/logout', (req, res) => {
-    const token = req.headers['x-auth-token'];
+    const token = getToken(req);
     if (token) sessionDelete(token);
+    res.clearCookie('auth-token');
+    res.clearCookie('csrf-token');
     res.json({ ok: true });
   });
 
   // Self-service password change (any authenticated user, for their own account)
   router.post('/auth/change-password', strictLimiter, (req, res) => {
-    const token = req.headers['x-auth-token'];
+    const token = getToken(req);
     const user  = token ? sessionGetUser(token) : null;
     if (!user || !user.id) return res.status(401).json({ error: 'Не авторизован' });
     const { currentPassword, newPassword } = req.body;
@@ -100,18 +116,26 @@ module.exports = (strictLimiter) => {
 
     if (user) {
       const token = require('crypto').randomBytes(32).toString('hex');
+      // В БД храним не сам токен, а его SHA-256-хэш: если файл БД когда-нибудь
+      // утечёт (бэкап, дамп диска), значения в password_reset_tokens нельзя
+      // будет напрямую использовать как рабочие ссылки сброса — токен из URL
+      // и его хэш в базе совпадают только через SHA-256, не обратимо.
+      const tokenHash = require('crypto').createHash('sha256').update(token).digest('hex');
       const expires = Date.now() + 60 * 60 * 1000; // 1 час
       try {
         db.run('DELETE FROM password_reset_tokens WHERE user_id=?', [user.id]);
         db.run('INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?,?,?)',
-          [token, user.id, expires]);
+          [tokenHash, user.id, expires]);
         const { saveDb } = require('../db/connection');
         saveDb();
 
-        // Формируем URL сброса. Берём origin из заголовка запроса — это
-        // корректный хост/порт даже за reverse-proxy (если тот прокидывает
-        // X-Forwarded-Host). Фолбэк — конструируем из req.protocol + host.
-        const origin = req.headers['x-forwarded-proto']
+        // Формируем URL сброса. X-Forwarded-* доверяем ТОЛЬКО если явно
+        // настроено (PROCURE_TRUST_PROXY=true) — иначе клиент может
+        // подставить произвольный X-Forwarded-Host и получить ссылку сброса
+        // на чужой домен (фишинг). По умолчанию — req.protocol/req.headers.host,
+        // которые Express сам вычисляет только из реального соединения
+        // (или из X-Forwarded-* при включённом app.set('trust proxy', ...)).
+        const origin = (TRUST_PROXY && req.headers['x-forwarded-proto'])
           ? `${req.headers['x-forwarded-proto']}://${req.headers['x-forwarded-host'] || req.headers.host}`
           : `${req.protocol}://${req.headers.host}`;
         const resetUrl = `${origin}/reset-password?token=${token}`;
@@ -127,7 +151,9 @@ module.exports = (strictLimiter) => {
           appName: smtpCfg.appName,
         }).catch(e => console.error(`[auth] Ошибка отправки письма сброса для ${user.username}:`, e.message));
 
-        console.log(`[auth] Сброс пароля для ${user.username} (${email}): ${resetUrl}`);
+        // Не логируем полную ссылку/токен сброса — логи не должны быть
+        // эквивалентом доступа к аккаунту.
+        console.log(`[auth] Запрошен сброс пароля для ${user.username} (${email})`);
       } catch(e) {
         console.error('[auth] Ошибка создания токена сброса:', e.message);
       }
@@ -143,18 +169,21 @@ module.exports = (strictLimiter) => {
     if (newPassword.length < 6) return res.status(400).json({ error: 'Минимум 6 символов' });
     const db = getDb();
     try {
-      const rows = db.exec('SELECT user_id, expires_at FROM password_reset_tokens WHERE token=?', [token]);
+      // password_reset_tokens хранит SHA-256(token), а не сам токен —
+      // хэшируем полученный от клиента, чтобы найти совпадение (см. reset-password-request).
+      const tokenHash = require('crypto').createHash('sha256').update(token).digest('hex');
+      const rows = db.exec('SELECT user_id, expires_at FROM password_reset_tokens WHERE token=?', [tokenHash]);
       if (!rows[0]?.values?.length) return res.status(400).json({ error: 'Недействительный или просроченный токен' });
       const [userId, expiresAt] = rows[0].values[0];
       if (Date.now() > expiresAt) {
-        db.run('DELETE FROM password_reset_tokens WHERE token=?', [token]);
+        db.run('DELETE FROM password_reset_tokens WHERE token=?', [tokenHash]);
         return res.status(400).json({ error: 'Токен истёк, запросите сброс заново' });
       }
       const { generateSalt, hashPassword } = require('../auth/crypto');
       const salt = generateSalt();
       const hash = hashPassword(newPassword, salt);
       db.run('UPDATE users SET password=?, salt=?, must_change_password=0 WHERE id=?', [hash, salt, userId]);
-      db.run('DELETE FROM password_reset_tokens WHERE token=?', [token]);
+      db.run('DELETE FROM password_reset_tokens WHERE token=?', [tokenHash]);
       db.run('DELETE FROM sessions WHERE user_id=?', [userId]);
       const { saveDb } = require('../db/connection');
       saveDb();
@@ -193,7 +222,7 @@ module.exports = (strictLimiter) => {
     if (role && !ROLES.includes(role)) return res.status(400).json({ error: `Недопустимая роль` });
 
     // Prevent self-demotion
-    const token    = req.headers['x-auth-token'];
+    const token    = getToken(req);
     const self     = token ? sessionGetUser(token) : null;
     if (self && String(self.id) === String(req.params.id) && role && role !== 'admin') {
       return res.status(400).json({ error: 'Нельзя понизить собственную роль' });

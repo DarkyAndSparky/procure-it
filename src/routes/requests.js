@@ -201,7 +201,16 @@ router.put('/requests/:id', operatorOrAdmin, (req, res) => {
       if (o !== n) diffFields.push({ field, old: o, new: n });
     }
     // Positions diff — detailed: added, removed, changed items
-    const prevPos = JSON.parse(prev.positions || '[]');
+    // Как и в rowToRequest (см. src/db/connection.js) — не даём битому JSON
+    // в старой записи уронить весь запрос 500-й ошибкой, деградируем в [].
+    let prevPos = [];
+    try {
+      const parsed = JSON.parse(prev.positions || '[]');
+      if (Array.isArray(parsed)) prevPos = parsed;
+      else console.warn(`[requests] positions заявки ${req.params.id} — не массив после JSON.parse, подставлен []`);
+    } catch(e) {
+      console.warn(`[requests] Битый JSON в positions заявки ${req.params.id}, подставлен []:`, e.message);
+    }
     const newPos  = r.positions || [];
 
     const prevNames = new Set(prevPos.map(p => p.name));
@@ -313,7 +322,16 @@ router.post('/addresses', operatorOrAdmin, (req, res) => {
 // ── TEMPLATES ─────────────────────────────────────────────────────────────────
 router.get('/templates', operatorOrAdmin, (req, res) => {
   res.json(query('SELECT * FROM templates ORDER BY created_at DESC')
-    .map(r => ({ ...r, positions: JSON.parse(r.positions || '[]') })));
+    .map(r => {
+      let positions = [];
+      try {
+        const parsed = JSON.parse(r.positions || '[]');
+        if (Array.isArray(parsed)) positions = parsed;
+      } catch(e) {
+        console.warn(`[templates] Битый JSON в positions шаблона ${r.id}, подставлен []:`, e.message);
+      }
+      return { ...r, positions };
+    }));
 });
 
 router.post('/templates', operatorOrAdmin, (req, res) => {

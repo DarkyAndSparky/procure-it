@@ -30,7 +30,12 @@ const KEY_FILE    = path.join(CERT_DIR, 'key.pem');
 // it acts as the admin password (backward compatible).
 const LEGACY_PASSWORD = process.env.PROCURE_PASSWORD || '';
 const INITIAL_ADMIN_PASSWORD = process.env.PROCURE_INITIAL_ADMIN_PASSWORD || '';
-const AUTH_ENABLED    = true; // always true — viewer role = no password
+
+// Only trust X-Forwarded-* headers (proto/host) when explicitly running behind
+// a trusted reverse proxy that overwrites/strips them from client input.
+// Off by default: without this, a client could set X-Forwarded-Host/-Proto
+// themselves and get e.g. a password-reset link pointing at an attacker host.
+const TRUST_PROXY = process.env.PROCURE_TRUST_PROXY === 'true';
 
 const DEFAULT_SETTINGS = {
   appName:        'Закупки ИТ',
@@ -62,5 +67,5 @@ const RU_MONTHS_FOLDER = ['Январь','Февраль','Март','Апрел
 
 module.exports = {
   PORT, BIND_HOST, ROOT_DIR, DATA_DIR, DB_FILE, CERT_DIR, SIGNED_DIR, INVOICE_DIR, BACKUP_DIR,
-  CERT_FILE, KEY_FILE, LEGACY_PASSWORD, INITIAL_ADMIN_PASSWORD, AUTH_ENABLED, DEFAULT_SETTINGS, RU_MONTHS_FOLDER,
+  CERT_FILE, KEY_FILE, LEGACY_PASSWORD, INITIAL_ADMIN_PASSWORD, TRUST_PROXY, DEFAULT_SETTINGS, RU_MONTHS_FOLDER,
 };

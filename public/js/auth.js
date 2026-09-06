@@ -2,15 +2,21 @@
 const API = '';
 
 // ── Auth token & role ────────────────────────────────────────────────────────
-let authToken = localStorage.getItem('procure_token') || '';
+// Токен сессии теперь живёт в httpOnly cookie (auth-token) — недоступен из
+// JS вообще, браузер сам шлёт её с каждым запросом на наш домен. Здесь
+// храним только CSRF-токен (обычная cookie, не httpOnly — её и нужно читать
+// из JS) и дублируем его в заголовке X-CSRF-Token на каждый небезопасный
+// запрос, иначе сервер отклонит запрос (см. src/auth/middleware.js).
+function getCsrfToken() {
+  const m = document.cookie.match(/(?:^|;\s*)csrf-token=([^;]*)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
 let userRole  = 'viewer';
 let userName  = null;
 
 async function checkAuth() {
   try {
-    const r = await fetch('/api/auth/status', {
-      headers: authToken ? { 'X-Auth-Token': authToken } : {}
-    });
+    const r = await fetch('/api/auth/status');
     const data = await r.json();
     userRole = data.role || 'viewer';
     userName = data.username || null;
@@ -181,10 +187,8 @@ async function doLogin() {
     });
     const data = await r.json();
     if (data.ok) {
-      authToken = data.token || '';
       userRole  = data.role || 'operator';
       userName  = data.username || username;
-      if (authToken) localStorage.setItem('procure_token', authToken);
       document.getElementById('login-modal').style.display = 'none';
       updateRoleUI();
       refreshVersionBadge();
@@ -228,7 +232,9 @@ async function api(method, path, body) {
     method,
     headers: {
       'Content-Type': 'application/json',
-      ...(authToken ? { 'X-Auth-Token': authToken } : {}),
+      // CSRF-заголовок нужен только для небезопасных методов — cookie
+      // auth-token браузер шлёт сам, а GET/HEAD не защищены CSRF-мидлваром.
+      ...(method !== 'GET' ? { 'X-CSRF-Token': getCsrfToken() } : {}),
     }
   };
   if (body) opts.body = JSON.stringify(body);
@@ -236,8 +242,6 @@ async function api(method, path, body) {
     const r = await fetch(API + path, opts);
     if (r.status === 401) {
       // Token expired or invalid
-      authToken = '';
-      localStorage.removeItem('procure_token');
       showLoginModal();
       throw new Error('Сессия истекла, войдите снова');
     }
@@ -307,7 +311,7 @@ function showForgotPasswordModal() {
   const content = document.getElementById('forgot-pw-content');
 
   // Проверяем, настроен ли SMTP
-  fetch('/api/auth/reset-password-info', { headers: authToken ? { 'X-Auth-Token': authToken } : {} })
+  fetch('/api/auth/reset-password-info')
     .then(r => r.json())
     .then(data => {
       if (data.smtpConfigured) {

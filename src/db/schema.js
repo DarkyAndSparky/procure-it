@@ -102,7 +102,9 @@ function runMigrations(db) {
   try {
     db.run(`UPDATE requests SET status='ordered'   WHERE status='inwork'`);
     db.run(`UPDATE requests SET status='delivered' WHERE status='paid'`);
-  } catch(e) {}
+  } catch(e) {
+    console.error('[migration] Не удалось перевести старые статусы заявок (inwork/paid) на новые — записи со старыми статусами могут вести себя некорректно в UI:', e.message);
+  }
 
   // Audit log table
   db.run(`CREATE TABLE IF NOT EXISTS audit_log (

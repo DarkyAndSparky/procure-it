@@ -36,8 +36,8 @@ module.exports = defineConfig({
   projects: [
     // "setup" сеет тестовые аккаунты (admin/operator/viewer) через API один
     // раз за весь прогон — см. e2e/auth.setup.js. Остальные проекты просто
-    // подключают готовый storageState (localStorage-токен, см. auth.js —
-    // приложение хранит токен там, а не в куках) и не трогают логин-форму,
+    // подключают готовый storageState (cookies — сессия теперь в HttpOnly
+    // auth-token cookie, см. auth.js/middleware.js) и не трогают логин-форму,
     // кроме auth.spec.js, который явно сбрасывает storageState.
     { name: 'setup', testMatch: /.*\.setup\.js/ },
     {
@@ -62,9 +62,12 @@ module.exports = defineConfig({
       PORT,
       PROCURE_DATA_DIR: E2E_DATA_DIR,
       NODE_ENV: 'test',
-      // Без PROCURE_PASSWORD — миграция засеет дефолтного admin/admin0000
-      // (см. src/db/schema.js), это и используют фикстуры логина.
+      // Без PROCURE_PASSWORD — миграция засеет дефолтного admin со случайным
+      // паролем; для e2e нужен известный заранее пароль, поэтому фиксируем
+      // его через PROCURE_INITIAL_ADMIN_PASSWORD (см. src/config.js/schema.js).
+      // auth.setup.js логинится этим паролем и сразу меняет его на CREDS.admin.
       PROCURE_PASSWORD: '',
+      PROCURE_INITIAL_ADMIN_PASSWORD: 'E2eBootstrap#Initial1',
       PROCURE_AUTO_OPEN: '0',
     },
     stdout: 'pipe',

@@ -16,7 +16,7 @@ const morgan      = require('morgan');
 const compression = require('compression');
 
 const {
-  PORT, BIND_HOST, DATA_DIR, DB_FILE, CERT_FILE, KEY_FILE, AUTH_ENABLED,
+  PORT, BIND_HOST, DATA_DIR, DB_FILE, CERT_FILE, KEY_FILE, TRUST_PROXY,
 } = require('./src/config');
 const { ensureCert } = require('./src/certs');
 const { initDb, getDb } = require('./src/db/connection');
@@ -24,6 +24,9 @@ const { doBackup } = require('./src/services/backupService');
 const { BACKUP_DIR } = require('./src/config');
 
 const app = express();
+// Only trust X-Forwarded-* headers when explicitly configured to run behind
+// a trusted reverse proxy (see PROCURE_TRUST_PROXY in src/config.js).
+if (TRUST_PROXY) app.set('trust proxy', 1);
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(compression());
@@ -45,8 +48,21 @@ if (helmet) {
     contentSecurityPolicy: {
       directives: {
         defaultSrc:  ["'self'"],
-        scriptSrc:   ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net", "cdnjs.cloudflare.com"],
-        scriptSrcAttr: ["'unsafe-inline'"], // allow onclick="..." / onkeydown="..." used throughout the UI
+        // Inline onclick="..." on the STATIC pages (zakupki.html/reset-password.html)
+        // were converted to addEventListener + external files. But a large part
+        // of the app renders HTML via innerHTML at runtime (login modal, registry
+        // rows, position rows, org/user list items — see public/js/auth.js,
+        // registry.js, positions.js, users.js, config.js, helpers.js) and those
+        // templates still bake in onclick=/onchange=/onkeydown=... directly.
+        // Removing 'unsafe-inline' from scriptSrcAttr silently breaks EVERY one
+        // of those — the browser just drops the handler, no console error, so it
+        // looks like "the button does nothing" (found via a real e2e run: login
+        // modal never closes, delete buttons never fire, etc. — 8/23 tests failed,
+        // all tracing to this). A full fix means converting all ~43 remaining
+        // dynamic handlers to real event delegation, which needs a real browser
+        // to verify safely — not done yet. Until then, keep 'unsafe-inline' here.
+        scriptSrc:   ["'self'", "cdn.jsdelivr.net", "cdnjs.cloudflare.com"],
+        scriptSrcAttr: ["'unsafe-inline'"],
         styleSrc:    ["'self'", "'unsafe-inline'"],
         styleSrcAttr: ["'unsafe-inline'"], // allow style="..." attributes used throughout the UI
         imgSrc:      ["'self'", "data:", "blob:"],
@@ -112,6 +128,16 @@ app.use('/api/', apiLimiter);
 // Затем — точечный лимит для /api/settings. И только потом — общий дефолт
 // для всех остальных /api-роутов (orgs, requests, auth, backup/restore,
 // docx, bitrix), которые сами парсер не объявляют.
+// CSRF-защита (double-submit cookie) для cookie-based auth — см. комментарий
+// в src/auth/middleware.js. Не требует распарсенного body, поэтому стоит
+// перед files.js и остальными /api-роутами, включая file-upload эндпоинты,
+// которые сами объявляют свой express.json() ниже по цепочке.
+const { csrfProtection } = require('./src/auth/middleware');
+app.use('/api', (req, res, next) => {
+  if (req.path === '/auth/login' || req.path === '/auth/status') return next();
+  return csrfProtection(req, res, next);
+});
+
 app.use('/api', require('./src/routes/files'));
 app.use('/api/settings', express.json({ limit: '600kb' }));
 app.use('/api', express.json({ limit: '15mb' }));
@@ -226,8 +252,7 @@ function extractFileFromTarGz(gzBuf, innerPath) {
 async function ensureXlsx() {
   const dest = path.join(__dirname, 'public', 'xlsx.full.min.js');
   if (fs.existsSync(dest) && fs.statSync(dest).size > 100_000) return;
-  throw new Error('Не найден обязательный локальный файл public/xlsx.full.min.js');
-  console.log('[xlsx] Скачиваю xlsx-js-style локально (с проверкой контрольной суммы)...');
+  console.log('[xlsx] Локальный файл отсутствует или повреждён — скачиваю xlsx-js-style (с проверкой контрольной суммы)...');
   try {
     const tarball = await new Promise((resolve, reject) => {
       const chunks = [];
@@ -290,14 +315,7 @@ initDb().then(async () => {
     console.log(`  Локально:    ${proto}://localhost:${PORT}`);
     ips.forEach(ip => console.log(`  По сети:     ${proto}://${ip}:${PORT}`));
     console.log(`  База данных: ${DB_FILE}`);
-    console.log(`  Авторизация: ${AUTH_ENABLED ? '✓ Включена (пароль задан)' : '✗ Выключена (PROCURE_PASSWORD не задан)'}`);
     console.log(`  Логи:        ${path.join(__dirname, 'logs', 'access.log')}`);
-    if (!AUTH_ENABLED) {
-      console.log('');
-      console.log('  ⚠️  Для включения пароля установите переменную:');
-      console.log('     Windows: set PROCURE_PASSWORD=yourpassword');
-      console.log('     Linux:   PROCURE_PASSWORD=yourpassword node server.js');
-    }
     if (proto === 'https') {
       console.log('');
       console.log('  ⚠️  Первый раз браузер покажет предупреждение');

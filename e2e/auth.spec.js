@@ -1,6 +1,6 @@
 // Логин-форма, гостевой режим, разлогин — единственный спек, который
 // намеренно НЕ подключает готовый storageState (см. helpers.js): здесь как
-// раз важно, что происходит с чистого листа, без токена в localStorage.
+// раз важно, что происходит с чистого листа, без cookie сессии.
 const { test, expect } = require('@playwright/test');
 const { CREDS, waitToast } = require('./helpers');
 
@@ -46,8 +46,8 @@ test.describe('Аутентификация', () => {
     await expect(page.locator('#nav-config')).toBeHidden(); // оператору конфиг не положен
     await expect(page.locator('#role-badge')).toContainText(CREDS.operator.username);
 
-    // Токен лежит в localStorage — сессия должна пережить обновление страницы
-    // без повторного показа модалки логина.
+    // Токен теперь лежит в HttpOnly cookie (не видна из JS) — сессия должна
+    // пережить обновление страницы без повторного показа модалки логина.
     await page.reload();
     await expect(page.locator('#login-modal')).toBeHidden();
     await expect(page.locator('#nav-new')).toBeVisible();
@@ -66,6 +66,12 @@ test.describe('Аутентификация', () => {
 
     const token = await page.evaluate(() => localStorage.getItem('procure_token'));
     expect(token).toBeFalsy();
+    // Сама auth-token cookie HttpOnly — недоступна из page.evaluate(document.cookie)
+    // по определению, поэтому проверяем через API контекста браузера, у
+    // которого есть доступ к полному cookie jar (httpOnly включительно).
+    const cookies = await page.context().cookies();
+    const authCookie = cookies.find(c => c.name === 'auth-token');
+    expect(authCookie).toBeFalsy();
   });
 
   test('администратору доступны config и users, оператору — нет', async ({ page }) => {

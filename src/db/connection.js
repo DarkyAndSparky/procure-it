@@ -12,7 +12,13 @@ function getDb() { return db; }
 
 function saveDb() {
   const data = db.export();
-  fs.writeFileSync(DB_FILE, Buffer.from(data));
+  // Atomic write: write to a temp file first, then rename. A crash mid-write
+  // to DB_FILE directly could leave a truncated/corrupt db file behind;
+  // rename() on the same filesystem is atomic, so DB_FILE is always either
+  // the old or the new complete version.
+  const tmpFile = `${DB_FILE}.tmp-${process.pid}`;
+  fs.writeFileSync(tmpFile, Buffer.from(data));
+  fs.renameSync(tmpFile, DB_FILE);
 }
 
 async function initDb() {

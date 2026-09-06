@@ -242,7 +242,9 @@ function findOrCreateRequestFolderLocal(orgPath, reqId, safeName) {
         break;
       }
     }
-  } catch(e) {}
+  } catch(e) {
+    console.warn(`[fileLayout] Не удалось проверить существующие папки заявки ${reqId} в ${orgPath} — возможно, будет создана папка-дубликат:`, e.message);
+  }
 
   const isNewFolder = !requestFolderName;
   if (!requestFolderName) requestFolderName = `${String(maxNum + 1).padStart(2, '0')}_${safeName}`;
@@ -250,7 +252,8 @@ function findOrCreateRequestFolderLocal(orgPath, reqId, safeName) {
   const requestPath = path.join(orgPath, requestFolderName);
   fs.mkdirSync(requestPath, { recursive: true });
   if (isNewFolder) {
-    try { fs.writeFileSync(path.join(requestPath, REQUEST_MARKER_FILE), String(reqId), 'utf8'); } catch(e) {}
+    try { fs.writeFileSync(path.join(requestPath, REQUEST_MARKER_FILE), String(reqId), 'utf8'); }
+    catch(e) { console.warn(`[fileLayout] Не удалось записать маркер-файл для заявки ${reqId} — при следующем обращении может быть создана папка-дубликат:`, e.message); }
   }
   return requestPath;
 }

@@ -21,7 +21,14 @@ function calcRowPricing({ purchasePrice, qty, totalPurchase, deliveryCost, marku
   const deliveryShare   = round2(pctOfOrder * deliveryCost);
   const ppWithDelivery  = round2(qty > 0 ? purchasePrice + deliveryShare / qty : purchasePrice);
   const sellPerUnit     = round2(ppWithDelivery * (1 + markup));
-  const sellSum         = round2(sellPerUnit * qty);
+  // Сумма по строке считается от (purchaseSum + deliveryShare) — обе уже честно округлены
+  // до копеек и НЕ делились на qty — а не от sellPerUnit*qty или ppWithDelivery*qty.
+  // Деление deliveryShare на qty (для ppWithDelivery/sellPerUnit, которые остаются
+  // справочной ценой "за единицу" в интерфейсе) само по себе теряет копейки при нецелых
+  // долях, и умножение обратно на qty их не возвращает. Пример: deliveryShare=350.72,
+  // qty=3 → 350.72/3=116.9066.. → округление до 116.91/шт → ×3 = 350.73 (лишняя копейка).
+  // Через purchaseSum+deliveryShare копейка не возникает, т.к. это готовая сумма по строке.
+  const sellSum         = round2((purchaseSum + deliveryShare) * (1 + markup));
 
   return { purchaseSum, pctOfOrder, deliveryShare, ppWithDelivery, sellPerUnit, sellSum };
 }

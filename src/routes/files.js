@@ -103,7 +103,9 @@ router.post('/requests/:id/invoice-file', operatorOrAdmin, requireSafeId, expres
       for (const f of fs.readdirSync(INVOICE_DIR)) {
         if (f.startsWith(`${req.params.id}.`)) fs.unlinkSync(path.join(INVOICE_DIR, f));
       }
-    } catch(e) {}
+    } catch(e) {
+      console.warn(`[files] Не удалось удалить старый файл счёта для заявки ${req.params.id} — возможно, останется файл со старым расширением:`, e.message);
+    }
     const buf = Buffer.from(file.replace(/^data:[\w/.+-]+;base64,/, ''), 'base64');
     fs.writeFileSync(path.join(INVOICE_DIR, fname), buf);
 

@@ -333,7 +333,7 @@
 <aside class="sidebar">
   <div class="sidebar-logo">
     <h1>procure-it</h1>
-    <span class="version"><!--VERSION-->26w35-r01<!--/VERSION--></span>
+    <span class="version"><!--VERSION-->26w36-b03<!--/VERSION--></span>
   </div>
   <div class="nav-section">Начало</div>
   <a href="#intro"     class="nav-link active">О проекте</a>
@@ -374,7 +374,7 @@
     <h1>procure-it</h1>
     <p>Self-hosted web tool for IT asset procurement — manage purchase requests, calculate prices, generate Excel sheets and specifications.</p>
     <div class="badges">
-      <span class="badge badge-blue"><!--VERSION-->26w35-r01<!--/VERSION--></span>
+      <span class="badge badge-blue"><!--VERSION-->26w36-b03<!--/VERSION--></span>
       <span class="badge badge-green">MIT</span>
       <span class="badge badge-green">Node.js 18+</span>
       <span class="badge badge-blue">SQLite</span>
@@ -469,6 +469,8 @@ elease.bat 26w36-r01</span><br>
         <tr><th>Переменная</th><th>По умолчанию</th><th>Описание</th></tr>
         <tr><td>PORT</td><td>9111</td><td>Порт HTTPS сервера. HTTP-редирект = PORT+1 (9112)</td></tr>
         <tr><td>PROCURE_PASSWORD</td><td><em>пусто</em></td><td>Legacy-режим единого пароля — см. «Аутентификация» ниже</td></tr>
+        <tr><td>PROCURE_INITIAL_ADMIN_PASSWORD</td><td><em>пусто</em></td><td>Задать пароль первого администратора явно (по умолчанию — случайный, выводится в консоль один раз)</td></tr>
+        <tr><td>PROCURE_TRUST_PROXY</td><td><em>false</em></td><td>Доверять <code>X-Forwarded-Proto</code>/<code>-Host</code> от reverse-proxy — включайте только если procure-it реально стоит за прокси, который сам их подставляет</td></tr>
         <tr><td>BACKUP_INTERVAL_MS</td><td>21600000</td><td>Интервал автобэкапа (мс). 21600000 = 6 часов</td></tr>
       </table>
     </div>
@@ -490,6 +492,8 @@ elease.bat 26w36-r01</span><br>
     <div class="alert alert-warn">
       <code>PROCURE_PASSWORD</code> — это <strong>legacy-заглушка</strong>, а не основной механизм входа: она работает только пока в базе вообще нет ни одного пользователя (например, самый первый запуск до первого входа через интерфейс). Как только появился хотя бы один пользователь, <code>PROCURE_PASSWORD</code> игнорируется — доступом управляют через интерфейс.
     </div>
+    <p>Сессия хранится в <code>HttpOnly</code>-, <code>Secure</code>-, <code>SameSite=Strict</code>-cookie (не доступна из JS на странице, поэтому не крадётся через XSS) и живёт 8 часов. Все запросы, изменяющие данные, дополнительно защищены от CSRF отдельным токеном (double-submit cookie) — фронтенд подставляет его автоматически, настраивать ничего не нужно.</p>
+    <p>Если procure-it работает за reverse-proxy (nginx/Caddy/Traefik), который сам подставляет корректные <code>X-Forwarded-Proto</code>/<code>X-Forwarded-Host</code>, включите <code>PROCURE_TRUST_PROXY=true</code> — иначе (по умолчанию) эти заголовки игнорируются, чтобы клиент не мог подделать ссылку в письме сброса пароля.</p>
   </section>
 
   <!-- Requests -->
@@ -855,6 +859,7 @@ docker exec -it procure-it sh # войти в контейнер</pre>
       <tr><th>Переменная</th><th>По умолчанию</th><th>Описание</th></tr>
       <tr><td>PORT</td><td>9111</td><td>HTTPS порт</td></tr>
       <tr><td>PROCURE_PASSWORD</td><td>не задан</td><td>Legacy-заглушка для самого первого запуска — см. <a href="#config" style="color:var(--accent)">«Аутентификация»</a></td></tr>
+      <tr><td>PROCURE_TRUST_PROXY</td><td>false</td><td>Доверять X-Forwarded-* от reverse-proxy — см. <a href="#config" style="color:var(--accent)">«Аутентификация»</a></td></tr>
       <tr><td>BACKUP_INTERVAL_MS</td><td>21600000</td><td>Интервал автобэкапа (мс)</td></tr>
     </table></div>
   </section>
@@ -943,7 +948,13 @@ docker exec -it procure-it sh # войти в контейнер</pre>
     <p>Отдельный слой поверх unit-тестов — гоняет настоящий Chromium против настоящего сервера (реальные клики, реальная форма логина, а не только HTTP-запросы напрямую):</p>
     <pre>npx playwright install chromium   # один раз
 npm run test:e2e</pre>
-    <p>Сеттап-проект (<code>e2e/auth.setup.js</code>) заводит admin/operator/viewer через API один раз на весь прогон и сохраняет сессию (<code>storageState</code> — токен в <code>localStorage</code>, приложение не использует куки для сессии), остальные тесты подключают готовую сессию вместо повторного прохождения формы логина. Покрытие: логин-форма и гостевой режим, организации (создание, дубликат короткого названия, редактирование, удаление), полный цикл заявки (создание с проверкой формулы наценки прямо в форме → сохранение → поиск в реестре → смена статуса → редактирование с пересчётом суммы → удаление), ролевые границы viewer/operator/admin — включая прямые API-запросы в обход UI (403/400 от сервера, не только «кнопка скрыта»). Сервер поднимается на изолированной временной директории данных (<code>PROCURE_DATA_DIR</code>) — не трогает <code>data/</code> репозитория. Пока не подключено в CI — прогоняется вручную.</p>
+    <p>Сеттап-проект (<code>e2e/auth.setup.js</code>) заводит admin/operator/viewer через API один раз на весь прогон и сохраняет сессию (<code>storageState</code>, куки — включая <code>HttpOnly</code>, снимается через <code>request.storageState()</code>, не через <code>localStorage</code>), остальные тесты подключают готовую сессию вместо повторного прохождения формы логина. Прямые API-вызовы в обход UI (проверка 403/400 от сервера) шлют CSRF отдельным заголовком <code>X-CSRF-Token</code>, значение — из cookie <code>csrf-token</code> (см. <code>e2e/helpers.js:csrfHeader()</code>). Покрытие: логин-форма и гостевой режим, организации (создание, дубликат короткого названия, редактирование, удаление), полный цикл заявки (создание с проверкой формулы наценки прямо в форме → сохранение → поиск в реестре → смена статуса → редактирование с пересчётом суммы → удаление), ролевые границы viewer/operator/admin — включая прямые API-запросы в обход UI (403/400 от сервера, не только «кнопка скрыта»). Сервер поднимается на изолированной временной директории данных (<code>PROCURE_DATA_DIR</code>) с фиксированным паролем первого админа (<code>PROCURE_INITIAL_ADMIN_PASSWORD</code> в <code>playwright.config.js</code>) — не трогает <code>data/</code> репозитория. Пока не подключено в CI — прогоняется вручную.</p>
+    <div class="alert alert-info">
+      Логика сеттапа проверена напрямую через API (curl-эквивалент login → change-password с CSRF —
+      обе стадии отвечают <code>ok:true</code>), а список тестов собирается без ошибок
+      (<code>npx playwright test --list</code>). Полный прогон в настоящем браузере на момент
+      написания не выполнялся — сделайте его перед тем, как полагаться на зелёный e2e в CI.
+    </div>
 
     <h3>CHANGELOG.md</h3>
     <p><code>CHANGELOG.md</code> в формате <a href="https://keepachangelog.com/ru/1.0.0/" target="_blank" style="color:var(--accent)">Keep a Changelog</a> — единственный источник истины по истории изменений. Раздел «Последние изменения» на странице <a href="#about-page" style="color:var(--accent)">«О системе»</a> парсит именно этот файл, отдельного списка в коде нет.</p>
@@ -988,7 +999,7 @@ tools\release\release.bat 26w36-r01
   </section>
 
   <div style="border-top:1px solid var(--border);margin-top:48px;padding-top:24px;color:var(--text2);font-size:12px;display:flex;justify-content:space-between;align-items:center">
-    <span>procure-it <!--VERSION-->26w35-r01<!--/VERSION--> · MIT License</span>
+    <span>procure-it <!--VERSION-->26w36-b03<!--/VERSION--> · MIT License</span>
     <a href="https://github.com/DarkyAndSparky" style="color:var(--text2);text-decoration:none">© DarkyAndSparky</a>
   </div>
 

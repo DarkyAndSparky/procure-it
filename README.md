@@ -2,7 +2,7 @@
 
 > Web-based IT asset procurement tool — manage purchase requests, generate Excel calculation sheets and specifications.
 
-[![Version](https://img.shields.io/badge/version-<!--VERSION_SHIELDS-->26w35--r01<!--/VERSION_SHIELDS-->-blue)](#)
+[![Version](https://img.shields.io/badge/version-<!--VERSION_SHIELDS-->26w36--b03<!--/VERSION_SHIELDS-->-blue)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-brightgreen)](https://nodejs.org/)
 [![SQLite](https://img.shields.io/badge/Database-SQLite-blue)](https://www.sqlite.org/)
@@ -91,8 +91,12 @@ cp .env.example .env
 ```env
 PORT=9111                        # HTTPS port (default 9111); HTTP redirect = PORT+1 (9112)
 # PROCURE_PASSWORD=yourpassword  # legacy fallback only — see "Authentication" below
+# PROCURE_INITIAL_ADMIN_PASSWORD=            # optional: fixed password for the auto-created first admin (default: random, printed once on first start)
+# PROCURE_TRUST_PROXY=true       # only if running behind a reverse proxy that overwrites X-Forwarded-Proto/-Host — see below
 BACKUP_INTERVAL_MS=21600000      # auto-backup interval (default 6 h)
 ```
+
+> **`PROCURE_TRUST_PROXY`** — off by default. The app reads `X-Forwarded-Proto`/`X-Forwarded-Host` (used to build the correct link in password-reset emails) only when this is `true`. Only enable it if procure-it sits behind a reverse proxy (nginx, Caddy, Traefik) that you control and that overwrites those headers — otherwise a client could forge them.
 
 ---
 
@@ -106,9 +110,11 @@ The app has a built-in multi-user system with three roles:
 | `operator` | Create/edit requests, orgs, upload files |
 | `admin` | Everything operator can, plus users, settings, restore |
 
-On first run a default admin account is created automatically — **login `admin` / password `admin0000`** — and the app forces a password change on first login. Manage additional users from the sidebar (admin only).
+On first run a default admin account is created automatically — login `admin`, with a random one-time password printed once to the console (or set via `PROCURE_INITIAL_ADMIN_PASSWORD`) — and the app forces a password change on first login. Manage additional users from the sidebar (admin only).
 
 `PROCURE_PASSWORD` is a **legacy fallback**, not the primary auth mechanism: it only takes effect if the `users` table is still empty (e.g. a fresh install where you haven't logged in via the UI yet). Once any user exists, `PROCURE_PASSWORD` is ignored — manage access through the UI instead.
+
+**Session security:** the session token lives in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie (not accessible from page JavaScript, so it can't be stolen via XSS) and expires after 8 hours. State-changing requests (create/edit/delete) are additionally protected against CSRF via a double-submit token — the frontend handles this automatically, nothing to configure.
 
 ---
 
@@ -140,13 +146,16 @@ procure-it/
 │       ├── auth.js, orgs.js, requests.js, files.js,
 │       └── backup.js, settings.js, docx.js, bitrix.js
 ├── public/
-│   ├── zakupki.html              # Markup only — no inline styles/scripts
+│   ├── zakupki.html               # Main app markup — event handlers attached via addEventListener
+│   ├── reset-password.html        # Standalone password-reset page (opened from the emailed link)
 │   ├── css/style.css
-│   └── js/                       # Loaded as plain <script src> (shared global scope, no bundler)
+│   └── js/                        # Loaded as plain <script src> (shared global scope, no bundler)
 │       ├── auth.js, positions.js, request-form.js, users.js, save-export.js,
 │       ├── request-detail.js, registry.js, files.js, modals-misc.js,
-│       ├── helpers.js, export-templates.js, config.js
-│       └── main.js               # Bootstrap — must load last
+│       ├── helpers.js, export-templates.js, config.js, pricing-core.js,
+│       ├── reset-password.js      # Logic for reset-password.html
+│       ├── inline-events.js       # addEventListener wiring for zakupki.html/reset-password.html — load last
+│       └── main.js                # App bootstrap — load right before inline-events.js
 ├── docs/
 │   └── index.html                # Project documentation site
 ├── tools/                         # Dev-only tooling (not included in main branch releases)
@@ -179,7 +188,7 @@ procure-it/
 └── LICENSE
 ```
 
-**Layering rule:** `routes/` handle HTTP concerns (validation, status codes) and delegate everything else; `services/` hold the actual business logic (docx building, file layout, backups); `db/connection.js` is the only module that touches the live sql.js instance directly — everything else goes through `query()`/`run()`/`saveDb()`. Frontend JS files share one global scope on purpose (loaded in dependency order, `main.js` last) so the many `onclick="..."` handlers in the markup keep working without a bundler.
+**Layering rule:** `routes/` handle HTTP concerns (validation, status codes) and delegate everything else; `services/` hold the actual business logic (docx building, file layout, backups); `db/connection.js` is the only module that touches the live sql.js instance directly — everything else goes through `query()`/`run()`/`saveDb()`. Frontend JS files share one global scope on purpose (loaded in dependency order, `main.js` last, `inline-events.js` last of all) so functions defined in one file are callable from another without a bundler or `import`/`export`.
 
 ---
 
@@ -221,7 +230,8 @@ cd procure-it
 # Запуск (без пароля — используется встроенная система ролей)
 docker compose up -d
 
-# Первый вход: admin / admin0000  — система сразу попросит сменить пароль
+# Первый вход: admin / <пароль из лога контейнера> — docker compose logs покажет
+# одноразовый пароль первого администратора; система сразу попросит сменить пароль
 ```
 
 Откройте **https://localhost:9111** (примите предупреждение о самоподписанном сертификате).
@@ -234,6 +244,7 @@ docker compose up -d
 # Создайте .env файл (docker compose подхватит автоматически):
 PORT=9111                        # HTTPS порт (HTTP redirect = PORT+1)
 PROCURE_PASSWORD=                # legacy single-password режим (оставьте пустым — используйте UI)
+# PROCURE_TRUST_PROXY=true       # только если procure-it за reverse-proxy, который сам подставляет X-Forwarded-*
 BACKUP_INTERVAL_MS=21600000      # интервал автобэкапа (6 часов)
 ```
 

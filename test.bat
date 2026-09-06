@@ -1,19 +1,18 @@
 @echo off
 setlocal
-chcp 65001 >nul 2>&1
 cd /d "%~dp0"
 
-echo === procure-it - тесты ===
+echo === procure-it - tests ===
 echo.
 
 if not exist node_modules (
-  echo Зависимости ещё не установлены. Устанавливаю сейчас...
-  echo ЭТО МОЖЕТ ЗАНЯТЬ МИНУТУ-ДВЕ ^(особенно первый раз^) — НЕ ЗАКРЫВАЙТЕ ОКНО,
-  echo даже если кажется, что ничего не происходит.
+  echo Dependencies not installed yet. Installing now...
+  echo THIS MAY TAKE A MINUTE OR TWO ^(especially the first time^) - DO NOT CLOSE THIS WINDOW,
+  echo even if nothing seems to be happening.
   echo.
   call npm install
   if errorlevel 1 (
-    echo Установка зависимостей не удалась. Проверьте сообщение выше.
+    echo Dependency installation failed. Check the message above.
     pause
     exit /b 1
   )

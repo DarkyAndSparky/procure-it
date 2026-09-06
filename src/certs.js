@@ -16,8 +16,8 @@ function ensureCert() {
       }
     } catch(e) {}
     console.log('[HTTPS] Сертификат повреждён, пересоздаём...');
-    try { fs.unlinkSync(KEY_FILE);  } catch(e) {}
-    try { fs.unlinkSync(CERT_FILE); } catch(e) {}
+    try { fs.unlinkSync(KEY_FILE);  } catch(e) { console.warn('[HTTPS] Не удалось удалить старый key.pem:', e.message); }
+    try { fs.unlinkSync(CERT_FILE); } catch(e) { console.warn('[HTTPS] Не удалось удалить старый cert.pem:', e.message); }
   }
 
   console.log('[HTTPS] Генерация самоподписанного сертификата...');

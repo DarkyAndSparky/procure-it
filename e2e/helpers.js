@@ -107,4 +107,14 @@ function money(amount) {
   return new RegExp(`${grouped},${fracPart}`);
 }
 
-module.exports = { CREDS, uniq, waitToast, gotoPage, createOrgViaUi, fillNewRequestForm, money };
+/** Заголовок X-CSRF-Token для прямых API-вызовов в обход UI: сессия теперь
+ * в HttpOnly cookie (шлётся браузером/APIRequestContext сама), но не-GET
+ * запросы дополнительно защищены CSRF (double-submit) — нужно продублировать
+ * значение НЕ-httpOnly cookie csrf-token в заголовке. */
+async function csrfHeader(page) {
+  const cookies = await page.context().cookies();
+  const csrf = cookies.find(c => c.name === 'csrf-token');
+  return { 'X-CSRF-Token': csrf ? csrf.value : '' };
+}
+
+module.exports = { CREDS, uniq, waitToast, gotoPage, createOrgViaUi, fillNewRequestForm, money, csrfHeader };

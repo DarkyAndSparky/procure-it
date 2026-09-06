@@ -145,7 +145,7 @@ async function saveSpecWord() {
   try {
     const res = await fetch('/api/spec-docx', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': authToken },
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
       body: JSON.stringify(req)
     });
     if (!res.ok) throw new Error(await res.text());

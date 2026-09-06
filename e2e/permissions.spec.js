@@ -5,7 +5,7 @@
 // role-guard, а write-запрос — в серверный (403), а не в тихий успех.
 const path = require('path');
 const { test, expect } = require('@playwright/test');
-const { CREDS, uniq, waitToast, gotoPage } = require('./helpers');
+const { CREDS, uniq, waitToast, gotoPage, csrfHeader } = require('./helpers');
 
 test.describe('Роль: viewer', () => {
   test.use({ storageState: path.join(__dirname, '.auth', 'viewer.json') });
@@ -34,40 +34,45 @@ test.describe('Роль: viewer', () => {
   });
 
   test('прямой POST /api/orgs в обход UI получает 403 от сервера, а не тихий успех', async ({ page, request }) => {
-    // Токен viewer лежит в localStorage этой же сессии — переиспользуем его,
-    // чтобы проверить именно СЕРВЕРНУЮ, а не только клиентскую защиту:
-    // спрятанная кнопка — это UX, а не security-граница.
+    // Сессия viewer — в HttpOnly cookie этого же browser-контекста, `request`
+    // фикстура (та же storageState) шлёт её автоматически. Проверяем именно
+    // СЕРВЕРНУЮ, а не только клиентскую защиту: спрятанная кнопка — это UX,
+    // а не security-граница.
     await page.goto('/');
-    const token = await page.evaluate(() => localStorage.getItem('procure_token'));
     const res = await request.post('/api/orgs', {
-      headers: { 'X-Auth-Token': token },
+      headers: await csrfHeader(page),
       data: { full: 'Не должно создаться', short: uniq('nope') },
     });
     expect(res.status()).toBe(403);
   });
 
-  test('статус заявки нельзя менять из реестра — select задизейблен', async ({ page, request }) => {
-    // Сидируем и организацию, и заявку через API от имени оператора — не
+  test('статус заявки нельзя менять из реестра — select задизейблен', async ({ page }) => {
+    // Сидируем и организацию, и заявку через API от имени ОПЕРАТОРА — не
     // полагаемся на данные, оставшиеся от других спеков (порядок запуска
-    // файлов явно не гарантирован конфигом).
-    const opState = require(path.join(__dirname, '.auth', 'operator.json'));
-    const opToken = opState.origins[0].localStorage.find(x => x.name === 'procure_token').value;
+    // файлов явно не гарантирован конфигом). Отдельный APIRequestContext с
+    // operator.json storageState, а не переиспользование viewer-сессии
+    // текущего теста — иначе испортили бы её для этого же теста.
+    const { request: pwRequest } = require('@playwright/test');
+    const opCtx = await pwRequest.newContext({ storageState: path.join(__dirname, '.auth', 'operator.json') });
+    const opState = await opCtx.storageState();
+    const opCsrf = opState.cookies.find(c => c.name === 'csrf-token')?.value || '';
 
-    const orgRes = await request.post('/api/orgs', {
-      headers: { 'X-Auth-Token': opToken },
+    const orgRes = await opCtx.post('/api/orgs', {
+      headers: { 'X-CSRF-Token': opCsrf },
       data: { full: `ООО "${uniq('Viewer-RO-Org')}"`, short: uniq('VRO') },
     });
     expect(orgRes.ok()).toBeTruthy();
     const org = await orgRes.json();
 
     const name = uniq('Viewer-RO-Check');
-    await request.post('/api/requests', {
-      headers: { 'X-Auth-Token': opToken },
+    await opCtx.post('/api/requests', {
+      headers: { 'X-CSRF-Token': opCsrf },
       data: {
         orgId: org.id, name, date: new Date().toISOString().slice(0, 10),
         specNum: uniq('П-RO'), positions: [{ name: 'x', qty: 1, unit: 'шт', purchasePrice: 1, purchaseSum: 1, sellPerUnit: 1, sellSum: 1 }],
       },
     });
+    await opCtx.dispose();
 
     await page.goto('/');
     await gotoPage(page, 'registry');
@@ -97,9 +102,8 @@ test.describe('Роль: operator', () => {
 
   test('прямой POST /api/users в обход UI получает 403', async ({ page, request }) => {
     await page.goto('/');
-    const token = await page.evaluate(() => localStorage.getItem('procure_token'));
     const res = await request.post('/api/users', {
-      headers: { 'X-Auth-Token': token },
+      headers: await csrfHeader(page),
       data: { username: uniq('should-not-exist'), password: 'whatever12345', role: 'admin' },
     });
     expect(res.status()).toBe(403);
@@ -133,12 +137,12 @@ test.describe('Роль: admin', () => {
   test('нельзя понизить собственную роль с admin (self-demotion guard)', async ({ page, request }) => {
     await page.goto('/');
     await gotoPage(page, 'config');
-    const token = await page.evaluate(() => localStorage.getItem('procure_token'));
-    const usersRes = await request.get('/api/users', { headers: { 'X-Auth-Token': token } });
+    const headers = await csrfHeader(page);
+    const usersRes = await request.get('/api/users');
     const users = await usersRes.json();
     const self = users.find(u => u.username === CREDS.admin.username);
     const res = await request.put(`/api/users/${self.id}`, {
-      headers: { 'X-Auth-Token': token },
+      headers,
       data: { role: 'viewer' },
     });
     expect(res.status()).toBe(400);

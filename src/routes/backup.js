@@ -26,7 +26,16 @@ module.exports = (strictLimiter) => {
       invoiceFileOriginalName: rawFileRows[r.id]?.invoice_file_original_name || '',
     }));
     const addresses = query('SELECT address FROM addresses').map(r => r.address);
-    const templates = query('SELECT * FROM templates').map(r => ({ ...r, positions: JSON.parse(r.positions||'[]') }));
+    const templates = query('SELECT * FROM templates').map(r => {
+      let positions = [];
+      try {
+        const parsed = JSON.parse(r.positions || '[]');
+        if (Array.isArray(parsed)) positions = parsed;
+      } catch(e) {
+        console.warn(`[backup] Битый JSON в positions шаблона ${r.id}, подставлен [] — не даём одному битому шаблону сорвать весь экспорт бэкапа:`, e.message);
+      }
+      return { ...r, positions };
+    });
     const date = new Date().toISOString().slice(0,10);
     const auditRows = query('SELECT * FROM audit_log ORDER BY id DESC LIMIT 1000');
     const settingsRows = query('SELECT key, value FROM settings');
@@ -229,7 +238,8 @@ module.exports = (strictLimiter) => {
       db.run('COMMIT');
       saveDb();
       // Invalidate all sessions after restore — DB state changed, force re-login
-      try { db.run('DELETE FROM sessions'); saveDb(); } catch(e) {}
+      try { db.run('DELETE FROM sessions'); saveDb(); }
+      catch(e) { console.error('[restore] Не удалось инвалидировать сессии после восстановления — старые сессии могут остаться активными:', e.message); }
       res.json({
         ok: true,
         restored: { orgs: orgsInserted, requests: requestsInserted, users: usersInserted },

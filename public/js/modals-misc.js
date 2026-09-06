@@ -51,10 +51,8 @@ document.addEventListener('click', function(e) {
 // ── Logout ───────────────────────────────────────────────────────────────────
 async function doLogout() {
   try { await api('POST', '/api/auth/logout'); } catch(e) {}
-  authToken = '';
   userRole  = 'viewer';
   userName  = null;
-  localStorage.removeItem('procure_token');
   updateRoleUI();
   // Переводим на реестр — гость не имеет права оставаться на страницах
   // config/new/orgs/about, которые требуют operator или admin.

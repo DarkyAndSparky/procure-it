@@ -18,9 +18,7 @@ async function uploadSignedSpec(id, input) {
 
 async function downloadSignedSpec(id, specNum, orgShort) {
   try {
-    const res = await fetch(`/api/requests/${id}/signed-spec`, {
-      headers: authToken ? { 'X-Auth-Token': authToken } : {}
-    });
+    const res = await fetch(`/api/requests/${id}/signed-spec`);
     if (!res.ok) throw new Error(await res.text());
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -53,9 +51,7 @@ async function uploadInvoiceFile(id, input) {
 
 async function downloadInvoiceFile(id, specNum) {
   try {
-    const res = await fetch(`/api/requests/${id}/invoice-file`, {
-      headers: authToken ? { 'X-Auth-Token': authToken } : {}
-    });
+    const res = await fetch(`/api/requests/${id}/invoice-file`);
     if (!res.ok) throw new Error(await res.text());
     const cd = res.headers.get('Content-Disposition') || '';
     const m = /filename="([^"]+)"/.exec(cd);
@@ -74,7 +70,7 @@ async function openRequestFolder(id, rootPathOverride) {
   try {
     const res = await fetch(`/api/requests/${id}/open-folder`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(authToken ? { 'X-Auth-Token': authToken } : {}) },
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
       body: JSON.stringify(body)
     });
     const result = await res.json().catch(() => ({}));
@@ -102,9 +98,7 @@ async function openRequestFolder(id, rootPathOverride) {
 async function downloadBackup(type) {
   const url = type === 'db' ? '/api/backup/db' : '/api/backup';
   try {
-    const res = await fetch(url, {
-      headers: authToken ? { 'X-Auth-Token': authToken } : {}
-    });
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
     const cd   = res.headers.get('content-disposition') || '';
@@ -173,8 +167,8 @@ async function proceedRestoreConfirm() {
   btn.disabled = true; btn.textContent = '⏳ Восстанавливаю…';
   try {
     const result = await api('POST', '/api/restore', data);
-    // Server invalidated all sessions after restore — clear local token and reload
-    localStorage.removeItem('procure_token');
+    // Server invalidated all sessions after restore — cookie auth-token no
+    // longer valid; page reload below will trigger the login modal again.
     const f = result?.files;
     let msg = '✓ Данные восстановлены.';
     if (f && (f.restored || f.missing)) {

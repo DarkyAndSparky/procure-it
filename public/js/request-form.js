@@ -189,7 +189,7 @@ async function layoutFilesToFolder(reqId, req) {
   try {
     const res = await fetch('/api/spec-docx', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': authToken },
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
       body: JSON.stringify(specReq)
     });
     if (res.ok) {

@@ -1,14 +1,13 @@
 @echo off
 setlocal
-chcp 65001 >nul 2>&1
 cd /d "%~dp0"
 
-echo === procure-it - E2E-тесты (Playwright) ===
+echo === procure-it - E2E tests (Playwright) ===
 echo.
 
 where node >nul 2>nul
 if errorlevel 1 (
-  echo Node.js не найден. Установите Node.js 18 или новее и запустите файл снова.
+  echo Node.js not found. Install Node.js 18 or newer and run this file again.
   pause
   exit /b 1
 )
@@ -19,60 +18,61 @@ if errorlevel 1 (
   exit /b 1
 )
 
-rem E2E требует не только runtime-зависимости, но и @playwright/test.
-rem Поэтому проверяем свежесть lock-файла и наличие dev-зависимости, а не
-rem ограничиваемся существованием папки node_modules.
+rem E2E needs not only the runtime dependencies but also @playwright/test.
+rem So we check both lock-file freshness and the dev dependency itself,
+rem not just whether node_modules exists.
 set "NEED_INSTALL=0"
 node scripts\check-deps-fresh.js
 if errorlevel 1 set "NEED_INSTALL=1"
 if not exist "node_modules\@playwright\test" set "NEED_INSTALL=1"
 
 if "%NEED_INSTALL%"=="1" (
-  echo Устанавливаю зафиксированные зависимости для E2E-тестов...
-  echo ЭТО МОЖЕТ ЗАНЯТЬ МИНУТУ-ДВЕ ^(особенно первый раз^) — НЕ ЗАКРЫВАЙТЕ ОКНО,
-  echo даже если кажется, что ничего не происходит.
+  echo Installing locked dependencies for E2E tests...
+  echo THIS MAY TAKE A MINUTE OR TWO ^(especially the first time^) - DO NOT CLOSE THIS WINDOW,
+  echo even if nothing seems to be happening.
   echo.
   call npm ci
   if errorlevel 1 (
-    echo Установка зависимостей не удалась. Проверьте сообщение выше.
+    echo Dependency installation failed. Check the message above.
     pause
     exit /b 1
   )
   echo.
 )
 
-rem Браузер Chromium для Playwright не входит в npm install и качается
-rem отдельно (~150-300MB) — проверяем, стоит ли он уже (по кэшу Playwright
-rem в %USERPROFILE%\AppData\Local\ms-playwright), чтобы не тянуть заново
-rem на каждый прогон.
+rem Playwright's Chromium browser is not part of npm install and is
+rem downloaded separately (~150-300MB) - check whether it is already
+rem installed (via the Playwright cache under
+rem %USERPROFILE%\AppData\Local\ms-playwright) so we do not re-download
+rem it on every run.
 set "PLAYWRIGHT_CACHE=%USERPROFILE%\AppData\Local\ms-playwright"
 set "CHROMIUM_FOUND=0"
 if exist "%PLAYWRIGHT_CACHE%" (
   for /d %%D in ("%PLAYWRIGHT_CACHE%\chromium-*") do set "CHROMIUM_FOUND=1"
 )
 if "%CHROMIUM_FOUND%"=="0" (
-  echo Браузер Chromium для Playwright ещё не установлен. Устанавливаю...
-  echo Это может занять несколько минут при первом запуске — не закрывайте окно.
+  echo Playwright's Chromium browser is not installed yet. Installing...
+  echo This may take a few minutes the first time - do not close this window.
   echo.
   call npx playwright install chromium
   if errorlevel 1 (
-    echo Установка браузера Chromium не удалась. Проверьте сообщение выше.
+    echo Chromium installation failed. Check the message above.
     pause
     exit /b 1
   )
   echo.
 )
 
-echo Запускаю полный E2E-набор в Playwright...
+echo Running the full E2E suite in Playwright...
 echo.
 call npm run test:e2e
 if errorlevel 1 (
   echo.
-  echo E2E-тесты завершились с ошибкой. Подробности указаны выше.
+  echo E2E tests failed. See details above.
   pause
   exit /b 1
 )
 
 echo.
-echo E2E-тесты успешно пройдены.
+echo E2E tests passed.
 pause

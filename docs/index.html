@@ -333,7 +333,7 @@
 <aside class="sidebar">
   <div class="sidebar-logo">
     <h1>procure-it</h1>
-    <span class="version"><!--VERSION-->26w36-b03<!--/VERSION--></span>
+    <span class="version"><!--VERSION-->26w36-b06<!--/VERSION--></span>
   </div>
   <div class="nav-section">Начало</div>
   <a href="#intro"     class="nav-link active">О проекте</a>
@@ -374,7 +374,7 @@
     <h1>procure-it</h1>
     <p>Self-hosted web tool for IT asset procurement — manage purchase requests, calculate prices, generate Excel sheets and specifications.</p>
     <div class="badges">
-      <span class="badge badge-blue"><!--VERSION-->26w36-b03<!--/VERSION--></span>
+      <span class="badge badge-blue"><!--VERSION-->26w36-b06<!--/VERSION--></span>
       <span class="badge badge-green">MIT</span>
       <span class="badge badge-green">Node.js 18+</span>
       <span class="badge badge-blue">SQLite</span>
@@ -949,11 +949,15 @@ docker exec -it procure-it sh # войти в контейнер</pre>
     <pre>npx playwright install chromium   # один раз
 npm run test:e2e</pre>
     <p>Сеттап-проект (<code>e2e/auth.setup.js</code>) заводит admin/operator/viewer через API один раз на весь прогон и сохраняет сессию (<code>storageState</code>, куки — включая <code>HttpOnly</code>, снимается через <code>request.storageState()</code>, не через <code>localStorage</code>), остальные тесты подключают готовую сессию вместо повторного прохождения формы логина. Прямые API-вызовы в обход UI (проверка 403/400 от сервера) шлют CSRF отдельным заголовком <code>X-CSRF-Token</code>, значение — из cookie <code>csrf-token</code> (см. <code>e2e/helpers.js:csrfHeader()</code>). Покрытие: логин-форма и гостевой режим, организации (создание, дубликат короткого названия, редактирование, удаление), полный цикл заявки (создание с проверкой формулы наценки прямо в форме → сохранение → поиск в реестре → смена статуса → редактирование с пересчётом суммы → удаление), ролевые границы viewer/operator/admin — включая прямые API-запросы в обход UI (403/400 от сервера, не только «кнопка скрыта»). Сервер поднимается на изолированной временной директории данных (<code>PROCURE_DATA_DIR</code>) с фиксированным паролем первого админа (<code>PROCURE_INITIAL_ADMIN_PASSWORD</code> в <code>playwright.config.js</code>) — не трогает <code>data/</code> репозитория. Пока не подключено в CI — прогоняется вручную.</p>
-    <div class="alert alert-info">
-      Логика сеттапа проверена напрямую через API (curl-эквивалент login → change-password с CSRF —
-      обе стадии отвечают <code>ok:true</code>), а список тестов собирается без ошибок
-      (<code>npx playwright test --list</code>). Полный прогон в настоящем браузере на момент
-      написания не выполнялся — сделайте его перед тем, как полагаться на зелёный e2e в CI.
+    <div class="alert alert-green">
+      Прогнан полностью на реальной Windows (Chromium через Playwright) — 23/23 тестов зелёные.
+      В процессе поймал две реальные регрессии, которых не увидел статический аудит кода: CSP
+      <code>script-src-attr</code> без <code>unsafe-inline</code> молча ломал все динамически
+      генерируемые обработчики (<code>innerHTML</code>-шаблоны логин-модалки, строк реестра, позиций —
+      см. <code>server.js</code>, откачен обратно), и регистрозависимый поиск по кириллице в реестре
+      заявок (SQLite <code>LIKE</code> регистронезависим только для ASCII — см. <code>requests.js</code>,
+      поиск по <code>q</code> перенесён на JS-фильтрацию). Оба фикса — в CHANGELOG (<code>26w36-b03</code>,
+      <code>26w36-b04</code>).
     </div>
 
     <h3>CHANGELOG.md</h3>
@@ -999,7 +1003,7 @@ tools\release\release.bat 26w36-r01
   </section>
 
   <div style="border-top:1px solid var(--border);margin-top:48px;padding-top:24px;color:var(--text2);font-size:12px;display:flex;justify-content:space-between;align-items:center">
-    <span>procure-it <!--VERSION-->26w36-b03<!--/VERSION--> · MIT License</span>
+    <span>procure-it <!--VERSION-->26w36-b06<!--/VERSION--> · MIT License</span>
     <a href="https://github.com/DarkyAndSparky" style="color:var(--text2);text-decoration:none">© DarkyAndSparky</a>
   </div>
 

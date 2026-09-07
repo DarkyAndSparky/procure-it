@@ -32,6 +32,16 @@ echo [1/9] package.json ...
 node "%~dp0release-bump.js" "%NEW_VER%"
 if errorlevel 1 ( echo ERROR: package.json & exit /b 1 )
 
+echo [1b/9] sync package-lock.json version field ...
+rem release-bump.js only updates the version in package.json - without this
+rem step package-lock.json keeps the old version number in its top-level
+rem "version" field (bug found while reviewing this script: git add below
+rem would commit package-lock.json with a version that does not match
+rem package.json).
+rem --package-lock-only does not touch node_modules - fast, no full install.
+call npm install --package-lock-only
+if errorlevel 1 ( echo ERROR: package-lock.json sync & exit /b 1 )
+
 echo [2/9] npm run version:sync ...
 call npm run version:sync
 if errorlevel 1 ( echo ERROR: version:sync & exit /b 1 )

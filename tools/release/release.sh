@@ -28,6 +28,15 @@ echo
 echo "[1/9] package.json ..."
 node "$(dirname "$0")/release-bump.js" "$NEW_VER"
 
+echo "[1b/9] sync package-lock.json version field ..."
+# release-bump.js only updates the version in package.json - without this
+# step package-lock.json keeps the old version number in its top-level
+# "version" field (bug found while reviewing this script: git add below
+# would commit package-lock.json with a version that does not match
+# package.json).
+# --package-lock-only does not touch node_modules - fast, no full install.
+npm install --package-lock-only
+
 echo "[2/9] npm run version:sync ..."
 npm run version:sync
 

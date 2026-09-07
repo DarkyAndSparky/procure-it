@@ -96,33 +96,43 @@ router.get('/requests', (req, res) => {
   if (req.query.status)   { sql += ' AND status=?';     params.push(req.query.status); }
   if (req.query.supplier) { sql += ' AND supplier=?'; params.push(req.query.supplier); }
   if (req.query.counterparty) { sql += ' AND counterparty=?'; params.push(req.query.counterparty); }
-  if (req.query.q) {
-    sql += ' AND (name LIKE ? OR mol LIKE ? OR spec_num LIKE ? OR bitrix LIKE ? OR positions LIKE ?)';
-    const q = '%' + req.query.q + '%';
-    params.push(q, q, q, q, q);
-  }
+  // Свободный текстовый поиск (q) НЕ идёт через SQL LIKE: SQLite делает
+  // регистронезависимое сравнение в LIKE только для ASCII — для кириллицы
+  // (и любого другого не-ASCII) регистр учитывается буквально. Из-за этого
+  // поиск "закуп" не находил сохранённое "Закуп" (баг, найден реальным e2e-
+  // прогоном: фронтенд приводит запрос к нижнему регистру через JS
+  // toLowerCase(), который корректно ICU-aware, а SQLite LIKE — нет).
+  // Фильтруем в JS уже после остальных SQL-фильтров — набор для конкретной
+  // организации/месяца/статуса в self-hosted инструменте небольшой (БД и
+  // так целиком в памяти у sql.js), так что это не проблема производительности.
   sql += ' ORDER BY created_at DESC';
+
+  let rows = query(sql, params);
+
+  if (req.query.q) {
+    const q = req.query.q.toLowerCase();
+    rows = rows.filter(row =>
+      (row.name      || '').toLowerCase().includes(q) ||
+      (row.mol       || '').toLowerCase().includes(q) ||
+      (row.spec_num  || '').toLowerCase().includes(q) ||
+      (row.bitrix    || '').toLowerCase().includes(q) ||
+      (row.positions || '').toLowerCase().includes(q)
+    );
+  }
 
   // Server-side pagination — default 100 per page, max 500
   const limit  = Math.min(parseInt(req.query.limit  || '100'), 500);
   const offset = Math.max(parseInt(req.query.offset || '0'),   0);
-
-  // Count total matching rows for pagination metadata
-  const countSql = sql
-    .replace(/^SELECT \*/, 'SELECT COUNT(*) as total')
-    .replace(/ ORDER BY .+$/, '');
-  const total = query(countSql, params)[0]?.total || 0;
-
-  sql += ` LIMIT ? OFFSET ?`;
-  params.push(limit, offset);
+  const total  = rows.length;
 
   res.json({
-    items:  query(sql, params).map(rowToRequest),
+    items: rows.slice(offset, offset + limit).map(rowToRequest),
     total,
     limit,
     offset,
   });
 });
+
 
 router.get('/requests/:id', (req, res) => {
   const row = query('SELECT * FROM requests WHERE id=?', [req.params.id])[0];

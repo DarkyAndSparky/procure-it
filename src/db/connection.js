@@ -18,7 +18,41 @@ function saveDb() {
   // the old or the new complete version.
   const tmpFile = `${DB_FILE}.tmp-${process.pid}`;
   fs.writeFileSync(tmpFile, Buffer.from(data));
-  fs.renameSync(tmpFile, DB_FILE);
+  // На Windows rename() поверх DB_FILE может кратковременно упасть с EPERM/
+  // EBUSY, если файл в этот момент открыт другим процессом — антивирусное
+  // сканирование, индексатор, а особенно OneDrive Known Folder Move (когда
+  // папка Desktop/Documents синхронизируется в облако — очень частая
+  // конфигурация на корпоративных Windows) регулярно ненадолго блокируют
+  // файл сразу после записи. Баг воспроизведён вживую: смена пароля падала
+  // с "EPERM: operation not permitted, rename ... zakupki.db.tmp-N ->
+  // zakupki.db" прямо в UI. На POSIX (Linux/macOS) rename() не требует,
+  // чтобы целевой файл был не занят, так что там это в принципе не
+  // воспроизводится — проблема чисто Windows-специфичная. Блокировка почти
+  // всегда снимается сама за десятки-сотни миллисекунд, поэтому retry с
+  // короткой синхронной паузой (Atomics.wait — единственный способ
+  // синхронно подождать в Node.js без внешних зависимостей) решает
+  // подавляющее большинство случаев, не переводя весь путь БД на async.
+  const isWindowsLockError = e => e && (e.code === 'EPERM' || e.code === 'EBUSY');
+  const MAX_ATTEMPTS = 8;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      fs.renameSync(tmpFile, DB_FILE);
+      return;
+    } catch (e) {
+      if (!isWindowsLockError(e) || attempt === MAX_ATTEMPTS) {
+        // Не удалось даже после всех попыток — подчищаем временный файл,
+        // чтобы он не копился при каждом неудачном saveDb(), и пробрасываем
+        // ошибку дальше. Вызывающий код (routes/*.js) должен считать, что
+        // изменения НЕ сохранены на диск, даже если run() уже применился к
+        // in-memory базе — см. комментарии в auth.js/change-password.
+        try { fs.unlinkSync(tmpFile); } catch (_) {}
+        throw e;
+      }
+      const delayMs = Math.min(20 * attempt, 150);
+      const sab = new SharedArrayBuffer(4);
+      Atomics.wait(new Int32Array(sab), 0, 0, delayMs);
+    }
+  }
 }
 
 async function initDb() {
@@ -41,8 +75,33 @@ function query(sql, params = []) {
 }
 
 function run(sql, params = []) {
-  try { db.run(sql, params); saveDb(); return true; }
-  catch(e) { console.error('Run error:', sql, e.message); return false; }
+  try {
+    db.run(sql, params);
+  } catch (e) {
+    // SQL-ошибка (constraint violation и т.п.) — поведение как раньше:
+    // молча возвращаем false, вызывающий код (requests.js — создание/
+    // редактирование заявки) сам решает, что сказать пользователю
+    // ("номер спецификации уже занят"). Эта ветка НЕ связана с записью
+    // на диск, поэтому throw здесь не нужен и сломал бы то сообщение.
+    console.error('Run error (SQL):', sql, e.message);
+    return false;
+  }
+  // db.run() выше уже применился к in-memory БД. saveDb() (запись на диск)
+  // может упасть отдельно — раньше это тоже тихо глоталось тем же catch,
+  // что и SQL-ошибки, и функция всегда возвращала false без разбора причины.
+  // Нашли вживую: 70 из 72 мест, вызывающих run() в проекте, НЕ проверяют
+  // возвращаемое значение вообще — при таком глотании клиент получал
+  // res.json({ok:true}) и не подозревал, что на диск ничего не записалось
+  // (после перезапуска сервера/сбоя изменения бы просто исчезли). saveDb()
+  // теперь бросает наружу вместо возврата false — непойманное исключение
+  // в route попадает в глобальный error handler (server.js) и отдаёт
+  // клиенту честную 500 вместо молчаливого ложного успеха. Для route'ов,
+  // где нужен явный откат in-memory состояния при такой ошибке (например
+  // src/routes/auth.js — смена пароля), там теперь свой try/catch вокруг
+  // run() с откатом; для большинства обычных INSERT/UPDATE достаточно
+  // самой по себе 500-ошибки — клиент не решит, что изменение прошло.
+  saveDb();
+  return true;
 }
 
 // Заявка из строки БД → камелкейс-объект для API. PDF-поля отдаются как

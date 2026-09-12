@@ -82,8 +82,27 @@ module.exports = (strictLimiter) => {
       }
     }
     const newSalt = generateSalt();
-    run('UPDATE users SET password=?, salt=?, must_change_password=0 WHERE id=?', [hashPassword(newPassword, newSalt), newSalt, user.id]);
-    saveDb();
+    // Читаем старые значения ДО изменения — понадобятся для отката, если
+    // запись на диск не удастся (run() теперь бросает исключение именно в
+    // этом случае — см. комментарий в db/connection.js). db.run() внутри
+    // run() применяется к in-memory БД МГНОВЕННО, до попытки сохранить на
+    // диск — если сохранение не удастся, память и диск разойдутся без
+    // явного отката (нашли вживую: первая попытка падала при записи на
+    // диск, но must_change_password=0 уже применился в памяти, и повторная
+    // попытка сразу требовала текущий пароль, которого пользователь не
+    // ожидал вводить для временного пароля).
+    const oldRow = getDb().exec('SELECT password, salt, must_change_password FROM users WHERE id=?', [user.id])[0]?.values?.[0];
+    try {
+      run('UPDATE users SET password=?, salt=?, must_change_password=0 WHERE id=?', [hashPassword(newPassword, newSalt), newSalt, user.id]);
+    } catch (e) {
+      if (oldRow) {
+        try {
+          run('UPDATE users SET password=?, salt=?, must_change_password=? WHERE id=?', [oldRow[0], oldRow[1], oldRow[2], user.id]);
+        } catch (_) { /* если и откат не сохранился на диск — ситуация уже вне восстановления в рамках одного запроса, отдаём общую 500 ниже */ }
+      }
+      console.error('[auth] Не удалось сохранить смену пароля на диск:', e.message);
+      return res.status(500).json({ error: 'Не удалось сохранить изменения. Попробуйте ещё раз.' });
+    }
     res.json({ ok: true });
   });
 
@@ -189,7 +208,12 @@ module.exports = (strictLimiter) => {
       saveDb();
       res.json({ ok: true });
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      // Не отдаём e.message как есть — тот же класс утечки, что чинили в
+      // глобальном error-handler'е (server.js): непредвиденная ошибка (в
+      // т.ч. неудачная запись на диск) могла бы показать пользователю
+      // технические детали сервера вместо понятного сообщения.
+      console.error('[auth] Ошибка при сбросе пароля по токену:', e.message);
+      res.status(500).json({ error: 'Не удалось сохранить изменения. Попробуйте ещё раз.' });
     }
   });
 
@@ -208,11 +232,11 @@ module.exports = (strictLimiter) => {
       const hash = hashPassword(password, salt);
       const userEmail = (email || '').trim().toLowerCase();
       run('INSERT INTO users (username, password, salt, role, email) VALUES (?,?,?,?,?)', [username, hash, salt, role, userEmail]);
-      saveDb();
       res.json({ ok: true });
     } catch(e) {
       if (e.message.includes('UNIQUE')) return res.status(409).json({ error: 'Пользователь уже существует' });
-      res.status(500).json({ error: e.message });
+      console.error('[auth] Ошибка при создании пользователя:', e.message);
+      res.status(500).json({ error: 'Не удалось сохранить изменения. Попробуйте ещё раз.' });
     }
   });
 
@@ -235,7 +259,6 @@ module.exports = (strictLimiter) => {
     }
     if (role) run('UPDATE users SET role=? WHERE id=?', [role, req.params.id]);
     if (email !== undefined) run('UPDATE users SET email=? WHERE id=?', [(email || '').trim().toLowerCase(), req.params.id]);
-    saveDb();
     res.json({ ok: true });
   });
 
@@ -248,7 +271,6 @@ module.exports = (strictLimiter) => {
     }
     run('DELETE FROM users WHERE id=?', [req.params.id]);
     run('DELETE FROM sessions WHERE user_id=?', [req.params.id]);
-    saveDb();
     res.json({ ok: true });
   });
 

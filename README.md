@@ -2,7 +2,7 @@
 
 > Web-based IT asset procurement tool — manage purchase requests, generate Excel calculation sheets and specifications.
 
-[![Version](https://img.shields.io/badge/version-<!--VERSION_SHIELDS-->26w36--b06<!--/VERSION_SHIELDS-->-blue)](#)
+[![Version](https://img.shields.io/badge/version-<!--VERSION_SHIELDS-->26w36--b12<!--/VERSION_SHIELDS-->-blue)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-brightgreen)](https://nodejs.org/)
 [![SQLite](https://img.shields.io/badge/Database-SQLite-blue)](https://www.sqlite.org/)
@@ -24,7 +24,7 @@
 5. Optionally send request to Bitrix24 CRM via webhook
 6. All data in a local SQLite database, accessible from any LAN device
 
-**Also included:** drag & drop row reordering · position templates · Excel import · audit log with field-level diff · auto-backup every 6h (including attached files) · role-based auth (viewer/operator/admin) · Docker support
+**Also included:** drag & drop row reordering · position templates · Excel import · audit log with field-level diff · auto-backup every 6h (including attached files) · role-based auth (viewer/operator/admin) with HttpOnly cookies, CSRF protection, and a strict Content-Security-Policy (no inline scripts anywhere, static or dynamic) · Docker support
 
 ---
 
@@ -116,6 +116,8 @@ On first run a default admin account is created automatically — login `admin`,
 
 **Session security:** the session token lives in an `HttpOnly`, `Secure`, `SameSite=Strict` cookie (not accessible from page JavaScript, so it can't be stolen via XSS) and expires after 8 hours. State-changing requests (create/edit/delete) are additionally protected against CSRF via a double-submit token — the frontend handles this automatically, nothing to configure.
 
+**Content-Security-Policy:** `script-src-attr` is `'none'` — the app has zero inline event handlers (`onclick="..."` and similar), anywhere, static or dynamically rendered. Every interaction goes through `addEventListener`, using event delegation on the container element for anything rendered at runtime (registry rows, position rows, the user list, etc.) so a single listener survives any number of re-renders. This closes off inline-handler injection as an XSS vector even if a stored-XSS bug somehow made it past input validation elsewhere.
+
 ---
 
 ## Project structure
@@ -146,7 +148,9 @@ procure-it/
 │       ├── auth.js, orgs.js, requests.js, files.js,
 │       └── backup.js, settings.js, docx.js, bitrix.js
 ├── public/
-│   ├── zakupki.html               # Main app markup — event handlers attached via addEventListener
+│   ├── zakupki.html               # Main app markup — zero inline event handlers; static ones wired via
+│   │                                 addEventListener, dynamic ones (rendered by registry.js/positions.js/
+│   │                                 users.js at runtime) via event delegation on the parent container
 │   ├── reset-password.html        # Standalone password-reset page (opened from the emailed link)
 │   ├── css/style.css
 │   └── js/                        # Loaded as plain <script src> (shared global scope, no bundler)

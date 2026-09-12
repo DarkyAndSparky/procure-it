@@ -61,7 +61,7 @@ function showShortcutsHelp() {
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.4)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <span style="font-size:15px;font-weight:600">Горячие клавиши</span>
-        <button onclick="document.getElementById('shortcuts-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted)">×</button>
+        <button class="shortcuts-close-btn" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted)">×</button>
       </div>
       ${[
         ['Ctrl+S', 'Сохранить заявку'],
@@ -77,7 +77,9 @@ function showShortcutsHelp() {
           <kbd style="background:var(--surface-alt);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:12px;font-family:monospace">${k}</kbd>
         </div>`).join('')}
     </div>`;
-  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  modal.onclick = (e) => {
+    if (e.target === modal || e.target.closest('.shortcuts-close-btn')) modal.remove();
+  };
   document.body.appendChild(modal);
 }
 
@@ -111,7 +113,7 @@ function applyConfig() {
   const logoEl = document.getElementById('sidebar-logo-img');
   if (logoEl) {
     if (appConfig.logoBase64) {
-      logoEl.innerHTML = `<img src="${appConfig.logoBase64}" style="height:28px;width:auto;display:block" alt="logo">`;
+      logoEl.innerHTML = `<img src="${esc(appConfig.logoBase64)}" style="height:28px;width:auto;display:block" alt="logo">`;
     } else {
       logoEl.innerHTML = DEFAULT_LOGO_SVG;
     }
@@ -228,7 +230,7 @@ function updateConfigPreview() {
   const accL    = document.getElementById('cfg-accent-light')?.value || '#2563eb';
   const accD    = document.getElementById('cfg-accent-dark')?.value || '#60a5fa';
   const logoHtml = appConfig.logoBase64
-    ? `<img src="${appConfig.logoBase64}" style="height:24px;width:auto" alt="logo">`
+    ? `<img src="${esc(appConfig.logoBase64)}" style="height:24px;width:auto" alt="logo">`
     : DEFAULT_LOGO_SVG.replace('width="28" height="28"', 'width="24" height="24"');
 
   ['light','dark'].forEach(t => {
@@ -377,7 +379,7 @@ async function loadSystemInfoPage() {
         <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:13px;align-items:baseline">
           <span style="color:var(--text-muted)">Версия</span><span style="font-family:monospace;font-weight:600">${esc(info.version)}</span>
           <span style="color:var(--text-muted)">Описание</span><span>${esc(info.description || '—')}</span>
-          <span style="color:var(--text-muted)">Лицензия</span><span><a href="#" onclick="downloadLicense();return false;" style="color:var(--accent);text-decoration:underline dotted" title="Скачать текст лицензии">${esc(info.license)} — скачать</a></span>
+          <span style="color:var(--text-muted)">Лицензия</span><span><a href="#" class="download-license-link" style="color:var(--accent);text-decoration:underline dotted" title="Скачать текст лицензии">${esc(info.license)} — скачать</a></span>
           <span style="color:var(--text-muted)">Автор</span><span>${esc(info.author)}</span>
           <span style="color:var(--text-muted)">Репозиторий</span><span><a href="${esc(info.repository)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(info.repository)}</a></span>
         </div>
@@ -440,7 +442,7 @@ async function loadSystemInfoPage() {
     <div class="card" style="margin-bottom:16px">
       <div class="card-header">
         <span class="card-title">📦 Зависимости (${info.dependencies.length})</span>
-        <button class="btn btn-sm" id="btn-check-outdated" onclick="checkOutdatedPackages()" style="margin-left:auto">🔄 Проверить обновления</button>
+        <button class="btn btn-sm" id="btn-check-outdated" style="margin-left:auto">🔄 Проверить обновления</button>
       </div>
       <div id="outdated-summary" style="padding:0 16px;font-size:11px;color:var(--text-muted)"></div>
       <div class="table-wrap">
@@ -467,6 +469,21 @@ async function loadSystemInfoPage() {
     </div>` : ''}
   `;
   startAboutEnvPolling();
+  if (!el.dataset.actionsBound) {
+    el.dataset.actionsBound = '1';
+    // #about-page-content — статичный контейнер, но el.innerHTML выше
+    // переписывается ЦЕЛИКОМ при каждом визите на страницу «О системе»
+    // (см. registry.js: showPage('about') → loadSystemInfoPage() заново).
+    // Делегация на самом контейнере переживает любое число таких визитов.
+    el.addEventListener('click', e => {
+      if (e.target.closest('.download-license-link')) {
+        e.preventDefault();
+        downloadLicense();
+      } else if (e.target.closest('#btn-check-outdated')) {
+        checkOutdatedPackages();
+      }
+    });
+  }
 }
 
 // ── Технологии — курируемое описание стека поверх сырого списка зависимостей.

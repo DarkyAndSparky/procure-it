@@ -1,6 +1,6 @@
 {
   "name": "procure-it",
-  "version": "26w36-b06",
+  "version": "26w36-b12",
   "description": "IT Asset Procurement Tool — web-based tool for managing IT equipment purchase requests, generating specifications and calculation sheets",
   "main": "server.js",
   "scripts": {
@@ -50,5 +50,8 @@
   "devDependencies": {
     "@playwright/test": "^1.62.1",
     "playwright": "^1.62.1"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
   }
 }

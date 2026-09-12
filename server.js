@@ -48,21 +48,18 @@ if (helmet) {
     contentSecurityPolicy: {
       directives: {
         defaultSrc:  ["'self'"],
-        // Inline onclick="..." on the STATIC pages (zakupki.html/reset-password.html)
-        // were converted to addEventListener + external files. But a large part
-        // of the app renders HTML via innerHTML at runtime (login modal, registry
-        // rows, position rows, org/user list items — see public/js/auth.js,
-        // registry.js, positions.js, users.js, config.js, helpers.js) and those
-        // templates still bake in onclick=/onchange=/onkeydown=... directly.
-        // Removing 'unsafe-inline' from scriptSrcAttr silently breaks EVERY one
-        // of those — the browser just drops the handler, no console error, so it
-        // looks like "the button does nothing" (found via a real e2e run: login
-        // modal never closes, delete buttons never fire, etc. — 8/23 tests failed,
-        // all tracing to this). A full fix means converting all ~43 remaining
-        // dynamic handlers to real event delegation, which needs a real browser
-        // to verify safely — not done yet. Until then, keep 'unsafe-inline' here.
+        // Inline event handlers (onclick=/onchange=/oninput=/onkeydown=/...)
+        // are gone entirely — both on the static pages (zakupki.html,
+        // reset-password.html) and everywhere HTML is rendered at runtime
+        // (public/js/registry.js, positions.js, users.js, auth.js, config.js —
+        // login modal, registry rows, position rows, user list, org list,
+        // the about-page). Everything runs through addEventListener and event
+        // delegation instead — a single listener on the always-present parent
+        // container (not on each dynamically-created element, which would be
+        // lost on every re-render). Verified with jsdom tests per file before
+        // this line was tightened — see CHANGELOG.md for the history of what
+        // broke on the first (blind) attempt and how it was caught.
         scriptSrc:   ["'self'", "cdn.jsdelivr.net", "cdnjs.cloudflare.com"],
-        scriptSrcAttr: ["'unsafe-inline'"],
         styleSrc:    ["'self'", "'unsafe-inline'"],
         styleSrcAttr: ["'unsafe-inline'"], // allow style="..." attributes used throughout the UI
         imgSrc:      ["'self'", "data:", "blob:"],
@@ -197,8 +194,18 @@ app.use((req, res) => {
 
 app.use((err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
-  const message = err.message || 'Внутренняя ошибка сервера';
   console.error(`[ERROR] ${req.method} ${req.path}:`, err.stack || err);
+  // Раньше сюда попадал err.message как есть — для непредвиденных (500)
+  // ошибок это утекало в UI напрямую техническими деталями сервера,
+  // включая полные пути к файлам на диске (нашли вживую: неудавшийся
+  // atomic rename в saveDb() из-за временной блокировки файла на Windows
+  // показывал пользователю "EPERM: operation not permitted, rename
+  // 'C:\Users\...\zakupki.db.tmp-NNNN' -> 'C:\Users\...\zakupki.db'"
+  // прямо в форме смены пароля). Для намеренных, написанных для
+  // пользователя ошибок (res.status(4xx).json({error:'...'}) внутри самих
+  // route-обработчиков) это не проблема — они возвращаются напрямую и
+  // сюда, в error-handler для непойманных исключений, не попадают.
+  const message = status < 500 ? (err.message || 'Ошибка запроса') : 'Внутренняя ошибка сервера. Попробуйте ещё раз через несколько секунд.';
   res.status(status).json({ error: message });
 });
 

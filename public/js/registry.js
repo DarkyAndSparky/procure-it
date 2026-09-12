@@ -74,30 +74,30 @@ function buildDetailHtml(r) {
           <div class="detail-item"><span>Битрикс</span>${r.bitrix?'#'+esc(r.bitrix):'—'}</div>
           <div class="detail-item"><span>Адрес</span>${esc(r.address||'—')}</div>
           ${r.comment?`<div class="detail-item" style="grid-column:1/-1"><span>Комментарий</span>${esc(r.comment)}</div>`:''}
-          <div class="detail-item" style="grid-column:1/-1"><span>Путь папки</span><span style="font-family:monospace;font-size:11px;color:var(--accent);cursor:pointer" onclick="openRequestFolder('${escJsAttr(r.id)}')" title="Нажать, чтобы открыть папку заявки">📁 ${esc(buildFolderPath(r))}</span></div>
+          <div class="detail-item" style="grid-column:1/-1"><span>Путь папки</span><span class="open-folder-link" style="font-family:monospace;font-size:11px;color:var(--accent);cursor:pointer" title="Нажать, чтобы открыть папку заявки">📁 ${esc(buildFolderPath(r))}</span></div>
         </div>
         <table style="font-size:12px;width:100%;border-collapse:collapse">
           <tr><th style="padding:4px 8px;background:none;border-bottom:1px solid var(--border);font-size:11px">Наименование</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:120px">${r.isRealization?'ЮЛ / Кому':'Комментарий'}</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:60px">Кол-во</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:90px">Закуп</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:90px">Продажа</th></tr>
           ${r.positions.map(p=>`<tr><td style="padding:3px 8px;border:none">${esc(p.name)}</td><td style="padding:3px 4px;border:none;font-size:11px;color:var(--text-secondary)">${esc(p.comment||p.rowOrgName||'—')}</td><td style="padding:3px 4px;border:none">${p.qty} ${esc(p.unit||'шт')}</td><td style="padding:3px 4px;border:none;text-align:right">${fmtRub(p.purchasePrice)}</td><td style="padding:3px 4px;border:none;text-align:right;color:var(--accent)">${fmtRub(p.sellPerUnit||0)}</td></tr>`).join('')}
         </table>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
-          <button class="btn btn-sm btn-success" onclick="exportExcelById('${escJsAttr(r.id)}')">📊 Excel</button>
-          ${!r.isRealization?`<button class="btn btn-sm" onclick="loadSpec('${escJsAttr(r.id)}')">${r.docType==='install'?'🔧 Смета на работы':r.docType==='support'?'🛠️ Сопровождение':r.docType==='realization'?'🏪 Спецификация на реализацию':'📄 Спецификация'}</button>`:''}
+          <button class="btn btn-sm btn-success export-excel-btn">📊 Excel</button>
+          ${!r.isRealization?`<button class="btn btn-sm load-spec-btn">${r.docType==='install'?'🔧 Смета на работы':r.docType==='support'?'🛠️ Сопровождение':r.docType==='realization'?'🏪 Спецификация на реализацию':'📄 Спецификация'}</button>`:''}
           ${userRole !== 'viewer' ? `
-          <button class="btn btn-sm" onclick="loadToForm('${escJsAttr(r.id)}',true)">📋 Копировать</button>
+          <button class="btn btn-sm copy-request-btn">📋 Копировать</button>
           <label class="btn btn-sm" style="cursor:pointer;background:${r.signedSpecPdf?'var(--success)':'var(--surface-2)'};border-color:${r.signedSpecPdf?'var(--success)':'var(--border)'};color:${r.signedSpecPdf?'#fff':'var(--text)'}" title="${r.signedSpecPdf?'Подписанная спецификация прикреплена. Нажмите чтобы заменить':'Прикрепить подписанную спецификацию PDF'}">
             ${(r.signedSpecPdf&&r.signedSpecPdf!=='')?'✅ Спецификация подписана':'📎 Прикрепить подпись'}
-            <input type="file" accept=".pdf" style="display:none" onchange="uploadSignedSpec('${escJsAttr(r.id)}',this)">
+            <input type="file" accept=".pdf" style="display:none" class="upload-signed-spec-input">
           </label>
-          ${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}','${escJsAttr(r.orgShort)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}
+          ${r.signedSpecPdf?`<button class="btn btn-sm download-signed-spec-btn" data-spec-num="${esc(r.specNum)}" data-org-short="${esc(r.orgShort)}" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}
           <label class="btn btn-sm" style="cursor:pointer;background:${r.invoiceFile?'var(--success)':'var(--surface-2)'};border-color:${r.invoiceFile?'var(--success)':'var(--border)'};color:${r.invoiceFile?'#fff':'var(--text)'}" title="${r.invoiceFile?'Счёт прикреплён. Нажмите чтобы заменить':'Прикрепить счёт (PDF/фото)'}">
             ${(r.invoiceFile&&r.invoiceFile!=='')?'✅ Счёт прикреплён':'🧾 Прикрепить счёт'}
-            <input type="file" accept=".pdf,image/*" style="display:none" onchange="uploadInvoiceFile('${escJsAttr(r.id)}',this)">
+            <input type="file" accept=".pdf,image/*" style="display:none" class="upload-invoice-file-input">
           </label>
-          ${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}
-          ${appConfig.networkFolder?`<button class="btn btn-sm" id="layout-btn-${esc(r.id)}" onclick="event.stopPropagation();forceLayoutFiles('${escJsAttr(r.id)}',this)" title="Разложить файлы в сетевую папку" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">📁 Разложить файлы</button><span id="layout-status-${esc(r.id)}" style="font-size:11px;color:var(--text-muted)"></span>`:''}
-          <button class="btn btn-sm" style="margin-left:auto;color:var(--danger);border-color:var(--danger)" onclick="deleteRequest('${escJsAttr(r.id)}')">Удалить</button>
-          ` : `${r.signedSpecPdf?`<button class="btn btn-sm" onclick="downloadSignedSpec('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}','${escJsAttr(r.orgShort)}')" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}${r.invoiceFile?`<button class="btn btn-sm" onclick="downloadInvoiceFile('${escJsAttr(r.id)}','${escJsAttr(r.specNum)}')" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}`}
+          ${r.invoiceFile?`<button class="btn btn-sm download-invoice-file-btn" data-spec-num="${esc(r.specNum)}" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}
+          ${appConfig.networkFolder?`<button class="btn btn-sm force-layout-btn" id="layout-btn-${esc(r.id)}" title="Разложить файлы в сетевую папку" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">📁 Разложить файлы</button><span id="layout-status-${esc(r.id)}" style="font-size:11px;color:var(--text-muted)"></span>`:''}
+          <button class="btn btn-sm delete-request-btn" style="margin-left:auto;color:var(--danger);border-color:var(--danger)">Удалить</button>
+          ` : `${r.signedSpecPdf?`<button class="btn btn-sm download-signed-spec-btn" data-spec-num="${esc(r.specNum)}" data-org-short="${esc(r.orgShort)}" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}${r.invoiceFile?`<button class="btn btn-sm download-invoice-file-btn" data-spec-num="${esc(r.specNum)}" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}`}
         </div>
         <div id="audit-${esc(r.id)}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;font-size:12px"></div>`;
 }
@@ -122,7 +122,7 @@ function renderRegistryRows(reqs) {
   page.forEach(r => {
     const tr = document.createElement('tr');
     tr.className = 'row-toggle';
-    tr.onclick = () => toggleDetail(r.id);
+    tr.dataset.reqId = r.id;
     const realizBadge = r.isRealization ? ' <span style="font-size:10px;background:var(--accent-bg);color:var(--accent);padding:1px 5px;border-radius:4px;margin-left:4px">реализация</span>' : '';
     const docTypeBadge = r.docType === 'install' ? ' <span style="font-size:10px;background:var(--warning-bg);color:var(--warning);padding:1px 5px;border-radius:4px;margin-left:4px">монтаж</span>'
       : r.docType === 'support' ? ' <span style="font-size:10px;background:var(--surface-2);color:var(--text-secondary);padding:1px 5px;border-radius:4px;margin-left:4px">сопровождение</span>'
@@ -138,8 +138,8 @@ function renderRegistryRows(reqs) {
       <td style="text-align:center"><span class="num-badge">${r.positions.length}</span></td>
       <td style="font-weight:600;font-size:12px">${fmtRub(r.total)}</td>
       <td>
-        <button class="btn btn-sm" onclick="event.stopPropagation();loadToForm('${escJsAttr(r.id)}')">Ред.</button>
-        <select class="btn btn-sm status-select" onchange="event.stopPropagation();changeStatus('${escJsAttr(r.id)}',this.value)" onclick="event.stopPropagation()" style="margin-left:4px;padding:2px 4px;font-size:11px;cursor:pointer" ${userRole==='viewer'?'disabled title="Только для операторов"':''}>
+        <button class="btn btn-sm edit-request-btn">Ред.</button>
+        <select class="btn btn-sm status-select" style="margin-left:4px;padding:2px 4px;font-size:11px;cursor:pointer" ${userRole==='viewer'?'disabled title="Только для операторов"':''}>
           ${Object.entries(STATUS_MAP).map(([k,v])=>`<option value="${k}" ${r.status===k?'selected':''}>${v.label}</option>`).join('')}
         </select>
       </td>`;
@@ -147,6 +147,7 @@ function renderRegistryRows(reqs) {
     registryRowData[r.id] = r;
 
     const detail = document.createElement('tr');
+    detail.dataset.reqId = r.id;
     // Ленивая деталь: сам контейнер есть сразу (нужен для CSS-переходов и
     // toggleDetail), а содержимое строится по требованию — см.
     // buildDetailHtml() и toggleDetail() ниже.
@@ -155,6 +156,71 @@ function renderRegistryRows(reqs) {
   });
 
   renderPaginationBar(reqs.length);
+  if (!body.dataset.actionsBound) {
+    body.dataset.actionsBound = '1';
+    // #registry-body целиком перестраивается при каждом renderRegistryRows()
+    // (body.innerHTML = '' выше), но сам контейнер — нет, поэтому один
+    // делегированный набор слушателей покрывает и строки таблицы (кнопка
+    // "Ред.", select статуса), и ленивое содержимое деталей (buildDetailHtml,
+    // вставляется в #detail-<id> ПОЗЖЕ, по клику — делегация автоматически
+    // покрывает и его, без повторной привязки). r.id достаётся из
+    // closest('tr[data-req-id]') — общий для обеих строк (toggle и detail).
+    //
+    // toggleDetail (клик по самой строке, было отдельным tr.onclick) теперь
+    // тоже здесь, а не отдельным присвоением: слушатель на #registry-body
+    // физически ВЫШЕ по DOM, чем каждый tr, поэтому событие сначала проходит
+    // через уровень tr и только потом добирается до body при всплытии — будь
+    // toggleDetail отдельным tr.onclick, он сработал бы РАНЬШЕ, чем этот
+    // делегированный обработчик успел бы его остановить (stopPropagation,
+    // вызванный здесь, просто опоздал бы: событие уже миновало tr). Держа
+    // всё в одном месте с одним потоком if/else, конфликт снят полностью —
+    // toggleDetail это просто последняя ветка "если ничего более
+    // специфичного не совпало".
+    body.addEventListener('click', e => {
+      const tr = e.target.closest('tr[data-req-id]');
+      if (!tr) return;
+      const id = tr.dataset.reqId;
+
+      if (e.target.closest('.edit-request-btn')) {
+        loadToForm(id);
+      } else if (e.target.matches('.status-select')) {
+        // клик по select (в т.ч. открытие выпадающего списка) не должен
+        // одновременно триггерить toggleDetail — просто ничего не делаем
+        // здесь, ниже до toggleDetail дело не доходит благодаря else-цепочке.
+      } else if (e.target.closest('.open-folder-link')) {
+        openRequestFolder(id);
+      } else if (e.target.closest('.export-excel-btn')) {
+        exportExcelById(id);
+      } else if (e.target.closest('.load-spec-btn')) {
+        loadSpec(id);
+      } else if (e.target.closest('.copy-request-btn')) {
+        loadToForm(id, true);
+      } else if (e.target.closest('.download-signed-spec-btn')) {
+        const btn = e.target.closest('.download-signed-spec-btn');
+        downloadSignedSpec(id, btn.dataset.specNum, btn.dataset.orgShort);
+      } else if (e.target.closest('.download-invoice-file-btn')) {
+        downloadInvoiceFile(id, e.target.closest('.download-invoice-file-btn').dataset.specNum);
+      } else if (e.target.closest('.force-layout-btn')) {
+        forceLayoutFiles(id, e.target.closest('.force-layout-btn'));
+      } else if (e.target.closest('.delete-request-btn')) {
+        deleteRequest(id);
+      } else if (tr.classList.contains('row-toggle')) {
+        // Ничего специфичного не задето — обычный клик по строке реестра.
+        // Detail-строка (второй tr на тот же id) в row-toggle не входит, так
+        // что клики внутри уже раскрытых деталей сюда не попадают повторно.
+        toggleDetail(id);
+      }
+    });
+    body.addEventListener('change', e => {
+      if (e.target.matches('.status-select')) {
+        changeStatus(e.target.closest('tr[data-req-id]').dataset.reqId, e.target.value);
+      } else if (e.target.matches('.upload-signed-spec-input')) {
+        uploadSignedSpec(e.target.closest('tr[data-req-id]').dataset.reqId, e.target);
+      } else if (e.target.matches('.upload-invoice-file-input')) {
+        uploadInvoiceFile(e.target.closest('tr[data-req-id]').dataset.reqId, e.target);
+      }
+    });
+  }
 }
 
 async function renderRegistry() {
@@ -217,10 +283,21 @@ async function renderRegistry() {
       <div class="stat-card">
         <div class="stat-label">Действия</div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
-          <button class="btn btn-sm" onclick="exportRegistryExcel()" style="background:var(--accent);border-color:var(--accent);color:#fff">📊 Экспорт реестра</button>
-          <button class="btn btn-sm" onclick="toggleBreakdown()" id="breakdown-btn">📈 Разбивка по орг.</button>
+          <button class="btn btn-sm export-registry-btn" style="background:var(--accent);border-color:var(--accent);color:#fff">📊 Экспорт реестра</button>
+          <button class="btn btn-sm" id="breakdown-btn">📈 Разбивка по орг.</button>
         </div>
       </div>`;
+    const statsRow = document.getElementById('stats-row');
+    if (!statsRow.dataset.actionsBound) {
+      statsRow.dataset.actionsBound = '1';
+      // #stats-row.innerHTML переписывается целиком при каждом renderRegistry()
+      // (поиск/фильтр/переход на реестр) — делегация на контейнере переживает
+      // это без повторного навешивания.
+      statsRow.addEventListener('click', e => {
+        if (e.target.closest('.export-registry-btn')) exportRegistryExcel();
+        else if (e.target.closest('#breakdown-btn')) toggleBreakdown();
+      });
+    }
     renderBreakdown(reqs);
 
     // Update org filter options
@@ -229,7 +306,7 @@ async function renderRegistry() {
     orgSel.innerHTML = '<option value="">Все организации</option>';
     db.orgs.forEach(o => {
       if (reqs.some(r=>r.orgId===o.id) || db.requests.some(r=>r.orgId===o.id))
-        orgSel.innerHTML += `<option value="${esc(o.id)}" ${curOrg===o.id?'selected':''}>${o.short}</option>`;
+        orgSel.innerHTML += `<option value="${esc(o.id)}" ${curOrg===o.id?'selected':''}>${esc(o.short)}</option>`;
     });
 
     // Supplier filter
@@ -448,7 +525,7 @@ function renderOrgs() {
     return;
   }
   list.innerHTML = db.orgs.map(o => `
-    <div class="org-item" style="cursor:pointer" onclick="openOrgModal('${escJsAttr(o.id)}')">
+    <div class="org-item" style="cursor:pointer" data-org-id="${esc(o.id)}">
       <div style="flex:1">
         <div class="org-name">${esc(o.full)}</div>
         <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${esc(o.short)} · ${esc(o.signatory||'—')}</div>
@@ -456,10 +533,34 @@ function renderOrgs() {
         ${o.address  ? `<div style="font-size:11px;color:var(--text-muted);margin-top:1px">📍 ${esc(o.address)}</div>`  : ''}
       </div>
       <div style="display:flex;gap:4px;align-items:center">
-        <button class="btn btn-sm" onclick="event.stopPropagation();openOrgModal('${escJsAttr(o.id)}')" style="font-size:11px">✏️ Ред.</button>
-        <button class="del-btn" onclick="event.stopPropagation();deleteOrg('${escJsAttr(o.id)}')">×</button>
+        <button class="btn btn-sm org-edit-btn" style="font-size:11px">✏️ Ред.</button>
+        <button class="del-btn org-del-btn">×</button>
       </div>
     </div>`).join('');
+  if (!list.dataset.actionsBound) {
+    list.dataset.actionsBound = '1';
+    // list.innerHTML переписывается целиком при каждом renderOrgs() (после
+    // add/edit/delete организации) — делегация на контейнере переживает это.
+    // e.stopPropagation() в ветках кнопок воспроизводит поведение исходных
+    // inline-обработчиков: клик по "Ред."/"×" не должен также открывать
+    // .org-item целиком (который сам кликабелен и открывает ту же модалку).
+    list.addEventListener('click', e => {
+      const editBtn = e.target.closest('.org-edit-btn');
+      const delBtn  = e.target.closest('.org-del-btn');
+      if (editBtn) {
+        e.stopPropagation();
+        openOrgModal(editBtn.closest('.org-item').dataset.orgId);
+        return;
+      }
+      if (delBtn) {
+        e.stopPropagation();
+        deleteOrg(delBtn.closest('.org-item').dataset.orgId);
+        return;
+      }
+      const item = e.target.closest('.org-item');
+      if (item) openOrgModal(item.dataset.orgId);
+    });
+  }
 }
 
 function populateOrgSelect() {
@@ -467,7 +568,7 @@ function populateOrgSelect() {
   const cur = sel.value;
   sel.innerHTML = '<option value="">— выбрать —</option>';
   db.orgs.forEach(o => {
-    sel.innerHTML += `<option value="${esc(o.id)}" ${cur===o.id?'selected':''}>${o.short}</option>`;
+    sel.innerHTML += `<option value="${esc(o.id)}" ${cur===o.id?'selected':''}>${esc(o.short)}</option>`;
   });
 
   const specSel = document.getElementById('spec-select');

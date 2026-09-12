@@ -247,8 +247,17 @@ module.exports = (strictLimiter) => {
       });
     } catch(e) {
       try { db.run('ROLLBACK'); } catch(e2) {}
-      console.error('[restore] Ошибка, откат транзакции:', e.message);
-      res.status(500).json({ error: e.message });
+      // Если ошибка произошла ПОСЛЕ db.run('COMMIT') (строка выше) — сама
+      // транзакция в sql.js уже завершена, и это ROLLBACK ничего не
+      // откатывает (типичный случай: COMMIT прошёл, а saveDb() после него
+      // не смогла записать файл на диск — та же EPERM/EBUSY-природа на
+      // Windows, что и в auth.js/change-password, только для восстановления
+      // бэкапа полноценный откат многотабличной транзакции сложнее и здесь
+      // не реализован — известное ограничение). Не отдаём e.message как
+      // есть клиенту в любом случае — та же утечка технических деталей
+      // сервера, что чинили в других местах этой сессии.
+      console.error('[restore] Ошибка при восстановлении:', e.message);
+      res.status(500).json({ error: 'Не удалось восстановить бэкап. Попробуйте ещё раз.' });
     }
   });
 
@@ -262,7 +271,8 @@ module.exports = (strictLimiter) => {
       const latest = path.join(dir, files[0]);
       res.download(latest, files[0]);
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      console.error('[backup] Ошибка создания/скачивания бэкапа:', e.message);
+      res.status(500).json({ error: 'Не удалось создать бэкап. Попробуйте ещё раз.' });
     }
   });
 

@@ -42,10 +42,19 @@ router.put('/settings', adminOnly, (req, res) => {
     if (req.body.logoBase64 && req.body.logoBase64.length > 700000) {
       return res.status(400).json({ error: 'Логотип слишком большой. Максимум 500KB.' });
     }
-    // Validate logo format
+    // Validate logo format. startsWith() alone only checks the prefix — the
+    // REST of the string (after the data-URL prefix) still gets embedded
+    // unescaped into an <img src="..."> on the frontend (public/js/config.js),
+    // so a value like 'data:image/png" onerror="alert(1)' would pass a bare
+    // startsWith() check and break out of the src attribute into a working
+    // inline event handler (stored XSS, found while reviewing config.js —
+    // exploitable by any operator/admin since /api/settings requires that
+    // role, but still a real injection point, not just a cosmetic gap).
+    // Requiring the whole string to match a proper data: URL with a base64
+    // payload closes that off.
     if (req.body.logoBase64 && req.body.logoBase64.length > 0) {
-      const validFormats = ['data:image/svg', 'data:image/png', 'data:image/jpeg', 'data:image/webp'];
-      if (!validFormats.some(f => req.body.logoBase64.startsWith(f))) {
+      const validFormat = /^data:image\/(svg\+xml|png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+      if (!validFormat.test(req.body.logoBase64)) {
         return res.status(400).json({ error: 'Недопустимый формат логотипа. SVG, PNG, JPG, WebP.' });
       }
     }
@@ -57,7 +66,8 @@ router.put('/settings', adminOnly, (req, res) => {
     saveDb();
     res.json({ ok: true });
   } catch(e) {
-    res.status(500).json({ error: e.message });
+    console.error('[settings] Ошибка сохранения настроек:', e.message);
+    res.status(500).json({ error: 'Не удалось сохранить настройки. Попробуйте ещё раз.' });
   }
 });
 
@@ -157,7 +167,8 @@ router.get('/system-info', adminOnly, (req, res) => {
       env: process.env.NODE_ENV || 'production',
     });
   } catch(e) {
-    res.status(500).json({ error: e.message });
+    console.error('[settings] Ошибка при сборе system-info:', e.message);
+    res.status(500).json({ error: 'Не удалось загрузить информацию о системе.' });
   }
 });
 

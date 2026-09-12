@@ -23,15 +23,28 @@ git push origin dev
 
 ## Releasing to main
 
-When `dev` is stable and tested:
+Don't do this by hand — use the release script, which handles version
+bumping, syncing the version everywhere (`npm run version:sync`), stripping
+dev-only files (`test/`, `e2e/`, `tools/`, `playwright.config.js`, etc. —
+`main` should never contain them) from the release commit, tagging, and
+pushing, in the right order:
 
 ```bash
-git checkout main
-git merge dev
-git tag v26w31-b01        # matches package.json → version, prefixed with v
-git push origin main --tags
-git checkout dev           # always return to dev
+git checkout dev
+tools/release/release.bat 26w31-b01   # Windows
+./tools/release/release.sh 26w31-b01  # Linux/macOS
 ```
+
+Requires: `dev` is the current branch, working tree is clean (commit or
+stash first), version matches `YYwWW-{a|b|rc|r}NN` (see below).
+
+If you ever do need to do it by hand (script unavailable, debugging a
+release problem), the steps it automates are: bump `package.json` version →
+`npm run version:sync` → `npm install --package-lock-only` (keeps
+`package-lock.json`'s version field in sync — easy to forget) → commit on
+`dev` → merge into `main` → remove dev-only files from the `main` commit →
+tag `vYYwWW-STAGENN` → push `main` with tags → checkout back to `dev` →
+push `dev`.
 
 ## Commit message format
 

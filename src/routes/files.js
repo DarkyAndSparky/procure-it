@@ -49,10 +49,12 @@ router.post('/requests/:id/signed-spec', operatorOrAdmin, requireSafeId, express
 
     // Store only the filename in DB (not the full base64)
     run("UPDATE requests SET signed_spec_pdf=? WHERE id=?", [fname, req.params.id]);
-    saveDb();
     auditLog('UPDATE', req.params.id, 'signed_spec', '', 'uploaded', { name: 'подписанная спецификация' });
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    console.error('[files] Ошибка загрузки подписанной спецификации:', e.message);
+    res.status(500).json({ error: 'Не удалось сохранить файл. Попробуйте ещё раз.' });
+  }
 });
 
 // Download: GET /api/requests/:id/signed-spec
@@ -68,7 +70,6 @@ router.get('/requests/:id/signed-spec', operatorOrAdmin, requireSafeId, (req, re
       const fname = `${req.params.id}.pdf`;
       fs.writeFileSync(path.join(SIGNED_DIR, fname), buf);
       run("UPDATE requests SET signed_spec_pdf=? WHERE id=?", [fname, req.params.id]);
-      saveDb();
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(row.spec_num + '_подписано.pdf')}`);
       return res.send(buf);
@@ -79,7 +80,10 @@ router.get('/requests/:id/signed-spec', operatorOrAdmin, requireSafeId, (req, re
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(row.spec_num + '_подписано.pdf')}`);
     res.send(fs.readFileSync(fpath));
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    console.error('[files] Ошибка скачивания подписанной спецификации:', e.message);
+    res.status(500).json({ error: 'Не удалось получить файл. Попробуйте ещё раз.' });
+  }
 });
 
 // ── Invoice (счёт) file ───────────────────────────────────────────────────────
@@ -119,10 +123,12 @@ router.post('/requests/:id/invoice-file', operatorOrAdmin, requireSafeId, expres
     // services/fileLayoutService.js.
     const originalName = (name || '').trim().slice(0, 200);
     run('UPDATE requests SET invoice_file=?, invoice_file_original_name=? WHERE id=?', [fname, originalName, req.params.id]);
-    saveDb();
     auditLog('UPDATE', req.params.id, 'invoice_file', '', 'uploaded', { name: originalName || fname });
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    console.error('[files] Ошибка загрузки счёта:', e.message);
+    res.status(500).json({ error: 'Не удалось сохранить файл. Попробуйте ещё раз.' });
+  }
 });
 
 // Download: GET /api/requests/:id/invoice-file
@@ -138,7 +144,10 @@ router.get('/requests/:id/invoice-file', operatorOrAdmin, requireSafeId, (req, r
     res.setHeader('Content-Type', mimeMap[ext] || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(row.spec_num + '_счет.' + ext)}`);
     res.send(fs.readFileSync(fpath));
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) {
+    console.error('[files] Ошибка скачивания счёта:', e.message);
+    res.status(500).json({ error: 'Не удалось получить файл. Попробуйте ещё раз.' });
+  }
 });
 
 // ── Network folder / WebDAV file layout ──────────────────────────────────────

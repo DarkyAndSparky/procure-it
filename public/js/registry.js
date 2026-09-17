@@ -652,7 +652,14 @@ function clearForm() {
   document.getElementById('folder-card').style.display = 'none';
   document.getElementById('positions-body').innerHTML = '';
   rowCounter = 0;
+  addRow(); // должна остаться ровно 1 пустая строка, не 0 — раньше очищало полностью
+  const invoiceInput = document.getElementById('f-invoice');
+  if (invoiceInput) invoiceInput.value = ''; // раньше сбрасывалась только надпись с именем файла, а не сам выбранный файл
   document.getElementById('invoice-name').textContent = '';
+  const delOn = document.getElementById('f-delivery-on');
+  if (delOn) delOn.checked = false; // доставка вообще не сбрасывалась
+  const delCost = document.getElementById('f-delivery-cost');
+  if (delCost) delCost.value = '';
   updateSpecNum();
   calcTotal();
 }

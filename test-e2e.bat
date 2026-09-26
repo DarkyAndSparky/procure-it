@@ -40,28 +40,25 @@ if "%NEED_INSTALL%"=="1" (
   echo.
 )
 
-rem Playwright's Chromium browser is not part of npm install and is
-rem downloaded separately (~150-300MB) - check whether it is already
-rem installed (via the Playwright cache under
-rem %USERPROFILE%\AppData\Local\ms-playwright) so we do not re-download
-rem it on every run.
-set "PLAYWRIGHT_CACHE=%USERPROFILE%\AppData\Local\ms-playwright"
-set "CHROMIUM_FOUND=0"
-if exist "%PLAYWRIGHT_CACHE%" (
-  for /d %%D in ("%PLAYWRIGHT_CACHE%\chromium-*") do set "CHROMIUM_FOUND=1"
+rem Playwright's own installer is idempotent — it checks internally
+rem whether the browser is already present and skips re-downloading it
+rem (near-instant if so). Earlier this was a hand-rolled check for a
+rem "chromium-*" folder under the Playwright cache — removed after it
+rem produced a false "already installed" when only an unrelated cache
+rem folder from a previous Playwright version happened to match the
+rem prefix, silently skipping the real chromium_headless_shell install
+rem (found 26w39 — E2E failed with "Executable doesn't exist" despite
+rem this check saying browser was found). Playwright's own naming for
+rem the browser folder has changed between versions before (chromium-N
+rem vs chromium_headless_shell-N) — not worth re-guessing here.
+echo Checking Playwright browser (Chromium)...
+call npx playwright install chromium
+if errorlevel 1 (
+  echo Chromium installation failed. Check the message above.
+  pause
+  exit /b 1
 )
-if "%CHROMIUM_FOUND%"=="0" (
-  echo Playwright's Chromium browser is not installed yet. Installing...
-  echo This may take a few minutes the first time - do not close this window.
-  echo.
-  call npx playwright install chromium
-  if errorlevel 1 (
-    echo Chromium installation failed. Check the message above.
-    pause
-    exit /b 1
-  )
-  echo.
-)
+echo.
 
 echo Running the full E2E suite in Playwright...
 echo.

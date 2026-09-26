@@ -303,7 +303,9 @@ module.exports = (strictLimiter) => {
     const params = [];
     if (request_id) { sql += ' WHERE request_id = ?'; params.push(request_id); }
     sql += ' ORDER BY id DESC LIMIT ?';
-    params.push(parseInt(limit) || 50);
+    const parsedLimit = parseInt(limit);
+    const safeLimit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 500) : 50;
+    params.push(safeLimit);
     res.json(query(sql, params));
   });
 

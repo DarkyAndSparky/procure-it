@@ -27,15 +27,19 @@ if [ ! -d "node_modules/@playwright/test" ]; then
   npm ci
 fi
 
-# Браузер Chromium для Playwright не входит в npm install и качается
-# отдельно (~150-300MB) — проверяем, стоит ли он уже (по кэшу Playwright),
-# чтобы не тянуть заново на каждый прогон.
-if [ ! -d "$HOME/.cache/ms-playwright" ] || [ -z "$(find "$HOME/.cache/ms-playwright" -maxdepth 1 -iname 'chromium-*' -print -quit 2>/dev/null)" ]; then
-  echo "[INFO] Браузер Chromium для Playwright ещё не установлен. Устанавливаю..."
-  echo "Это может занять несколько минут при первом запуске — не закрывайте окно."
-  echo ""
-  npx playwright install chromium
-  echo ""
-fi
+# Собственный установщик Playwright уже идемпотентен — сам проверяет,
+# стоит ли браузер, и пропускает повторную закачку (почти мгновенно,
+# если уже стоит). Раньше здесь была самодельная проверка папки
+# "chromium-*" в кэше Playwright — убрана: она однажды дала ложное
+# "уже стоит" из-за папки от старой версии Playwright, случайно
+# попавшей под ту же маску, и молча пропустила установку реально
+# нужного chromium_headless_shell (найдено в 26w39 — E2E падал с
+# "Executable doesn't exist", хотя проверка говорила, что браузер есть).
+# Название папки браузера у самого Playwright уже менялось между
+# версиями (chromium-N vs chromium_headless_shell-N) — не наше дело
+# это угадывать.
+echo "[INFO] Проверяю браузер Playwright (Chromium)..."
+npx playwright install chromium
+echo ""
 
 npm run test:e2e

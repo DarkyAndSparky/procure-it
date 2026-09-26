@@ -73,6 +73,9 @@ git rm    --cached --ignore-unmatch test-e2e.bat       >nul 2>&1
 git rm    --cached --ignore-unmatch test-e2e.sh        >nul 2>&1
 git rm    --cached --ignore-unmatch CONTRIBUTING.md    >nul 2>&1
 git rm    --cached --ignore-unmatch ROADMAP.md         >nul 2>&1
+git rm    --cached --ignore-unmatch ROADMAP_Q4.md        >nul 2>&1
+git rm    --cached --ignore-unmatch ROADMAP_MIGRATION.md >nul 2>&1
+git rm    --cached --ignore-unmatch AI_CONTEXT.md        >nul 2>&1
 
 if exist test\           rmdir /s /q test
 if exist e2e\            rmdir /s /q e2e
@@ -84,6 +87,9 @@ if exist test-e2e.bat    del /q test-e2e.bat
 if exist test-e2e.sh     del /q test-e2e.sh
 if exist CONTRIBUTING.md del /q CONTRIBUTING.md
 if exist ROADMAP.md      del /q ROADMAP.md
+if exist ROADMAP_Q4.md        del /q ROADMAP_Q4.md
+if exist ROADMAP_MIGRATION.md del /q ROADMAP_MIGRATION.md
+if exist AI_CONTEXT.md        del /q AI_CONTEXT.md
 echo   done.
 
 echo [7/9] git commit strip ...

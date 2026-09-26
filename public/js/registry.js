@@ -378,9 +378,15 @@ async function renderRegistry() {
     const orgSel = document.getElementById('reg-filter-org');
     const curOrg = urlFilters ? urlFilters.org : orgSel.value;
     orgSel.innerHTML = '<option value="">Все организации</option>';
+    // Полный список организаций — не сужается активными фильтрами (раньше
+    // строился только из отфильтрованного reqs, из-за чего при выборе
+    // одной организации остальные пропадали из этого же списка, пока не
+    // сбросить фильтр). Заявки/поставщика/месяц ниже сознательно оставлены
+    // как есть — для них нет отдельного полного списка на клиенте без
+    // лишнего запроса, а сама эта узкая проблема помечена в roadmap как
+    // «не факт баг».
     db.orgs.forEach(o => {
-      if (reqs.some(r=>r.orgId===o.id) || db.requests.some(r=>r.orgId===o.id))
-        orgSel.innerHTML += `<option value="${esc(o.id)}" ${curOrg===o.id?'selected':''}>${esc(o.short)}</option>`;
+      orgSel.innerHTML += `<option value="${esc(o.id)}" ${curOrg===o.id?'selected':''}>${esc(o.short)}</option>`;
     });
 
     // Supplier filter
@@ -854,6 +860,7 @@ async function toggleAuditLog(id) {
               const FIELD_LABELS = {
                 name: 'Название', mol: 'МОЛ', date: 'Дата', address: 'Адрес',
                 supplier: 'Поставщик', contract: 'Договор',
+                invoice_num: 'Счёт №', counterparty: 'Контрагент',
                 delivery_cost: 'Доставка', markup: 'Наценка %',
                 comment: 'Комментарий', positions_count: 'Позиций (кол-во)',
                 positions_added: '➕ Добавлены',

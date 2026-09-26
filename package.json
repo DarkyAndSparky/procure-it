@@ -1,6 +1,6 @@
 {
   "name": "procure-it",
-  "version": "26w39-b06",
+  "version": "26w39-b10",
   "description": "IT Asset Procurement Tool — web-based tool for managing IT equipment purchase requests, generating specifications and calculation sheets",
   "main": "server.js",
   "scripts": {
@@ -12,7 +12,8 @@
     "test:e2e:report": "playwright show-report",
     "prepare": "node scripts/install-hooks.js",
     "version:sync": "node scripts/sync-version.js",
-    "bump": "node scripts/bump-version.js"
+    "bump": "node scripts/bump-version.js",
+    "check:email-dupes": "node scripts/check-email-duplicates.js"
   },
   "keywords": [
     "procurement",
@@ -33,7 +34,7 @@
     "url": "https://github.com/DarkyAndSparky/procure-it/issues"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=26.0.0"
   },
   "dependencies": {
     "compression": "^1.7.4",

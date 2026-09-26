@@ -2,9 +2,9 @@
 
 > Web-based IT asset procurement tool — manage purchase requests, generate Excel calculation sheets and specifications.
 
-[![Version](https://img.shields.io/badge/version-<!--VERSION_SHIELDS-->26w39--b06<!--/VERSION_SHIELDS-->-blue)](#)
+[![Version](https://img.shields.io/badge/version-<!--VERSION_SHIELDS-->26w39--b10<!--/VERSION_SHIELDS-->-blue)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-18%2B-brightgreen)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-26%2B-brightgreen)](https://nodejs.org/)
 [![SQLite](https://img.shields.io/badge/Database-SQLite-blue)](https://www.sqlite.org/)
 [![Branch](https://img.shields.io/badge/default%20branch-dev-orange)](https://github.com/DarkyAndSparky/procure-it/tree/dev)
 
@@ -50,7 +50,7 @@ First run installs npm dependencies (~1 min) and generates a self-signed TLS cer
 
 ## Requirements
 
-- **Node.js 18+** — https://nodejs.org/
+- **Node.js 26+** — https://nodejs.org/
 
 ---
 
@@ -74,7 +74,7 @@ First run installs npm dependencies (~1 min) and generates a self-signed TLS cer
 | E2e tests (`e2e/`, `playwright.config.js`) | ✅ | ❌ stripped on release |
 | Test scripts (`test.bat`, `test.sh`, `test-e2e.*`) | ✅ | ❌ stripped on release |
 | Release tooling (`tools/release/`) | ✅ | ❌ stripped on release |
-| Dev docs (`CONTRIBUTING.md`, `ROADMAP.md`) | ✅ | ❌ stripped on release |
+| Dev docs (`CONTRIBUTING.md`, `ROADMAP.md`, `ROADMAP_Q4.md`, `ROADMAP_MIGRATION.md`, `AI_CONTEXT.md`) | ✅ | ❌ stripped on release |
 
 > Stripping is handled automatically by `tools/release/release.bat` (Windows) or `tools/release/release.sh` (Linux/macOS).
 

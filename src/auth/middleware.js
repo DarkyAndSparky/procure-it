@@ -58,6 +58,15 @@ function requireRole(...roles) {
     const user  = token ? sessionGetUser(token) : null;
     const role  = user?.role || 'viewer';
     req.userRole = role;
+    // Аудит-находка (26w36-b20, ROADMAP_Q4.md §8 — «Пользователь» в audit
+    // log): req.username задумывался как способ узнать, кто делает запрос,
+    // но выставлялся только в authMiddleware() — функции, которая нигде не
+    // подключена ни в server.js, ни в одном роуте. Реально все защищённые
+    // write-роуты идут через requireRole()/operatorOrAdmin/adminOnly, так
+    // что req.username везде был undefined. Выставляем здесь — в
+    // единственном месте, которое действительно стоит на пути каждого
+    // такого запроса.
+    req.username = user?.username || '';
 
     // Block all write operations if password change is required
     if (user?.mustChangePassword && req.method !== 'GET') {

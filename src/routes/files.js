@@ -49,7 +49,7 @@ router.post('/requests/:id/signed-spec', operatorOrAdmin, requireSafeId, express
 
     // Store only the filename in DB (not the full base64)
     run("UPDATE requests SET signed_spec_pdf=? WHERE id=?", [fname, req.params.id]);
-    auditLog('UPDATE', req.params.id, 'signed_spec', '', 'uploaded', { name: 'подписанная спецификация' });
+    auditLog('UPDATE', req.params.id, 'signed_spec', '', 'uploaded', { name: 'подписанная спецификация' }, req.username);
     res.json({ ok: true });
   } catch(e) {
     console.error('[files] Ошибка загрузки подписанной спецификации:', e.message);
@@ -123,7 +123,7 @@ router.post('/requests/:id/invoice-file', operatorOrAdmin, requireSafeId, expres
     // services/fileLayoutService.js.
     const originalName = (name || '').trim().slice(0, 200);
     run('UPDATE requests SET invoice_file=?, invoice_file_original_name=? WHERE id=?', [fname, originalName, req.params.id]);
-    auditLog('UPDATE', req.params.id, 'invoice_file', '', 'uploaded', { name: originalName || fname });
+    auditLog('UPDATE', req.params.id, 'invoice_file', '', 'uploaded', { name: originalName || fname }, req.username);
     res.json({ ok: true });
   } catch(e) {
     console.error('[files] Ошибка загрузки счёта:', e.message);

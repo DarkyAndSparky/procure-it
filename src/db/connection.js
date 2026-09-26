@@ -141,6 +141,7 @@ function rowToRequest(row) {
     address: row.address, supplier: row.supplier, invoiceNum: row.invoice_num, contract: row.contract,
     counterparty: row.counterparty || '',
     warrantyPeriod: row.warranty_period || '',
+    roundToRuble: row.round_to_ruble === 1 || row.round_to_ruble === '1',
     status: row.status, comment: row.comment,
     isRealization: !!row.is_realization,
     deliveryCost: row.delivery_cost, markup: row.markup,

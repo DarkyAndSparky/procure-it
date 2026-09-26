@@ -32,19 +32,9 @@ async function loadToForm(id, copy=false) {
   document.getElementById('f-delivery-cost').style.pointerEvents = delOn ? 'auto' : 'none';
   document.getElementById('f-markup').value = req.markup ?? 5;
   { const noMarkup = (req.markup ?? 5) === 0; document.getElementById('f-no-markup').checked = noMarkup; document.getElementById('f-markup').disabled = noMarkup; }
+  const rtrEl = document.getElementById('f-round-to-ruble'); if (rtrEl) rtrEl.checked = !!req.roundToRuble;
   document.getElementById('f-doc-type').value = req.docType || 'goods';
-  onDocTypeChange();
-
-  // Restore realization mode if needed
-  if (req.isRealization) {
-    document.getElementById('realization-badge').style.display = 'flex';
-    const th = document.querySelector('#page-new table thead th:nth-child(4)');
-    if (th) { th.textContent = 'ЮЛ / Получатель'; th.style.color = 'var(--accent)'; }
-  } else {
-    document.getElementById('realization-badge').style.display = 'none';
-    const th = document.querySelector('#page-new table thead th:nth-child(4)');
-    if (th) { th.textContent = 'Комментарий / ФИО'; th.style.color = ''; }
-  }
+  onDocTypeChange(); // теперь сам показывает/прячет бейдж «реализация» и меняет заголовок колонки — см. комментарий в positions.js
 
   document.getElementById('positions-body').innerHTML = '';
   rowCounter = 0;
@@ -105,11 +95,42 @@ async function exportExcelById(id) {
 
 let currentSpecReq = null;
 
+// Чекбокс «печатать вместе с листом согласования» имеет смысл показывать
+// только если у организации заявки вообще прикреплён такой файл — иначе
+// его просто нечем печатать. Каждый раз, когда меняется currentSpecReq,
+// сверяем это с кэшем db.orgs (он подгружается при старте приложения и
+// уже содержит approval_pdf, т.к. GET /api/orgs отдаёт все колонки).
+function updateApprovalCheckboxVisibility(req) {
+  const row = document.getElementById('spec-print-approval-row');
+  const cb  = document.getElementById('spec-print-approval');
+  if (!row || !cb) return;
+  const org = req && db.orgs.find(o => o.id === req.orgId);
+  const has = !!(org && org.approval_pdf);
+  row.style.display = has ? 'flex' : 'none';
+  if (!has) cb.checked = false;
+}
+
+// «Печать / PDF» — если включена галочка и у организации есть прикреплённый
+// лист согласования, сперва открываем его в отдельной вкладке (встроенный
+// PDF-просмотрщик браузера, откуда пользователь и печатает при необходимости
+// — CSP приложения намеренно не разрешает встраивать PDF внутрь страницы
+// через <embed>/<iframe>, см. README → Content-Security-Policy), а затем
+// открываем системный диалог печати самой спецификации.
+function printSpec() {
+  const cb = document.getElementById('spec-print-approval');
+  if (cb && cb.checked && currentSpecReq) {
+    const org = db.orgs.find(o => o.id === currentSpecReq.orgId);
+    if (org && org.approval_pdf) window.open(`/api/orgs/${org.id}/approval-pdf`, '_blank');
+  }
+  window.print();
+}
+
 function previewSpec() {
   const req = collectForm();
   if (!req.name || req.positions.length === 0) { toast('Заполните форму и добавьте позиции'); return; }
   currentSpecReq = req;
   document.getElementById('spec-preview-content').innerHTML = buildSpecHtml(req);
+  updateApprovalCheckboxVisibility(req);
   showPage('spec');
 }
 
@@ -121,6 +142,7 @@ async function loadSpec(id) {
   if (!req) return;
   currentSpecReq = { ...req, supplier: req.supplier || appConfig.supplierName || '', supplierSignatory: appConfig.supplierSignatory || '', supplierStamp: appConfig.supplierStamp === '1' };
   document.getElementById('spec-preview-content').innerHTML = buildSpecHtml(currentSpecReq);
+  updateApprovalCheckboxVisibility(currentSpecReq);
   showPage('spec');
 }
 
@@ -132,6 +154,7 @@ async function loadSpecFromRegistry() {
   if (req) {
     currentSpecReq = { ...req, supplier: req.supplier || appConfig.supplierName || '', supplierSignatory: appConfig.supplierSignatory || '', supplierStamp: appConfig.supplierStamp === '1' };
     document.getElementById('spec-preview-content').innerHTML = buildSpecHtml(currentSpecReq);
+    updateApprovalCheckboxVisibility(currentSpecReq);
   }
 }
 

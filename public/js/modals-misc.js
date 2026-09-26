@@ -10,7 +10,19 @@ function openOrgModal(id) {
   document.getElementById('modal-org-address').value = org.address || '';
   document.getElementById('modal-org-folder').value = org.folder || '';
   document.getElementById('modal-org-stamp').checked = org.stamp === undefined ? true : (org.stamp === '1' || org.stamp === true);
+  refreshOrgApprovalUi(org);
   document.getElementById('org-modal').style.display = 'flex';
+}
+
+// Отражает наличие/отсутствие прикреплённого листа согласования в модалке
+// организации — статус-текст плюс кнопки «Открыть»/«Удалить».
+function refreshOrgApprovalUi(org) {
+  const has = !!(org && org.approval_pdf);
+  document.getElementById('modal-org-approval-status').textContent = has
+    ? `✅ прикреплён${org.approval_pdf_name ? ': ' + org.approval_pdf_name : ''}`
+    : 'не прикреплён';
+  document.getElementById('modal-org-approval-view').style.display = has ? '' : 'none';
+  document.getElementById('modal-org-approval-remove').style.display = has ? '' : 'none';
 }
 
 function closeOrgModal() {
@@ -196,6 +208,33 @@ const STATUS_MAP = {
   delivered: { label: '✅ Получено',  cls: 'badge-green'  },
   cancelled: { label: '❌ Отменена',  cls: 'badge-red'    },
 };
+
+// Матрица переходов — должна точно совпадать с STATUS_TRANSITIONS в
+// src/routes/requests.js (ROADMAP_Q4.md, раздел 7). Держим и на фронте,
+// чтобы не предлагать в выпадающем списке заведомо недопустимый переход —
+// но это только UX-подсказка: реальная защита данных всё равно на
+// бэкенде (см. isValidStatusTransition), фронт при рассинхроне максимум
+// покажет лишний пункт, который сервер всё равно отклонит.
+const STATUS_TRANSITIONS = {
+  new:       ['ordered', 'cancelled'],
+  ordered:   ['partial', 'delivered', 'cancelled'],
+  partial:   ['delivered'],
+  delivered: [],
+  cancelled: [],
+};
+
+// Опции для выпадающего списка смены статуса конкретной заявки: текущий
+// статус — всегда (иначе select не сможет его отображать выбранным) плюс
+// допустимые переходы отсюда. admin видит все статусы — бэкенд всё равно
+// разрешает admin обходить матрицу (исправление ошибок), так что прятать
+// варианты от него на фронте только мешало бы.
+function statusSelectOptions(currentStatus, userRole) {
+  const keys = userRole === 'admin'
+    ? Object.keys(STATUS_MAP)
+    : [currentStatus, ...(STATUS_TRANSITIONS[currentStatus] || [])];
+  const seen = new Set();
+  return keys.filter(k => STATUS_MAP[k] && !seen.has(k) && seen.add(k));
+}
 
 function statusBadge(s) {
   const m = STATUS_MAP[s] || STATUS_MAP['new'];

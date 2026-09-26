@@ -5,7 +5,7 @@ const path = require('path');
 
 const { getDb, query, saveDb, rowToRequest } = require('../db/connection');
 const { adminOnly, operatorOrAdmin } = require('../auth/middleware');
-const { BACKUP_DIR, SIGNED_DIR, INVOICE_DIR, DEFAULT_SETTINGS } = require('../config');
+const { BACKUP_DIR, SIGNED_DIR, INVOICE_DIR, APPROVAL_DIR, DEFAULT_SETTINGS } = require('../config');
 const { doBackup, resolveBackupDir } = require('../services/backupService');
 
 module.exports = (strictLimiter) => {
@@ -102,9 +102,30 @@ module.exports = (strictLimiter) => {
         txRun('DELETE FROM orgs');
         for (const o of orgs) {
           if (!o.full || !o.short) { console.warn(`[restore] Организация без full/short пропущена: id=${o.id}`); continue; }
-          const ok = txRun('INSERT OR REPLACE INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp,folder) VALUES (?,?,?,?,?,?,?,?,?,?)',
-            [safeId(o.id, 'org-'), o.full, o.short, o.prefix||'', o.signatory||'', o.contract||'', o.address||'', o.supplier||'', o.stamp !== undefined ? String(o.stamp) : '1', o.folder||'']);
-          if (ok) orgsInserted++;
+          const orgId = safeId(o.id, 'org-');
+          const ok = txRun('INSERT OR REPLACE INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp,folder,approval_pdf,approval_pdf_name) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+            [orgId, o.full, o.short, o.prefix||'', o.signatory||'', o.contract||'', o.address||'', o.supplier||'', o.stamp !== undefined ? String(o.stamp) : '1', o.folder||'', o.approval_pdf||'', o.approval_pdf_name||'']);
+          if (ok) {
+            orgsInserted++;
+            // Файл листа согласования (как и signed_spec_pdf/invoice_file у заявок)
+            // в JSON-бэкапе не лежит — только имя. Если его нет на диске (например,
+            // восстанавливаемся после потери data/contract_approvals), достаём из
+            // зеркала files_mirror, которое обновляется при каждом автобэкапе.
+            if (o.approval_pdf) {
+              const destPath = path.join(APPROVAL_DIR, path.basename(o.approval_pdf));
+              if (!fs.existsSync(destPath)) {
+                const mirrorPath = path.join(resolveBackupDir(), 'files_mirror', 'contract_approvals', path.basename(o.approval_pdf));
+                if (fs.existsSync(mirrorPath)) {
+                  fs.mkdirSync(APPROVAL_DIR, { recursive: true });
+                  fs.copyFileSync(mirrorPath, destPath);
+                  filesRestored++;
+                } else {
+                  filesMissing++;
+                  console.warn(`[restore] Лист согласования не найден ни на диске, ни в зеркале бэкапов: ${o.approval_pdf} (организация ${orgId})`);
+                }
+              }
+            }
+          }
         }
       }
       if (requests.length) {

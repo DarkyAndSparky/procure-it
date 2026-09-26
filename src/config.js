@@ -17,12 +17,16 @@ const DB_FILE    = path.join(DATA_DIR, 'zakupki.db');
 const CERT_DIR   = path.join(DATA_DIR, 'certs');
 const SIGNED_DIR = path.join(DATA_DIR, 'signed_specs');
 const INVOICE_DIR = path.join(DATA_DIR, 'invoices');
+// Лист согласования договора поставки (PDF) — прикладывается на уровне
+// организации (Реестр организаций), а не отдельной заявки: один договор
+// обслуживает много заявок, поэтому и файл согласования один на организацию.
+const APPROVAL_DIR = path.join(DATA_DIR, 'contract_approvals');
 const BACKUP_DIR  = path.join(DATA_DIR, 'backups');
 const CERT_FILE   = path.join(CERT_DIR, 'cert.pem');
 const KEY_FILE    = path.join(CERT_DIR, 'key.pem');
 
 // ── Ensure dirs ───────────────────────────────────────────────────────────────
-[DATA_DIR, CERT_DIR, SIGNED_DIR, INVOICE_DIR, BACKUP_DIR].forEach(d => {
+[DATA_DIR, CERT_DIR, SIGNED_DIR, INVOICE_DIR, APPROVAL_DIR, BACKUP_DIR].forEach(d => {
   if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
 });
 
@@ -66,6 +70,6 @@ const DEFAULT_SETTINGS = {
 const RU_MONTHS_FOLDER = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 
 module.exports = {
-  PORT, BIND_HOST, ROOT_DIR, DATA_DIR, DB_FILE, CERT_DIR, SIGNED_DIR, INVOICE_DIR, BACKUP_DIR,
+  PORT, BIND_HOST, ROOT_DIR, DATA_DIR, DB_FILE, CERT_DIR, SIGNED_DIR, INVOICE_DIR, APPROVAL_DIR, BACKUP_DIR,
   CERT_FILE, KEY_FILE, LEGACY_PASSWORD, INITIAL_ADMIN_PASSWORD, TRUST_PROXY, DEFAULT_SETTINGS, RU_MONTHS_FOLDER,
 };

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { getDb, saveDb, run } = require('../db/connection');
+const { getDb, saveDb, run, query } = require('../db/connection');
 const { getUsers, findUserByCredentials } = require('../auth/users');
 const { sessionCreate, sessionDelete, sessionGetUser, SESSION_TTL_MS } = require('../auth/sessions');
 const { generateToken, generateSalt, hashPassword, timingSafeStringEqual } = require('../auth/crypto');
@@ -154,21 +154,45 @@ module.exports = (strictLimiter) => {
         // на чужой домен (фишинг). По умолчанию — req.protocol/req.headers.host,
         // которые Express сам вычисляет только из реального соединения
         // (или из X-Forwarded-* при включённом app.set('trust proxy', ...)).
-        const origin = (TRUST_PROXY && req.headers['x-forwarded-proto'])
-          ? `${req.headers['x-forwarded-proto']}://${req.headers['x-forwarded-host'] || req.headers.host}`
-          : `${req.protocol}://${req.headers.host}`;
-        const resetUrl = `${origin}/reset-password?token=${token}`;
+        //
+        // Аудит-находка (26w36-b16): и это тоже не полная защита — сырой
+        // req.headers.host - это то, что клиент передал в HTTP Host-
+        // заголовке. У обычного браузера его нельзя подделать (он берётся
+        // из адресной строки), но ничто не мешает атакующему отправить
+        // произвольный сырой HTTP-запрос с любым Host, если приложение
+        // достижимо напрямую (без реверс-прокси, который бы это отсекал).
+        // Итог — фишинговая ссылка в ЛЕГИТИМНОМ письме сброса пароля,
+        // отправленном настоящим SMTP приложения на настоящий email
+        // пользователя. Раньше от этого не было вообще никакой защиты (кроме
+        // экранирования в письме — см. emailService.js, тоже поправлено
+        // в этом же аудите). Сверяем host/x-forwarded-host с простым
+        // форматом hostname[:port] / [IPv6][:port] — то, чем он и должен
+        // быть; если нет — не отправляем письмо вовсе, только предупреждаем
+        // в лог, а клиенту всё равно отвечаем ok (не раскрываем детали).
+        const HOST_RE = /^[a-zA-Z0-9.-]+(:\d+)?$|^\[[0-9a-fA-F:]+\](:\d+)?$/;
+        const rawHost = (TRUST_PROXY && req.headers['x-forwarded-proto'])
+          ? (req.headers['x-forwarded-host'] || req.headers.host)
+          : req.headers.host;
 
-        // Отправляем письмо асинхронно — не держим HTTP-ответ.
-        // Ошибка отправки логируется, но не возвращается клиенту
-        // (чтобы не раскрывать наличие адреса через тайминг/ошибку).
-        const smtpCfg = getSmtpConfig();
-        sendPasswordResetEmail({
-          to: email.trim(),
-          username: user.username,
-          resetUrl,
-          appName: smtpCfg.appName,
-        }).catch(e => console.error(`[auth] Ошибка отправки письма сброса для ${user.username}:`, e.message));
+        if (!rawHost || !HOST_RE.test(rawHost)) {
+          console.warn(`[auth] Подозрительный Host-заголовок при запросе сброса пароля — письмо НЕ отправлено: ${JSON.stringify(rawHost)}`);
+        } else {
+          const origin = (TRUST_PROXY && req.headers['x-forwarded-proto'])
+            ? `${req.headers['x-forwarded-proto']}://${rawHost}`
+            : `${req.protocol}://${rawHost}`;
+          const resetUrl = `${origin}/reset-password?token=${token}`;
+
+          // Отправляем письмо асинхронно — не держим HTTP-ответ.
+          // Ошибка отправки логируется, но не возвращается клиенту
+          // (чтобы не раскрывать наличие адреса через тайминг/ошибку).
+          const smtpCfg = getSmtpConfig();
+          sendPasswordResetEmail({
+            to: email.trim(),
+            username: user.username,
+            resetUrl,
+            appName: smtpCfg.appName,
+          }).catch(e => console.error(`[auth] Ошибка отправки письма сброса для ${user.username}:`, e.message));
+        }
 
         // Не логируем полную ссылку/токен сброса — логи не должны быть
         // эквивалентом доступа к аккаунту.
@@ -231,10 +255,26 @@ module.exports = (strictLimiter) => {
       const salt = generateSalt();
       const hash = hashPassword(password, salt);
       const userEmail = (email || '').trim().toLowerCase();
-      run('INSERT INTO users (username, password, salt, role, email) VALUES (?,?,?,?,?)', [username, hash, salt, role, userEmail]);
+      // Аудит-находка (26w36-b16): run() НЕ бросает исключение на нарушении
+      // UNIQUE (email/username задублированы) — это сделано намеренно (см.
+      // db/connection.js#run: «молча возвращаем false, вызывающий код сам
+      // решает, что сказать пользователю»), но этот роут возвращаемое
+      // значение никогда не проверял. try/catch ниже на practике никогда
+      // не срабатывал — INSERT молча проваливался, а клиент получал
+      // {ok:true}, хотя пользователь не создавался (проверено вживую:
+      // повторное создание того же username отвечало ok:true, но в списке
+      // пользователей оставалась только первая запись). Теперь проверяем
+      // возврат run() явно.
+      const ok = run('INSERT INTO users (username, password, salt, role, email) VALUES (?,?,?,?,?)', [username, hash, salt, role, userEmail]);
+      if (!ok) {
+        const existingByName  = query('SELECT id FROM users WHERE username=?', [username])[0];
+        const existingByEmail = userEmail && query('SELECT id FROM users WHERE email=?', [userEmail])[0];
+        if (existingByName) return res.status(409).json({ error: 'Пользователь с таким логином уже существует' });
+        if (existingByEmail) return res.status(409).json({ error: 'Этот email уже привязан к другому пользователю' });
+        return res.status(500).json({ error: 'Не удалось сохранить изменения. Попробуйте ещё раз.' });
+      }
       res.json({ ok: true });
     } catch(e) {
-      if (e.message.includes('UNIQUE')) return res.status(409).json({ error: 'Пользователь уже существует' });
       console.error('[auth] Ошибка при создании пользователя:', e.message);
       res.status(500).json({ error: 'Не удалось сохранить изменения. Попробуйте ещё раз.' });
     }
@@ -258,7 +298,14 @@ module.exports = (strictLimiter) => {
       run('UPDATE users SET password=?, salt=?, must_change_password=0 WHERE id=?', [hash, salt, req.params.id]);
     }
     if (role) run('UPDATE users SET role=? WHERE id=?', [role, req.params.id]);
-    if (email !== undefined) run('UPDATE users SET email=? WHERE id=?', [(email || '').trim().toLowerCase(), req.params.id]);
+    if (email !== undefined) {
+      const userEmail = (email || '').trim().toLowerCase();
+      // Тот же аудит-баг, что и в POST /users выше — проверяем возврат run(),
+      // иначе попытка сохранить email, уже занятый другим пользователем,
+      // молча ничего не изменит, а клиент получит {ok:true}.
+      const ok = run('UPDATE users SET email=? WHERE id=?', [userEmail, req.params.id]);
+      if (!ok) return res.status(409).json({ error: 'Этот email уже привязан к другому пользователю' });
+    }
     res.json({ ok: true });
   });
 

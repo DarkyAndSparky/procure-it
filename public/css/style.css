@@ -730,7 +730,7 @@
     @page { margin: 15mm 20mm; size: A4 portrait; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .sidebar, .topbar, .tabs, .btn-group, .search-bar, .filter-row,
-    #pagination-bar, .page:not(#page-spec) { display: none !important; }
+    #pagination-bar, .page:not(#page-spec), #spec-print-approval-row { display: none !important; }
     .app { display: block; }
     .main { margin-left: 0; padding: 0; }
     #page-spec { display: block !important; }

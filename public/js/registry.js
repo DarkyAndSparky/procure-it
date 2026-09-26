@@ -65,26 +65,39 @@ function renderPaginationBar(total) {
 const registryRowData = {};
 
 function buildDetailHtml(r) {
+  // Карточка заявки (ROADMAP_Q4.md §10) — сгруппировано по смыслу:
+  // ОСНОВНОЕ → ПОЗИЦИИ → ДОКУМЕНТЫ (файловые операции отдельно от прочих
+  // действий) → ДЕЙСТВИЯ (частые в начале) → опасная зона (Удалить —
+  // визуально и логически отдельно, не просто margin-left:auto в общем
+  // ряду) → ИСТОРИЯ (toggleAuditLog() — раньше не было кнопки, вызывающей
+  // эту функцию, весь механизм истории был недостижим из UI). Классы/id
+  // кнопок не менялись — на них завязан делегированный обработчик в
+  // renderRegistryRows(), только группировка и подписи разделов.
+  const sectionHeader = (label) => `<div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.4px;margin:14px 0 6px">${label}</div>`;
   return `
+        ${sectionHeader('Основное')}
         <div class="detail-grid">
           <div class="detail-item"><span>Поставщик</span>${esc(r.supplier||'—')}</div>
           <div class="detail-item"><span>Номер счёта</span>${r.invoiceNum ? `<span style="font-family:monospace;color:var(--accent)">${esc(r.invoiceNum)}</span>` : '—'}</div>
           <div class="detail-item"><span>Контрагент</span>${r.counterparty ? esc(r.counterparty) : '—'}</div>
           <div class="detail-item"><span>Договор</span>${esc(r.contract||'—')}</div>
+          <div class="detail-item"><span>Сумма закупки</span>${fmtRub(r.totalPurchase||0)}</div>
+          <div class="detail-item"><span>Сумма продажи</span><span style="color:var(--accent);font-weight:600">${fmtRub(r.total||0)}</span></div>
           <div class="detail-item"><span>Битрикс</span>${r.bitrix?'#'+esc(r.bitrix):'—'}</div>
           <div class="detail-item"><span>Адрес</span>${esc(r.address||'—')}</div>
           ${r.comment?`<div class="detail-item" style="grid-column:1/-1"><span>Комментарий</span>${esc(r.comment)}</div>`:''}
           <div class="detail-item" style="grid-column:1/-1"><span>Путь папки</span><span class="open-folder-link" style="font-family:monospace;font-size:11px;color:var(--accent);cursor:pointer" title="Нажать, чтобы открыть папку заявки">📁 ${esc(buildFolderPath(r))}</span></div>
         </div>
+
+        ${sectionHeader('Позиции')}
         <table style="font-size:12px;width:100%;border-collapse:collapse">
           <tr><th style="padding:4px 8px;background:none;border-bottom:1px solid var(--border);font-size:11px">Наименование</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:120px">${r.isRealization?'ЮЛ / Кому':'Комментарий'}</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:60px">Кол-во</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:90px">Закуп</th><th style="padding:4px;background:none;border-bottom:1px solid var(--border);font-size:11px;width:90px">Продажа</th></tr>
           ${r.positions.map(p=>`<tr><td style="padding:3px 8px;border:none">${esc(p.name)}</td><td style="padding:3px 4px;border:none;font-size:11px;color:var(--text-secondary)">${esc(p.comment||p.rowOrgName||'—')}</td><td style="padding:3px 4px;border:none">${p.qty} ${esc(p.unit||'шт')}</td><td style="padding:3px 4px;border:none;text-align:right">${fmtRub(p.purchasePrice)}</td><td style="padding:3px 4px;border:none;text-align:right;color:var(--accent)">${fmtRub(p.sellPerUnit||0)}</td></tr>`).join('')}
         </table>
-        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">
-          <button class="btn btn-sm btn-success export-excel-btn">📊 Excel</button>
-          ${!r.isRealization?`<button class="btn btn-sm load-spec-btn">${r.docType==='install'?'🔧 Смета на работы':r.docType==='support'?'🛠️ Сопровождение':r.docType==='realization'?'🏪 Спецификация на реализацию':'📄 Спецификация'}</button>`:''}
+
+        ${sectionHeader('Документы')}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           ${userRole !== 'viewer' ? `
-          <button class="btn btn-sm copy-request-btn">📋 Копировать</button>
           <label class="btn btn-sm" style="cursor:pointer;background:${r.signedSpecPdf?'var(--success)':'var(--surface-2)'};border-color:${r.signedSpecPdf?'var(--success)':'var(--border)'};color:${r.signedSpecPdf?'#fff':'var(--text)'}" title="${r.signedSpecPdf?'Подписанная спецификация прикреплена. Нажмите чтобы заменить':'Прикрепить подписанную спецификацию PDF'}">
             ${(r.signedSpecPdf&&r.signedSpecPdf!=='')?'✅ Спецификация подписана':'📎 Прикрепить подпись'}
             <input type="file" accept=".pdf" style="display:none" class="upload-signed-spec-input">
@@ -96,9 +109,25 @@ function buildDetailHtml(r) {
           </label>
           ${r.invoiceFile?`<button class="btn btn-sm download-invoice-file-btn" data-spec-num="${esc(r.specNum)}" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}
           ${appConfig.networkFolder?`<button class="btn btn-sm force-layout-btn" id="layout-btn-${esc(r.id)}" title="Разложить файлы в сетевую папку" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">📁 Разложить файлы</button><span id="layout-status-${esc(r.id)}" style="font-size:11px;color:var(--text-muted)"></span>`:''}
-          <button class="btn btn-sm delete-request-btn" style="margin-left:auto;color:var(--danger);border-color:var(--danger)">Удалить</button>
-          ` : `${r.signedSpecPdf?`<button class="btn btn-sm download-signed-spec-btn" data-spec-num="${esc(r.specNum)}" data-org-short="${esc(r.orgShort)}" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}${r.invoiceFile?`<button class="btn btn-sm download-invoice-file-btn" data-spec-num="${esc(r.specNum)}" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}`}
+          ` : `
+          ${r.signedSpecPdf?`<button class="btn btn-sm download-signed-spec-btn" data-spec-num="${esc(r.specNum)}" data-org-short="${esc(r.orgShort)}" title="Скачать подписанную спецификацию">⬇️ Скачать подпись</button>`:''}
+          ${r.invoiceFile?`<button class="btn btn-sm download-invoice-file-btn" data-spec-num="${esc(r.specNum)}" title="Скачать счёт">⬇️ Скачать счёт</button>`:''}
+          ${!r.signedSpecPdf && !r.invoiceFile ? '<span style="color:var(--text-muted);font-size:12px">Файлы не прикреплены</span>' : ''}
+          `}
         </div>
+
+        ${sectionHeader('Действия')}
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="btn btn-sm btn-success export-excel-btn">📊 Excel</button>
+          <button class="btn btn-sm load-spec-btn">${r.docType==='install'?'🔧 Смета на работы':r.docType==='support'?'🛠️ Сопровождение':r.docType==='realization'?'🏪 Спецификация на реализацию':'📄 Спецификация'}</button>
+          ${userRole !== 'viewer' ? `<button class="btn btn-sm copy-request-btn">📋 Копировать</button>` : ''}
+          <button class="btn btn-sm toggle-history-btn">🕓 История</button>
+        </div>
+        ${userRole !== 'viewer' ? `
+        <div style="margin-top:14px;padding:10px;border:1px dashed var(--danger);border-radius:var(--radius);display:flex;align-items:center;gap:10px">
+          <span style="font-size:11px;color:var(--text-muted)">Необратимо — заявка удаляется полностью, вместе с прикреплёнными файлами.</span>
+          <button class="btn btn-sm delete-request-btn" style="margin-left:auto;color:var(--danger);border-color:var(--danger)">Удалить заявку</button>
+        </div>` : ''}
         <div id="audit-${esc(r.id)}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px;font-size:12px"></div>`;
 }
 
@@ -140,7 +169,7 @@ function renderRegistryRows(reqs) {
       <td>
         <button class="btn btn-sm edit-request-btn">Ред.</button>
         <select class="btn btn-sm status-select" style="margin-left:4px;padding:2px 4px;font-size:11px;cursor:pointer" ${userRole==='viewer'?'disabled title="Только для операторов"':''}>
-          ${Object.entries(STATUS_MAP).map(([k,v])=>`<option value="${k}" ${r.status===k?'selected':''}>${v.label}</option>`).join('')}
+          ${statusSelectOptions(r.status||'new', userRole).map(k=>`<option value="${k}" ${r.status===k?'selected':''}>${STATUS_MAP[k].label}</option>`).join('')}
         </select>
       </td>`;
     body.appendChild(tr);
@@ -204,6 +233,8 @@ function renderRegistryRows(reqs) {
         forceLayoutFiles(id, e.target.closest('.force-layout-btn'));
       } else if (e.target.closest('.delete-request-btn')) {
         deleteRequest(id);
+      } else if (e.target.closest('.toggle-history-btn')) {
+        toggleAuditLog(id);
       } else if (tr.classList.contains('row-toggle')) {
         // Ничего специфичного не задето — обычный клик по строке реестра.
         // Detail-строка (второй tr на тот же id) в row-toggle не входит, так
@@ -223,11 +254,43 @@ function renderRegistryRows(reqs) {
   }
 }
 
+// Восстановление фильтров из URL при самом первом открытии реестра
+// (ROADMAP_Q4.md §9 — «скопировать ссылку на отфильтрованный список» имеет
+// смысл, только если ссылка реально что-то восстанавливает при открытии).
+// Работает только один раз за сессию страницы — дальше URL сам синхронен с
+// фильтрами (см. history.replaceState ниже, в конце renderRegistry), так
+// что читать его повторно незачем.
+let filtersInitializedFromUrl = false;
+
 async function renderRegistry() {
-  const search    = (document.getElementById('reg-search')?.value || '').toLowerCase();
-  const filterOrg = document.getElementById('reg-filter-org')?.value || '';
-  const filterMonth = document.getElementById('reg-filter-month')?.value || '';
-  const filterStatus = document.getElementById('reg-filter-status')?.value || '';
+  // <select> для организации/месяца/поставщика/контрагента в момент самого
+  // первого рендера ещё пустые — их <option> строятся чуть ниже, из уже
+  // загруженных данных (db.orgs/db.requests). Установить .value на select
+  // без нужного <option> браузер молча откажется — значение просто не
+  // применится. Поэтому urlFilters не пишем напрямую в .value полей, а
+  // прокидываем как источник для тех же curOrg/curM/curSupplier/
+  // curCounterparty переменных ниже, которыми уже помечается выбранный
+  // <option> при перестройке — там таймингового конфликта нет.
+  let urlFilters = null;
+  if (!filtersInitializedFromUrl) {
+    filtersInitializedFromUrl = true;
+    const p = new URLSearchParams(location.search);
+    if ([...p.keys()].length) {
+      urlFilters = {
+        q: p.get('q') || '', org: p.get('org') || '', month: p.get('month') || '',
+        status: p.get('status') || '', supplier: p.get('supplier') || '', counterparty: p.get('counterparty') || '',
+      };
+      // q и status — не перестраиваются динамически (текстовое поле и
+      // статичные <option> в разметке), можно применить сразу.
+      const searchEl = document.getElementById('reg-search'); if (searchEl) searchEl.value = urlFilters.q;
+      const statusEl = document.getElementById('reg-filter-status'); if (statusEl) statusEl.value = urlFilters.status;
+    }
+  }
+
+  const search    = (urlFilters ? urlFilters.q : (document.getElementById('reg-search')?.value || '')).toLowerCase();
+  const filterOrg = urlFilters ? urlFilters.org : (document.getElementById('reg-filter-org')?.value || '');
+  const filterMonth = urlFilters ? urlFilters.month : (document.getElementById('reg-filter-month')?.value || '');
+  const filterStatus = urlFilters ? urlFilters.status : (document.getElementById('reg-filter-status')?.value || '');
 
   // Build query
   const params = new URLSearchParams();
@@ -235,10 +298,21 @@ async function renderRegistry() {
   if (filterOrg)      params.set('org', filterOrg);
   if (filterMonth)    params.set('month', filterMonth);
   if (filterStatus)   params.set('status', filterStatus);
-  const filterSupplier = document.getElementById('reg-filter-supplier')?.value || '';
+  const filterSupplier = urlFilters ? urlFilters.supplier : (document.getElementById('reg-filter-supplier')?.value || '');
   if (filterSupplier) params.set('supplier', filterSupplier);
-  const filterCounterparty = document.getElementById('reg-filter-counterparty')?.value || '';
+  const filterCounterparty = urlFilters ? urlFilters.counterparty : (document.getElementById('reg-filter-counterparty')?.value || '');
   if (filterCounterparty) params.set('counterparty', filterCounterparty);
+
+  // Синхронизируем адресную строку с текущими фильтрами — без этого
+  // «скопировать ссылку» скопировала бы просто /zakupki.html без
+  // параметров. replaceState (не pushState) — иначе каждая буква в поиске
+  // засоряла бы историю браузера отдельной записью.
+  const qs = params.toString();
+  const newUrl = location.pathname + (qs ? '?' + qs : '') + location.hash;
+  if (newUrl !== location.pathname + location.search + location.hash) {
+    history.replaceState(null, '', newUrl);
+  }
+  renderActiveFilterChips({ q: search, org: filterOrg, month: filterMonth, status: filterStatus, supplier: filterSupplier, counterparty: filterCounterparty });
 
   let reqs = [];
   let totalCount = 0;
@@ -302,7 +376,7 @@ async function renderRegistry() {
 
     // Update org filter options
     const orgSel = document.getElementById('reg-filter-org');
-    const curOrg = orgSel.value;
+    const curOrg = urlFilters ? urlFilters.org : orgSel.value;
     orgSel.innerHTML = '<option value="">Все организации</option>';
     db.orgs.forEach(o => {
       if (reqs.some(r=>r.orgId===o.id) || db.requests.some(r=>r.orgId===o.id))
@@ -312,7 +386,7 @@ async function renderRegistry() {
     // Supplier filter
     const supplierSel = document.getElementById('reg-filter-supplier');
     if (supplierSel) {
-      const curSupplier = supplierSel.value;
+      const curSupplier = urlFilters ? urlFilters.supplier : supplierSel.value;
       const suppliers = [...new Set(db.requests.map(r=>r.supplier).filter(Boolean))].sort();
       supplierSel.innerHTML = '<option value="">Все поставщики</option>';
       suppliers.forEach(s => {
@@ -324,7 +398,7 @@ async function renderRegistry() {
     // «Поставщика» в шапке документа, см. request-form.js)
     const counterpartySel = document.getElementById('reg-filter-counterparty');
     if (counterpartySel) {
-      const curCounterparty = counterpartySel.value;
+      const curCounterparty = urlFilters ? urlFilters.counterparty : counterpartySel.value;
       const counterparties = [...new Set(db.requests.map(r=>r.counterparty).filter(Boolean))].sort();
       counterpartySel.innerHTML = '<option value="">Все контрагенты</option>';
       counterparties.forEach(c => {
@@ -334,7 +408,7 @@ async function renderRegistry() {
 
     // Month filter
     const monthSel = document.getElementById('reg-filter-month');
-    const curM = monthSel.value;
+    const curM = urlFilters ? urlFilters.month : monthSel.value;
     const allMonths = [...new Set(db.requests.map(r=>r.date?.slice(0,7)).filter(Boolean))].sort().reverse();
     monthSel.innerHTML = '<option value="">Все месяцы</option>';
     allMonths.forEach(m => {
@@ -342,6 +416,67 @@ async function renderRegistry() {
       monthSel.innerHTML += `<option value="${m}" ${curM===m?'selected':''}>${months[parseInt(mo)-1]} ${y}</option>`;
     });
   } catch(e) { console.error('Stats error', e); }
+}
+
+// ─── Активные фильтры: чипы, сброс, ссылка (ROADMAP_Q4.md §9) ─────────────
+const FILTER_LABELS = { q: 'Поиск', org: 'Организация', month: 'Месяц', status: 'Статус', supplier: 'Поставщик', counterparty: 'Контрагент' };
+const FILTER_INPUT_IDS = { q: 'reg-search', org: 'reg-filter-org', month: 'reg-filter-month', status: 'reg-filter-status', supplier: 'reg-filter-supplier', counterparty: 'reg-filter-counterparty' };
+
+function renderActiveFilterChips(filters) {
+  const row = document.getElementById('active-filters-row');
+  if (!row) return;
+  if (!row.dataset.actionsBound) {
+    row.dataset.actionsBound = '1';
+    // Делегированный обработчик переживает перестройку innerHTML на каждый
+    // renderRegistry() — тот же приём, что у #stats-row чуть выше.
+    row.addEventListener('click', e => {
+      const removeBtn = e.target.closest('[data-remove-filter]');
+      if (removeBtn) { removeFilter(removeBtn.dataset.removeFilter); return; }
+      if (e.target.closest('#reset-filters-btn')) resetFilters();
+      else if (e.target.closest('#copy-filter-link-btn')) copyFilterLink();
+    });
+  }
+  const active = Object.entries(filters).filter(([,v]) => v);
+  if (!active.length) { row.style.display = 'none'; row.innerHTML = ''; return; }
+  row.style.display = 'flex';
+  // Текст значения для чипа — для select берём подпись выбранного <option>
+  // (человекочитаемо: "📦 Заказано", а не служебный ключ "ordered"), для
+  // текстового поиска — само значение.
+  const chipText = (key, val) => {
+    if (key === 'q') return val;
+    const el = document.getElementById(FILTER_INPUT_IDS[key]);
+    const opt = el && [...el.options].find(o => o.value === val);
+    return opt ? opt.textContent : val;
+  };
+  row.innerHTML = active.map(([key, val]) => `
+    <span class="filter-chip" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:var(--surface-alt);border:1px solid var(--border);border-radius:12px;font-size:11px">
+      <span style="color:var(--text-muted)">${esc(FILTER_LABELS[key])}:</span> ${esc(chipText(key, val))}
+      <button type="button" data-remove-filter="${key}" title="Убрать фильтр" style="border:none;background:none;cursor:pointer;color:var(--text-muted);font-size:13px;line-height:1;padding:0 0 0 2px">✕</button>
+    </span>`).join('') +
+    `<button type="button" id="reset-filters-btn" class="btn btn-sm" style="font-size:11px;padding:2px 8px">Сбросить все</button>
+     <button type="button" id="copy-filter-link-btn" class="btn btn-sm" style="font-size:11px;padding:2px 8px" title="Скопировать ссылку на этот отфильтрованный список">🔗 Скопировать ссылку</button>`;
+}
+
+function removeFilter(key) {
+  const el = document.getElementById(FILTER_INPUT_IDS[key]);
+  if (el) el.value = '';
+  renderRegistry();
+}
+
+function resetFilters() {
+  Object.values(FILTER_INPUT_IDS).forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  renderRegistry();
+}
+
+async function copyFilterLink() {
+  try {
+    await navigator.clipboard.writeText(location.href);
+    toast('✓ Ссылка скопирована');
+  } catch(e) {
+    // Буфер обмена может быть недоступен (нет разрешения, не HTTPS-контекст
+    // и т.п.) — не оставляем пользователя без обратной связи молча.
+    toast('Не удалось скопировать — ссылка: ' + location.href);
+  }
 }
 
 function toggleDetail(id) {
@@ -450,6 +585,11 @@ async function addOrg() {
 }
 
 async function deleteOrg(id) {
+  // Аудит-находка (ROADMAP_Q4.md §13, «Подтверждение удаления»): в отличие
+  // от deleteRequest/deleteUser/removeOrgApproval, здесь не было confirm()
+  // вообще — удаление организации (необратимое) срабатывало сразу по клику.
+  const org = db.orgs.find(o => o.id === id);
+  if (!confirm(`Удалить организацию «${org ? org.short : id}»?`)) return;
   try {
     await api('DELETE', '/api/orgs/' + id);
     db.orgs = db.orgs.filter(o => o.id !== id);
@@ -583,6 +723,7 @@ function populateOrgSelect() {
 const pageTitles = {
   new: 'Новая заявка',
   registry: 'Реестр заявок',
+  dashboard: 'Дашборд',
   spec: 'Спецификация',
   orgs: 'Организации',
   config: 'Настройки',
@@ -608,6 +749,7 @@ function showPage(name) {
   document.getElementById('page-title').textContent = pageTitles[name] || name;
 
   if (name === 'registry') renderRegistry();
+  if (name === 'dashboard') renderDashboard();
   if (name === 'orgs') renderOrgs();
   if (name === 'spec') populateOrgSelect();
   if (name === 'config') {
@@ -647,6 +789,7 @@ function clearForm() {
   document.getElementById('f-markup').value = '5';
   document.getElementById('f-markup').disabled = false;
   document.getElementById('f-no-markup').checked = false;
+  const rtrEl = document.getElementById('f-round-to-ruble'); if (rtrEl) rtrEl.checked = false;
   document.getElementById('f-doc-type').value = 'goods';
   onDocTypeChange();
   document.getElementById('folder-card').style.display = 'none';
@@ -716,7 +859,7 @@ async function toggleAuditLog(id) {
                 positions_added: '➕ Добавлены',
                 positions_removed: '➖ Удалены',
                 positions_changed: '✏️ Изменены',
-                total: 'Сумма'
+                total: 'Сумма', round_to_ruble: 'Округление до рубля'
               };
               detail = `<div style="display:flex;flex-direction:column;gap:3px;margin-top:2px">` +
                 diff.map(d => {
@@ -738,6 +881,7 @@ async function toggleAuditLog(id) {
           return `<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--surface-alt);border-radius:4px">
             <span style="font-size:10px;font-weight:600;color:${action.color};min-width:56px">${action.label}</span>
             <span style="color:var(--text-muted);min-width:120px">${ts}</span>
+            ${log.username ? `<span style="color:var(--text-secondary);min-width:70px;font-size:11px" title="Кто сделал изменение">👤 ${esc(log.username)}</span>` : ''}
             <span>${detail}</span>
           </div>`;
         }).join('')}

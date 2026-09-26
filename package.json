@@ -1,6 +1,6 @@
 {
   "name": "procure-it",
-  "version": "26w36-b13",
+  "version": "26w39-b06",
   "description": "IT Asset Procurement Tool — web-based tool for managing IT equipment purchase requests, generating specifications and calculation sheets",
   "main": "server.js",
   "scripts": {
@@ -11,7 +11,8 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:report": "playwright show-report",
     "prepare": "node scripts/install-hooks.js",
-    "version:sync": "node scripts/sync-version.js"
+    "version:sync": "node scripts/sync-version.js",
+    "bump": "node scripts/bump-version.js"
   },
   "keywords": [
     "procurement",

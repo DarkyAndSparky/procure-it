@@ -96,7 +96,7 @@ async function sendPasswordResetEmail({ to, username, resetUrl, appName }) {
               Нажмите на кнопку ниже — ссылка действует <strong>1 час</strong>.
             </p>
             <div style="text-align:center;margin-bottom:24px">
-              <a href="${resetUrl}"
+              <a href="${escHtml(resetUrl)}"
                  style="display:inline-block;padding:12px 28px;background:#2563eb;color:#fff;
                         border-radius:6px;text-decoration:none;font-size:14px;font-weight:600">
                 Сбросить пароль
@@ -106,7 +106,7 @@ async function sendPasswordResetEmail({ to, username, resetUrl, appName }) {
               Если кнопка не работает, скопируйте эту ссылку в браузер:
             </p>
             <p style="margin:0;font-size:12px;color:#2563eb;word-break:break-all">
-              <a href="${resetUrl}" style="color:#2563eb">${escHtml(resetUrl)}</a>
+              <a href="${escHtml(resetUrl)}" style="color:#2563eb">${escHtml(resetUrl)}</a>
             </p>
           </td>
         </tr>

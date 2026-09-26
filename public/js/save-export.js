@@ -97,21 +97,34 @@ function buildAndDownloadExcel(req, existingWb) {
 
   // ── Лист 1: Расчёты ──────────────────────────────────────────────────────
   const calcRows = [];
+  // Аудит-находка (округление до рубля): I2 хранит ту же «эффективную»
+  // доставку, что реально использовали формулы каждой строки ниже — в
+  // обычном режиме это req.deliveryCost как есть, но в roundToRuble
+  // pricing-core.js округляет доставку вверх ДО распределения (см. dc в
+  // calcRowPricing). Раньше сюда шёл raw req.deliveryCost всегда — если бы
+  // не поправили, I2 показывала бы не ту базу, от которой реально считали
+  // остальные ячейки, и сумма долей доставки (J-колонка) не сходилась бы
+  // визуально с I2. Берём эффективное значение из первой же строки расчёта
+  // (все строки видят одну и ту же дельту — см. деталь ниже, где считаем
+  // effectiveDeliveryCost один раз до цикла).
+  const roundToRuble = !!req.roundToRuble;
+  const effectiveDeliveryCost = roundToRuble ? Math.ceil((req.deliveryCost || 0) - 1e-9) : (req.deliveryCost || 0);
   // Row 0 (index): пустая
   calcRows.push(Array(15).fill(''));
   // Row 1: шапка с доставкой
-  calcRows.push(['Потребности пользователей', '', '', '', '', '', '', 'Доставка', req.deliveryCost || 0, '', '', '', '', '', '']);
+  calcRows.push(['Потребности пользователей', '', '', '', '', '', '', 'Доставка', effectiveDeliveryCost, '', '', '', '', '', '']);
   // Row 2: заголовки колонок
   calcRows.push([
     'ЮЛ','ФИО','№ ПП','Наименование','Кол-во','Где закуп',
     'Цена ед.','Цена закупа','% от заказа для доставки','Доля доставки',
     'Цена закупа за ед с доставкой','Цена закупа с доставкой','',
-    'Цена продажи за единицу','Стоимость продажи'
+    roundToRuble ? 'Цена продажи за единицу (округлено вверх до ₽)' : 'Цена продажи за единицу',
+    'Стоимость продажи'
   ]);
 
   const dataStartRow = 3; // 0-indexed row where first data row goes
   const totalPurchase = req.totalPurchase || 0;
-  const deliveryCost  = req.deliveryCost  || 0;
+  const deliveryCost  = effectiveDeliveryCost;
   const markup        = req.markup ?? 5;
   const posCount      = req.positions.length;
   const itogExcelRow  = dataStartRow + posCount + 1; // 1-based Excel row of итого — pre-calculated for formula refs
@@ -142,7 +155,7 @@ function buildAndDownloadExcel(req, existingWb) {
     // заявки), с сохранением старого поведения: если у позиции уже есть
     // зафиксированная цена продажи (sellPerUnit/sellSum — сохранённая
     // заявка), используем её, а не пересчитываем заново при экспорте.
-    const pricing = calcRowPricing({ purchasePrice: p.purchasePrice, qty: p.qty, totalPurchase, deliveryCost, markup: markup / 100 });
+    const pricing = calcRowPricing({ purchasePrice: p.purchasePrice, qty: p.qty, totalPurchase, deliveryCost, markup: markup / 100, roundToRuble });
     const purchaseSum   = pricing.purchaseSum;
     const pctOfOrder    = pricing.pctOfOrder;
     const deliveryShare = pricing.deliveryShare;
@@ -151,6 +164,9 @@ function buildAndDownloadExcel(req, existingWb) {
     // Сумма — из pricing.sellSum, посчитанной как (purchaseSum+deliveryShare)*(1+markup),
     // а НЕ sellPerUnit*p.qty: так же, как в pricing-core.js, чтобы избежать копеечного
     // расхождения от округления цены за единицу. См. комментарий в pricing-core.js.
+    // Исключение — режим roundToRuble: там sellPerUnit уже целое число рублей,
+    // и sellSum ДОЛЖНА быть sellPerUnit*qty (см. pricing-core.js, roundToRuble),
+    // pricing.sellSum уже это учитывает.
     const sellSum       = round2(p.sellSum || pricing.sellSum);
 
     const r = dataStartRow + i + 1; // Excel row (1-based)
@@ -169,12 +185,31 @@ function buildAndDownloadExcel(req, existingWb) {
       { f: `ROUND(IF(E${r}=0,G${r},G${r}+J${r}/E${r}),2)`, v: ppWithDel, t: 'n' },  // K: Цена с дост за ед
       { f: `ROUND(K${r}*E${r},2)`, v: round2(ppWithDel * p.qty), t: 'n' },          // L: Итого с доставкой
       { v: '', t: 's' },                             // M: пусто
-      { f: `ROUND(K${r}*(1+R2/100),2)`, v: sellPerUnit, t: 'n' },           // N: Цена продажи за ед (R2=markup)
-      // Формула считает от (H+J) — Цена закупа + Доля доставки, обе уже готовые суммы
-      // по строке без деления на qty — а не от K/N (цена ЗА ЕДИНИЦУ), умноженной на E.
-      // Деление доли доставки на кол-во (для цены за ед. в K/N) само по себе теряет
-      // копейки при нецелых долях, и умножение обратно их не возвращает. См. pricing-core.js.
-      { f: `ROUND((H${r}+J${r})*(1+R2/100),2)`, v: sellSum, t: 'n' },      // O: Стоимость продажи
+      // N: Цена продажи за ед (R2=markup). Аудит-находка (округление до
+      // рубля): формула — не только сохранённое значение — пересчитывается
+      // Excel'ем при открытии файла (см. комментарий к round2() в начале
+      // файла — та же ловушка). Без замены формулы на CEILING здесь сайт и
+      // открытый в Excel файл показывали бы РАЗНЫЕ числа для одной и той же
+      // заявки, что прямо противоречит просьбе о согласованности. CEILING(x,1)
+      // — округление вверх до ближайшего кратного 1 (целого рубля), Excel-
+      // аналог Math.ceil().
+      roundToRuble
+        ? { f: `CEILING(K${r}*(1+R2/100),1)`, v: sellPerUnit, t: 'n' }
+        : { f: `ROUND(K${r}*(1+R2/100),2)`, v: sellPerUnit, t: 'n' },
+      // O: Стоимость продажи. В обычном режиме — от (H+J), не от N*E (см.
+      // комментарий ниже про anti-drift). В roundToRuble — ИМЕННО N*E,
+      // потому что смысл режима — «цена за единицу целая, сумма строки =
+      // этой цене × количество», а не «сумма минимально дрейфует от честной
+      // доли доставки». Формула отражает пользовательский пример: 2×1400.13
+      // → округление до 1401 → сумма = 1401×2 = 2802.00, а не производная
+      // от (H+J)*(1+markup).
+      roundToRuble
+        ? { f: `ROUND(N${r}*E${r},2)`, v: sellSum, t: 'n' }
+        // Формула считает от (H+J) — Цена закупа + Доля доставки, обе уже готовые суммы
+        // по строке без деления на qty — а не от K/N (цена ЗА ЕДИНИЦУ), умноженной на E.
+        // Деление доли доставки на кол-во (для цены за ед. в K/N) само по себе теряет
+        // копейки при нецелых долях, и умножение обратно их не возвращает. См. pricing-core.js.
+        : { f: `ROUND((H${r}+J${r})*(1+R2/100),2)`, v: sellSum, t: 'n' },
     ]);
   });
 
@@ -213,6 +248,19 @@ function buildAndDownloadExcel(req, existingWb) {
   // R2 = markup (строка 1, col 17 = R)
   ws1['I2'] = { t: 'n', v: round2(deliveryCost) };
   ws1['R2'] = { t: 'n', v: markup };
+
+  // Красная ячейка-метка (согласовано с пользователем) — видимый признак
+  // того, что расчёты в этом листе сделаны с округлением цены продажи до
+  // целого рубля вверх, а не как обычно. M2 — гарантированно пустая ячейка
+  // в строке заголовка доставки (между "Доставка"/I2 и заголовками таблицы
+  // на следующей строке), в существующем диапазоне A:O, не требует
+  // расширения '!ref'.
+  if (roundToRuble) {
+    ws1['M2'] = {
+      t: 's', v: '⚠ ОКРУГЛЕНИЕ ДО РУБЛЯ (копейки не учитываются)',
+      s: { fill: { patternType: 'solid', fgColor: { rgb: 'FF0000' } }, font: { color: { rgb: 'FFFFFF' }, bold: true } },
+    };
+  }
 
   // ВАЖНО: aoa_to_sheet построил '!ref' только по 15 колонкам (A:O), т.к. все
   // строки массива были такой длины. Ячейка R2 (наценка), от которой зависят

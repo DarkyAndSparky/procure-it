@@ -333,7 +333,7 @@
 <aside class="sidebar">
   <div class="sidebar-logo">
     <h1>procure-it</h1>
-    <span class="version"><!--VERSION-->26w36-b13<!--/VERSION--></span>
+    <span class="version"><!--VERSION-->26w39-b06<!--/VERSION--></span>
   </div>
   <div class="nav-section">Начало</div>
   <a href="#intro"     class="nav-link active">О проекте</a>
@@ -374,7 +374,7 @@
     <h1>procure-it</h1>
     <p>Self-hosted web tool for IT asset procurement — manage purchase requests, calculate prices, generate Excel sheets and specifications.</p>
     <div class="badges">
-      <span class="badge badge-blue"><!--VERSION-->26w36-b13<!--/VERSION--></span>
+      <span class="badge badge-blue"><!--VERSION-->26w39-b06<!--/VERSION--></span>
       <span class="badge badge-green">MIT</span>
       <span class="badge badge-green">Node.js 18+</span>
       <span class="badge badge-blue">SQLite</span>
@@ -455,7 +455,7 @@ elease.bat 26w36-r01</span><br>
       └── <span class="dir dim">data/</span>              <span class="comment dim"># git-ignored, создаётся автоматически</span><br>
           ├── <span class="dim">zakupki.db</span>        <span class="comment dim"># SQLite база данных</span><br>
           ├── <span class="dir dim">certs/</span>            <span class="comment dim"># TLS сертификат</span><br>
-          ├── <span class="dir dim">signed_specs/</span>, <span class="dir dim">invoices/</span> <span class="comment dim"># Прикреплённые файлы</span><br>
+          ├── <span class="dir dim">signed_specs/</span>, <span class="dir dim">invoices/</span>, <span class="dir dim">contract_approvals/</span> <span class="comment dim"># Прикреплённые файлы</span><br>
           └── <span class="dir dim">backups/</span>          <span class="comment dim"># .db-снапшоты + зеркало прикреплённых файлов</span><br>
     </div>
   </section>
@@ -538,6 +538,16 @@ elease.bat 26w36-r01</span><br>
       Формула верифицирована по трём реальным файлам (ЯП июнь, ЛД июнь, ИП Рогулькин июль) — все 16 позиций совпали с точностью до копейки.
     </div>
 
+    <h3>Округление до рубля</h3>
+    <p>Чекбокс «💰 Округление до рубля» в форме заявки — цена продажи за единицу округляется <strong>вверх</strong> (даже 1 копейка сверху уходит в следующий рубль) <em>до</em> умножения на количество, а не сумма строки округляется отдельно. Стоимость доставки тоже округляется вверх до целого рубля — до распределения по позициям.</p>
+    <pre>2 шт. по расчётной цене 1400,13 ₽
+→ цена за единицу: 1401 ₽ (округление вверх)
+→ сумма по строке: 1401 × 2 = 2802,00 ₽  (не 2801, не 2800,26)</pre>
+    <p>Закупочная себестоимость (цена поставщику) <strong>не округляется</strong> в этом режиме — округляется только сторона продажи, обращённая к клиенту.</p>
+    <div class="alert alert-warn">
+      Сервер — единственный источник истины: при сохранении заявки цена и сумма каждой позиции авторитетно пересчитываются и перезаписываются на бэкенде (не просто сверяются с тем, что прислал браузер). Excel-экспорт и DOCX-спецификация читают уже готовые, сохранённые значения — поэтому сайт, Excel и спецификация показывают одни и те же числа. В листе «Расчёты» Excel-экспорта при включённом режиме появляется красная ячейка-метка «⚠ ОКРУГЛЕНИЕ ДО РУБЛЯ» рядом с ячейкой доставки — <strong>и сами формулы Excel</strong> в колонках «Цена продажи»/«Стоимость продажи» меняются на <code>CEILING(...,1)</code> вместо обычного <code>ROUND(...,2)</code>, иначе при открытии файла Excel пересчитал бы их по-старому и числа разошлись бы с сайтом.
+    </div>
+
     <h3>Шаблоны позиций</h3>
     <p>Часто используемые наборы товаров можно сохранить как шаблон (кнопка «💾 Шаблон») и добавлять одним кликом из выпадашки «+ Из шаблона».</p>
 
@@ -570,12 +580,16 @@ elease.bat 26w36-r01</span><br>
         <tr><td>Контрагент</td><td>По полю «Контрагент» (магазин закупки — Ситилинк, DNS и т.д.)</td></tr>
       </table>
     </div>
+    <p>Активные фильтры и поиск отображаются чипами над таблицей — каждый можно убрать отдельно (✕) или сбросить все разом. Фильтры синхронизированы с адресной строкой (<code>?q=dell&amp;status=ordered</code>) — ссылку можно скопировать кнопкой рядом с чипами и отправить коллеге: открыв её, он увидит тот же отфильтрованный список.</p>
+
+    <h3>Дашборд</h3>
+    <p>Отдельная страница со сводкой поверх того же <code>GET /api/stats</code>: количество заявок по статусам, суммы закупок/продаж/маржи, разбивка по организациям, тренд продаж по последним 12 месяцам с данными (простые CSS-бары, без графической библиотеки). Переключатель периода (Сегодня / Неделя / Месяц / Квартал / Год / Всё время) фильтрует всё, кроме тренда по месяцам — тренд специально показывает соседние месяцы для сравнения независимо от выбранного периода. Кнопка «📊 Экспорт в Excel» выгружает текущий вид (выбранный период) одним листом с разделёнными секциями.</p>
 
     <h3>Пагинация</h3>
     <p>25 / 50 / 100 заявок на странице. Появляется автоматически когда заявок больше выбранного размера страницы. Детальная разметка строки (позиции, кнопки, статус раскладки файлов) строится лениво — только при первом разворачивании конкретной заявки, а не заранее для всех строк страницы.</p>
 
     <h3>Статусы</h3>
-    <p>Выпадающий список в строке реестра меняет статус напрямую (это select, а не циклическая кнопка).</p>
+    <p>Выпадающий список в строке реестра меняет статус напрямую (это select, а не циклическая кнопка) — и с <code>26w36-b19</code> показывает только допустимые переходы из текущего статуса, а не все пять сразу.</p>
     <div class="table-wrap">
       <table>
         <tr><th>Статус</th><th>Значение</th><th>Цвет</th></tr>
@@ -586,10 +600,11 @@ elease.bat 26w36-r01</span><br>
         <tr><td>❌ Отменена</td><td>Заявка отменена</td><td>красный</td></tr>
       </table>
     </div>
+    <p><strong>Матрица переходов</strong> (с <code>26w36-b19</code>): Новая → Заказано/Отменена; Заказано → Частично/Получено/Отменена; Частично → Получено; Получено и Отменена — финальные, дальше никуда. Недопустимый переход отклоняется и через смену статуса, и через полное редактирование заявки (оба пути ведут в одну и ту же проверку на сервере). Роль <code>admin</code> может обойти матрицу — например, откатить ошибочно проставленный статус; <code>operator</code> не может.</p>
     <p>Каждая смена статуса пишется в <a href="#api" style="color:var(--accent)">audit log</a>, а если в Конфиге настроен «Webhook при смене статуса» — отправляется туда же.</p>
 
     <h3>Экспорт</h3>
-    <p>Кнопка «📊 Экспорт реестра» — .xlsx с текущими фильтрами и итоговой строкой. Кнопка «📄 CSV» рядом — тот же набор данных в CSV (точка с запятой как разделитель, UTF-8 с BOM — открывается в Excel без кракозябр с кириллицей) для внешних систем/BI, которым проще работать с CSV, чем с .xlsx.</p>
+    <p>Кнопка «📊 Экспорт реестра» — .xlsx с текущими фильтрами (см. чипы фильтров выше — экспортируются ровно те заявки, что сейчас показаны) и итоговой строкой. Суммы — с разделителями разрядов и знаком ₽ (корректно отображаются и для сумм от миллиона — раньше округлялись визуально до целого при открытии в Excel, см. `CHANGELOG.md` 26w39-b03).</p>
   </section>
 
   <!-- Excel -->
@@ -642,6 +657,9 @@ elease.bat 26w36-r01</span><br>
     <p>Печать в PDF: кнопка «Печать / PDF» → в диалоге выбрать «Сохранить как PDF». Кнопка «Сохранить в Word» скачивает <code>.docx</code>, сгенерированный на сервере (<code>POST /api/spec-docx</code>) — красная строка (первая строка абзаца, 1.25см) сделана через явный символ табуляции + табстоп, а не через свойство <code>w:ind firstLine</code>: это надёжнее при печати в реальном Word.</p>
     <p>Файл называется <code>{краткое_название_орг}_Спецификация_{номер}.docx</code> — например <code>ЛД_Спецификация_П202608-01.docx</code>.</p>
     <p>Содержимое зависит от типа документа заявки (см. <a href="#requests" style="color:var(--accent)">«Заявки → Тип документа»</a>): для «Товаров»/«Услуг монтажа» — заголовок, ссылка на договор, дата, таблица позиций, итого, условия поставки, порядок оплаты, блок подписей Поставщик/Покупатель. Для «Реализации» — без ссылки на договор и без порядка оплаты, подпись только одной стороны. Для «Сопровождения» — «Акт гарантийного обслуживания» с гарантийным сроком и условиями покрытия, без порядка оплаты.</p>
+    <h3>Лист согласования договора поставки</h3>
+    <p>Сам договор поставки хранится вне приложения — в системе документооборота организации — и на его согласование обычно уходит отдельная процедура со своим листом (визы ответственных служб). Чтобы не искать этот лист отдельно каждый раз, его можно один раз прикрепить прямо к организации: <strong>Реестр организаций → редактировать → «Лист согласования договора поставки (PDF)»</strong>. Файл общий для организации — не привязан к конкретной заявке, потому что один договор обслуживает много заявок.</p>
+    <p>Если файл прикреплён, на странице предпросмотра спецификации появляется галочка «📎 Печатать вместе с листом согласования договора поставки». При включённой галочке кнопка «Печать / PDF» сначала открывает лист согласования в отдельной вкладке (встроенный PDF-просмотрщик браузера), затем — системный диалог печати самой спецификации. Это два отдельных документа, а не один склеенный PDF: приложение намеренно не встраивает PDF внутрь страницы через <code>&lt;embed&gt;</code>/<code>&lt;iframe&gt;</code>, поскольку CSP запрещает это (<code>object-src 'none'</code>, <code>frame-src 'none'</code> — см. «Аутентификация» выше) в целях защиты от XSS.</p>
   </section>
 
   <!-- About page -->
@@ -744,6 +762,9 @@ POST /api/restore    → восстановить из JSON</pre>
       <tr><td><span class="method PUT">PUT</span>/api/orgs/:id</td><td>Обновить организацию <em>(operator)</em></td></tr>
       <tr><td><span class="method DELETE">DELETE</span>/api/orgs/:id</td><td>Удалить (если нет заявок) <em>(operator)</em></td></tr>
       <tr><td><span class="method POST">POST</span>/api/orgs/bulk</td><td>Импорт списком — <code>{ rows: [{full,short,signatory,contract,address,folder}, ...] }</code>, построчный отчёт <em>(operator)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/orgs/:id/approval-pdf</td><td>Загрузить лист согласования договора поставки, PDF (body: <code>{file: base64, name}</code>, лимит 20MB) <em>(operator)</em></td></tr>
+      <tr><td><span class="method GET">GET</span>/api/orgs/:id/approval-pdf</td><td>Открыть лист согласования (inline PDF) <em>(public)</em></td></tr>
+      <tr><td><span class="method DELETE">DELETE</span>/api/orgs/:id/approval-pdf</td><td>Удалить лист согласования <em>(operator)</em></td></tr>
     </table></div>
     <div class="alert alert-info">
       <code>POST</code>/<code>PUT</code> отклоняют дубли (<code>409</code>) — по короткому названию и по фактической папке раскладки файлов, регистронезависимо (включая кириллицу). Две организации с одинаковым коротким названием иначе физически раскладывались бы в одну и ту же папку на диске. <code>POST /orgs/bulk</code> не откатывает всю пачку из-за одной проблемной строки — каждая строка обрабатывается независимо (дубль с БД, дубль внутри самого списка или незаполненные обязательные поля отмечаются как <code>skipped</code>/<code>error</code>, остальные добавляются).
@@ -756,7 +777,7 @@ POST /api/restore    → восстановить из JSON</pre>
       <tr><td><span class="method GET">GET</span>/api/requests/:id</td><td>Одна заявка <em>(public)</em></td></tr>
       <tr><td><span class="method POST">POST</span>/api/requests</td><td>Создать <em>(operator)</em></td></tr>
       <tr><td><span class="method PUT">PUT</span>/api/requests/:id</td><td>Обновить <em>(operator)</em></td></tr>
-      <tr><td><span class="method PATCH">PATCH</span>/api/requests/:id/status</td><td>Только статус — см. <a href="#registry" style="color:var(--accent)">таблицу статусов</a> <em>(operator)</em></td></tr>
+      <tr><td><span class="method PATCH">PATCH</span>/api/requests/:id/status</td><td>Только статус — подчиняется <a href="#registry" style="color:var(--accent)">матрице переходов</a> (кроме admin) <em>(operator)</em></td></tr>
       <tr><td><span class="method DELETE">DELETE</span>/api/requests/:id</td><td>Удалить <em>(operator)</em></td></tr>
       <tr><td><span class="method GET">GET</span>/api/requests/:id/layout-status</td><td>Статус раскладки файлов в сетевую папку — read-only проверка по факту на диске, не хранится в БД <em>(operator)</em></td></tr>
     </table></div>
@@ -768,7 +789,7 @@ POST /api/restore    → восстановить из JSON</pre>
       <tr><td><span class="method GET">GET</span>/api/requests/:id/signed-spec</td><td>Скачать подписанную спецификацию <em>(operator)</em></td></tr>
       <tr><td><span class="method POST">POST</span>/api/requests/:id/invoice-file</td><td>Загрузить счёт — PDF/PNG/JPG/WebP (лимит 20MB) <em>(operator)</em></td></tr>
       <tr><td><span class="method GET">GET</span>/api/requests/:id/invoice-file</td><td>Скачать счёт <em>(operator)</em></td></tr>
-      <tr><td><span class="method POST">POST</span>/api/requests/:id/layout-files</td><td>Разложить docx/excel/счёт в сетевую папку (лимит 50MB) <em>(operator)</em></td></tr>
+      <tr><td><span class="method POST">POST</span>/api/requests/:id/layout-files</td><td>Разложить docx/excel/счёт/подпись/лист согласования в сетевую папку (лимит 50MB) <em>(operator)</em></td></tr>
       <tr><td><span class="method POST">POST</span>/api/requests/:id/open-folder</td><td>Создать/открыть папку заявки в проводнике ОС (Windows/macOS/Linux) <em>(operator)</em></td></tr>
       <tr><td><span class="method POST">POST</span>/api/test-folder</td><td>Проверить доступность сетевой папки/WebDAV <em>(operator)</em></td></tr>
     </table></div>
@@ -781,12 +802,12 @@ POST /api/restore    → восстановить из JSON</pre>
       <tr><td><span class="method GET">GET</span>/api/templates</td><td>Шаблоны позиций <em>(operator)</em></td></tr>
       <tr><td><span class="method POST">POST</span>/api/templates</td><td>Создать шаблон <em>(operator)</em></td></tr>
       <tr><td><span class="method DELETE">DELETE</span>/api/templates/:id</td><td>Удалить шаблон <em>(operator)</em></td></tr>
-      <tr><td><span class="method GET">GET</span>/api/stats</td><td>Агрегированная статистика <em>(public)</em></td></tr>
+      <tr><td><span class="method GET">GET</span>/api/stats</td><td>Агрегированная статистика — суммы, разбивка по организациям/статусам, тренд по месяцам; опционально <code>?period=today|week|month|quarter|year</code> <em>(public)</em></td></tr>
       <tr><td><span class="method GET">GET</span>/api/backup</td><td>JSON бэкап <em>(admin)</em></td></tr>
       <tr><td><span class="method POST">POST</span>/api/restore</td><td>Восстановить из JSON <em>(admin)</em></td></tr>
       <tr><td><span class="method GET">GET</span>/api/backup/db</td><td>SQLite бэкап <em>(admin)</em></td></tr>
       <tr><td><span class="method GET">GET</span>/health</td><td>Health check <em>(public)</em></td></tr>
-      <tr><td><span class="method GET">GET</span>/api/audit</td><td>История изменений (<code>?request_id=&amp;limit=50</code>) <em>(operator)</em></td></tr>
+      <tr><td><span class="method GET">GET</span>/api/audit</td><td>История изменений — кто, когда, что изменил (<code>?request_id=&amp;limit=50</code>) <em>(operator)</em></td></tr>
       <tr><td><span class="method GET">GET</span>/api/settings</td><td>Настройки приложения (логотип, цвета, webhook) <em>(operator, часть полей скрыта)</em></td></tr>
       <tr><td><span class="method PUT">PUT</span>/api/settings</td><td>Сохранить настройки <em>(admin)</em></td></tr>
       <tr><td><span class="method POST">POST</span>/api/settings/smtp-test</td><td>Проверить SMTP и отправить тестовое письмо (body: <code>{to}</code>) <em>(admin)</em></td></tr>
@@ -845,6 +866,7 @@ data/certs/                   # TLS сертификат
 data/backups/                 # Автобэкапы .db каждые 6ч + files_mirror/ (зеркало прикреплённых файлов)
 data/signed_specs/            # Подписанные спецификации (PDF)
 data/invoices/                # Приложенные файлы счетов
+data/contract_approvals/      # Листы согласования договоров поставки (PDF, по организациям)
 logs/access.log                # Логи запросов</pre>
 
     <h3>Команды</h3>
@@ -934,6 +956,15 @@ docker exec -it procure-it sh # войти в контейнер</pre>
       <pre>npm run version:sync</pre>
       Скрипт (<code>scripts/sync-version.js</code>) сам подставит новый номер во все места, где он отображается: бейдж в README, версия в шапке и футере этой страницы, тег Docker-образа в <code>docker-compose.yml</code>. Иллюстративные примеры формата (как в таблице выше) скрипт не трогает — только реальные «текущая версия» плейсхолдеры, помеченные комментариями <code>&lt;!--VERSION--&gt;…&lt;!--/VERSION--&gt;</code> в исходниках.
     </div>
+
+    <h3>Автоматический расчёт следующей версии</h3>
+    <p><code>npm run bump</code> (<code>scripts/bump-version.js</code>) сам вычисляет следующую версию — не нужно вручную сверять ISO-номер недели и считать сборки: та же неделя → счётчик <code>+1</code>, неделя сменилась (обычно ночь с воскресенья на понедельник) → счётчик сбрасывается на <code>01</code> и подставляется текущая ISO-неделя. Пишет результат в <code>package.json</code> и сам вызывает <code>version:sync</code>.</p>
+    <pre>npm run bump                  # тот же stage (a/b/rc/r), авто week/counter
+npm run bump -- --stage=rc    # сменить стадию — тоже сбрасывает счётчик на 01
+npm run bump -- --dry-run     # только показать, что получится, не писать в package.json</pre>
+    <div class="alert alert-info">
+      Не заменяет release-хелпер ниже (<code>tools/release/release.sh</code>/<code>.bat</code>) — тот принимает версию явным аргументом и делает полный флоу (merge в <code>main</code>, тег, push). <code>npm run bump</code> — про повседневные сборки в <code>dev</code> и про то, чтобы понять, какую строку вообще передать в <code>release.sh</code>, не считая неделю в уме.
+    </div>
   </section>
 
   <!-- Testing & changelog -->
@@ -1013,7 +1044,7 @@ tools\release\release.bat 26w36-r01
   </section>
 
   <div style="border-top:1px solid var(--border);margin-top:48px;padding-top:24px;color:var(--text2);font-size:12px;display:flex;justify-content:space-between;align-items:center">
-    <span>procure-it <!--VERSION-->26w36-b13<!--/VERSION--> · MIT License</span>
+    <span>procure-it <!--VERSION-->26w39-b06<!--/VERSION--> · MIT License</span>
     <a href="https://github.com/DarkyAndSparky" style="color:var(--text2);text-decoration:none">© DarkyAndSparky</a>
   </div>
 

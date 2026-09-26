@@ -2,7 +2,7 @@
 
 > Web-based IT asset procurement tool — manage purchase requests, generate Excel calculation sheets and specifications.
 
-[![Version](https://img.shields.io/badge/version-<!--VERSION_SHIELDS-->26w36--b13<!--/VERSION_SHIELDS-->-blue)](#)
+[![Version](https://img.shields.io/badge/version-<!--VERSION_SHIELDS-->26w39--b06<!--/VERSION_SHIELDS-->-blue)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-brightgreen)](https://nodejs.org/)
 [![SQLite](https://img.shields.io/badge/Database-SQLite-blue)](https://www.sqlite.org/)
@@ -24,7 +24,7 @@
 5. Optionally send request to Bitrix24 CRM via webhook
 6. All data in a local SQLite database, accessible from any LAN device
 
-**Also included:** drag & drop row reordering · position templates · Excel import · audit log with field-level diff · auto-backup every 6h (including attached files) · role-based auth (viewer/operator/admin) with HttpOnly cookies, CSRF protection, and a strict Content-Security-Policy (no inline scripts anywhere, static or dynamic) · Docker support
+**Also included:** drag & drop row reordering · position templates · Excel import · audit log with field-level diff · auto-backup every 6h (including attached files) · role-based auth (viewer/operator/admin) with HttpOnly cookies, CSRF protection, and a strict Content-Security-Policy (no inline scripts anywhere, static or dynamic) · per-organization contract approval sheet (PDF), optionally printed alongside the specification · Docker support
 
 ---
 
@@ -170,6 +170,7 @@ procure-it/
 │       └── release-bump.js       # package.json version writer (used by release.bat/.sh)
 ├── scripts/                       # Build-time helpers (included in releases — used by install scripts and Dockerfile)
 │   ├── sync-version.js           # npm run version:sync — propagates package.json version to README/docs/Docker
+│   ├── bump-version.js           # npm run bump — computes next version (auto ISO-week rollover), then runs sync-version.js
 │   ├── check-node-version.js     # Node.js version check (used by install.bat/.sh)
 │   ├── check-deps-fresh.js       # Decides whether npm install is needed (used by install.bat/.sh)
 │   ├── install-hooks.js          # Copies scripts/hooks/* into .git/hooks/ on npm install (prepare script)
@@ -183,7 +184,8 @@ procure-it/
 │   ├── certs/                    # TLS cert (auto-generated)
 │   ├── backups/                  # .db snapshots (30-day retention) + files_mirror/ (attached-file mirror)
 │   ├── signed_specs/              # Uploaded signed specification PDFs
-│   └── invoices/                  # Uploaded invoice files
+│   ├── invoices/                  # Uploaded invoice files
+│   └── contract_approvals/        # Contract approval sheets (PDF), one per organization
 ├── start.bat                      # Windows launcher (install + run)
 ├── start.sh                       # Linux/macOS launcher (install + run)
 ├── install.bat / install.sh       # Install deps only, no server start
@@ -261,10 +263,11 @@ data/backups/                 # Автобэкапы .db каждые 6 часо
 data/backups/files_mirror/    # Зеркало прикреплённых файлов (см. ниже) — актуально всегда, не версионируется
 data/signed_specs/            # Подписанные спецификации (PDF)
 data/invoices/                # Приложенные файлы счетов
+data/contract_approvals/      # Листы согласования договоров поставки (PDF, по организациям)
 logs/access.log                # Логи запросов (morgan combined)
 ```
 
-> **О бэкапах прикреплённых файлов:** сами PDF (подписанные спецификации, счета) хранятся на диске отдельно от SQLite, поэтому `.db`-снапшот их не содержит. При каждом автобэкапе `data/backups/files_mirror/` синхронизируется с текущим содержимым `signed_specs/`/`invoices/` (копируются только новые/изменённые файлы). При восстановлении (`POST /api/restore`) сервер сначала пытается найти файл на месте, а если его нет — берёт из `files_mirror/`.
+> **О бэкапах прикреплённых файлов:** сами PDF (подписанные спецификации, счета, листы согласования договоров) хранятся на диске отдельно от SQLite, поэтому `.db`-снапшот их не содержит. При каждом автобэкапе `data/backups/files_mirror/` синхронизируется с текущим содержимым `signed_specs/`/`invoices/`/`contract_approvals/` (копируются только новые/изменённые файлы). При восстановлении (`POST /api/restore`) сервер сначала пытается найти файл на месте, а если его нет — берёт из `files_mirror/`.
 
 ### Команды
 

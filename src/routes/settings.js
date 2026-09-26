@@ -5,6 +5,10 @@ const { getDb, saveDb } = require('../db/connection');
 const { operatorOrAdmin, adminOnly } = require('../auth/middleware');
 const { DEFAULT_SETTINGS } = require('../config');
 
+// Должен точно совпадать с CLEAR_PASSWORD_SENTINEL в public/js/config.js —
+// см. комментарий у PUT /settings ниже (26w36-b18).
+const CLEAR_PASSWORD_SENTINEL = '__CLEAR_PASSWORD__26w36b18__';
+
 const PKG_VERSION = (() => {
   // package.json — единственный источник правды для версии (см. scripts/sync-version.js,
   // который подставляет её же во все остальные места: README, docs/index.html,
@@ -22,8 +26,13 @@ router.get('/settings', operatorOrAdmin, (req, res) => {
       rows[0].values.forEach(([k, v]) => { if (k in result) result[k] = v; });
     }
     // Never expose the actual password over the wire — return a sentinel so
-    // the UI knows a password is set without leaking it
+    // the UI knows a password is set without leaking it.
+    // Аудит-находка (26w36-b18): smtpPass не был замаскирован здесь вообще —
+    // отдавался в открытом виде любому admin'у, хотя комментарий выше прямо
+    // требует обратного для паролей. networkPass уже маскировался правильно —
+    // приводим smtpPass к тому же виду.
     if (result.networkPass) result.networkPass = '••••••••';
+    if (result.smtpPass) result.smtpPass = '••••••••';
     // Operators need branding + supplier defaults to create requests/specs,
     // but shouldn't see infra credentials/webhooks — only admins get those.
     if (req.userRole !== 'admin') {
@@ -59,9 +68,25 @@ router.put('/settings', adminOnly, (req, res) => {
       }
     }
     for (const [k, v] of Object.entries(req.body)) {
-      if (allowed.includes(k)) {
-        db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [k, String(v)]);
+      if (!allowed.includes(k)) continue;
+      // Аудит-находка (26w36-b18): форма настроек (public/js/config.js)
+      // никогда не подставляет реальный пароль обратно в поле (сознательно,
+      // из соображений безопасности — см. populateConfigPage()/маскировку
+      // выше), поэтому ЛЮБОЕ сохранение настроек, где админ не перепечатал
+      // пароль заново, отправляло сюда пустую строку — и тихо стирало ранее
+      // сохранённый smtpPass/networkPass. Подтверждено вживую: после
+      // настройки SMTP один-единственный клик «Сохранить», где менялось
+      // только название приложения, полностью обнулял пароль. Пустая строка
+      // для ЭТИХ ДВУХ полей теперь означает «не менять», а не «очистить» —
+      // остальные поля ведут себя как раньше (пустая строка = сохранить
+      // пустую строку, это осмысленно для текстовых полей вроде названия).
+      // Явная очистка — через отдельный чекбокс на фронте, который шлёт
+      // сентинел ниже вместо пустой строки.
+      if ((k === 'smtpPass' || k === 'networkPass')) {
+        if (v === CLEAR_PASSWORD_SENTINEL) { db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [k, '']); continue; }
+        if (v === '') continue;
       }
+      db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [k, String(v)]);
     }
     saveDb();
     res.json({ ok: true });

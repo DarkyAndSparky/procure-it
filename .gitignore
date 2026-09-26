@@ -12,6 +12,8 @@ data/**
 !data/signed_specs/.gitkeep
 !data/invoices/
 !data/invoices/.gitkeep
+!data/contract_approvals/
+!data/contract_approvals/.gitkeep
 *.db
 *.db-wal
 *.db-shm

@@ -37,6 +37,7 @@ function runMigrations(db) {
     `ALTER TABLE requests ADD COLUMN doc_type TEXT DEFAULT 'goods'`,    // тип документа: goods | install | support
     `ALTER TABLE requests ADD COLUMN counterparty TEXT DEFAULT ''`,    // контрагент/магазин закупки (для фильтров в реестре)
     `ALTER TABLE requests ADD COLUMN warranty_period TEXT DEFAULT ''`, // гарантийный срок — только для docType='support' (Акт гарантийного обслуживания)
+    `ALTER TABLE requests ADD COLUMN round_to_ruble INTEGER DEFAULT 0`, // округление цены продажи до целого рубля вверх (см. pricing-core.js#calcRowPricing, roundToRuble) — 1 = включено
     `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')`,
     `CREATE TABLE IF NOT EXISTS audit_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -117,6 +118,14 @@ function runMigrations(db) {
     new_value TEXT,
     meta      TEXT
   )`);
+  // Migration (26w36-b20, ROADMAP_Q4.md §8): кто сделал изменение — раньше
+  // не писалось вообще, ни в схеме, ни в вызовах auditLog() по всему
+  // src/routes/*.js. Пишем именно username (не user_id) — так строка
+  // остаётся читаемой сама по себе и не ломается, если пользователя потом
+  // удалят; ровно то же соображение, что уже применено к org_full/org_short
+  // в requests (денормализация ради устойчивости истории к удалению
+  // связанной записи).
+  try { db.run(`ALTER TABLE audit_log ADD COLUMN username TEXT DEFAULT ''`); } catch(e) {}
 
   // Settings table
   db.run(`CREATE TABLE IF NOT EXISTS settings (
@@ -137,6 +146,13 @@ function runMigrations(db) {
   // Migration: отдельное имя папки для раскладки файлов (напр. «ЛД»), может
   // отличаться от короткого названия, которое показывается в интерфейсе
   try { db.run(`ALTER TABLE orgs ADD COLUMN folder TEXT DEFAULT ''`); } catch(e) {}
+  // Migration: лист согласования договора поставки (скан PDF) — общий для
+  // организации файл; approval_pdf хранит служебное имя файла на диске
+  // (data/contract_approvals/<id>.pdf), approval_pdf_name — оригинальное
+  // имя для красивого скачивания. Печатается вместе со спецификацией по
+  // галочке на странице предпросмотра — см. public/js/request-detail.js.
+  try { db.run(`ALTER TABLE orgs ADD COLUMN approval_pdf TEXT DEFAULT ''`); } catch(e) {}
+  try { db.run(`ALTER TABLE orgs ADD COLUMN approval_pdf_name TEXT DEFAULT ''`); } catch(e) {}
 
   db.run(`CREATE TABLE IF NOT EXISTS requests (
     id TEXT PRIMARY KEY, spec_num TEXT NOT NULL,
@@ -196,6 +212,23 @@ function runMigrations(db) {
   try { db.run(`ALTER TABLE users ADD COLUMN salt TEXT NOT NULL DEFAULT ''`); } catch(e) {}
   // Email для привязки к учётной записи (сброс пароля, уведомления)
   try { db.run(`ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''`); } catch(e) {}
+  // Аудит-находка (26w36-b16): email не был уникальным. При дублях
+  // POST /auth/reset-password-request бил по ПЕРВОЙ найденной строке — то
+  // есть сброс пароля мог случайно достаться не тому аккаунту. Пустая
+  // строка (email не привязан — по умолчанию у многих пользователей)
+  // намеренно исключена из уникальности через частичный индекс — иначе
+  // второй же пользователь без email не смог бы сохраниться.
+  try {
+    db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email) WHERE email != ''`);
+  } catch(e) {
+    // На существующей БД дубли уже могут быть — тогда индекс не создастся.
+    // Не блокируем запуск сервера/миграцию из-за этого: администратору
+    // нужно будет развести дубли вручную (см. CHANGELOG), но приложение
+    // должно продолжать работать. Новые дубли всё равно будет ловить
+    // POST/PUT /users на уровне приложения (routes/auth.js) — так что риск
+    // растёт, а не появляется заново.
+    console.warn('[schema] Не удалось создать уникальный индекс users.email (вероятно, есть дубли в существующей БД):', e.message);
+  }
 
   // Токены сброса пароля — создаются при запросе сброса, удаляются после
   // использования или истечения срока (1 час).

@@ -20,7 +20,13 @@ router.post('/send-bitrix', operatorOrAdmin, async (req, res) => {
     res.json({ ok: true, bitrixResult: result });
   } catch(e) {
     console.error('[bitrix]', e.message);
-    res.status(500).json({ error: e.message });
+    // Не отдаём e.message клиенту напрямую — оно может содержать детали
+    // сети/хоста вебхука (DNS, ECONNREFUSED, таймаут), настроенного
+    // админом и не обязательно предназначенного для глаз operator'а,
+    // который просто нажал «Отправить в Bitrix». Тот же принцип, что уже
+    // применён к 17 другим роутам (см. CHANGELOG 26w36-b12) — этот роут
+    // тогда пропустили.
+    res.status(500).json({ error: 'Не удалось отправить сделку в Bitrix24. Проверьте настройки вебхука в Конфиге.' });
   }
 });
 

@@ -37,6 +37,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
       Реестр заявок
     </button>
+    <button class="nav-item" id="nav-dashboard" data-ie113="1">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Дашборд
+    </button>
     <button class="nav-item" id="nav-spec" data-ie4="1">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
       Спецификация
@@ -283,6 +287,10 @@
             <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:4px;margin-top:4px"><span style="color:var(--success)">Прибыль:</span><span id="sum-profit" style="font-weight:600;color:var(--success)">0,00 ₽</span></div>
           </div>
         </div>
+        <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:13px;font-weight:500;color:var(--text);margin-top:14px;padding:10px;background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer">
+          <input type="checkbox" id="f-round-to-ruble" style="width:16px;height:16px;cursor:pointer" data-ie114="1">
+          💰 Округление до рубля (без копеек) — цена за единицу округляется вверх, даже на 1 копейку
+        </label>
       </div>
 
       <!-- Upload invoice + comment -->
@@ -365,6 +373,8 @@
         </div>
       </div>
 
+      <div id="active-filters-row" style="display:none;flex-wrap:wrap;align-items:center;gap:6px;margin:-8px 0 12px"></div>
+
       <div class="card" style="padding:0;overflow:hidden">
         <div class="table-wrap">
           <table>
@@ -410,6 +420,22 @@
       </div>
     </div>
 
+    <!-- PAGE: Dashboard -->
+    <div id="page-dashboard" class="page" style="display:none">
+      <div class="btn-group" style="margin-bottom:16px;flex-wrap:wrap;gap:6px">
+        <button class="btn btn-sm dash-period-btn" data-period="">Всё время</button>
+        <button class="btn btn-sm dash-period-btn" data-period="today">Сегодня</button>
+        <button class="btn btn-sm dash-period-btn" data-period="week">Неделя</button>
+        <button class="btn btn-sm dash-period-btn" data-period="month">Месяц</button>
+        <button class="btn btn-sm dash-period-btn" data-period="quarter">Квартал</button>
+        <button class="btn btn-sm dash-period-btn" data-period="year">Год</button>
+        <button class="btn btn-sm" id="dash-export-btn" style="margin-left:auto;background:var(--success);border-color:var(--success);color:#fff">📊 Экспорт в Excel</button>
+      </div>
+      <div id="dashboard-content">
+        <div style="color:var(--text-muted);padding:20px;text-align:center">Загрузка…</div>
+      </div>
+    </div>
+
     <!-- PAGE: Spec preview -->
     <div id="page-spec" class="page" style="display:none">
       <div class="btn-group" style="margin-bottom:16px">
@@ -418,6 +444,10 @@
         <select id="spec-select" style="border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;font-size:13px;background:var(--surface);font-family:inherit" data-ie56="1">
           <option value="">— Выбрать сохранённую заявку —</option>
         </select>
+      </div>
+      <div id="spec-print-approval-row" style="display:none;align-items:center;gap:8px;margin:-8px 0 16px;font-size:13px">
+        <input type="checkbox" id="spec-print-approval" style="width:16px;height:16px">
+        <label for="spec-print-approval" style="margin:0;cursor:pointer">📎 Печатать вместе с листом согласования договора поставки</label>
       </div>
       <div id="spec-preview-content" class="spec-preview">
         <div class="empty" style="font-family:sans-serif">
@@ -553,6 +583,9 @@
             <div class="field">
               <label>Пароль</label>
               <input type="password" id="cfg-network-pass" placeholder="••••••••">
+              <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:normal;font-size:12px;color:var(--text-muted);cursor:pointer">
+                <input type="checkbox" id="cfg-network-pass-clear" style="width:14px;height:14px;margin:0"> удалить сохранённый пароль
+              </label>
             </div>
           </div>
           <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
@@ -681,6 +714,9 @@
             <div class="field" style="margin:0">
               <label>Пароль</label>
               <input type="password" id="cfg-smtp-pass" autocomplete="new-password" style="width:100%">
+              <label style="display:flex;align-items:center;gap:6px;margin-top:6px;font-weight:normal;font-size:12px;color:var(--text-muted);cursor:pointer">
+                <input type="checkbox" id="cfg-smtp-pass-clear" style="width:14px;height:14px;margin:0"> удалить сохранённый пароль
+              </label>
             </div>
           </div>
           <div class="field" style="margin-bottom:14px">
@@ -824,6 +860,18 @@
       <input type="checkbox" id="modal-org-stamp" checked style="width:16px;height:16px">
       <label for="modal-org-stamp" style="margin:0;cursor:pointer">С печатью (М.П.) — иначе в подписи покупателя будет «Б.П.»</label>
     </div>
+    <div class="field" style="margin-bottom:20px">
+      <label>Лист согласования договора поставки (PDF)</label>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px">
+        <label class="btn btn-sm" style="cursor:pointer">
+          📎 Прикрепить PDF
+          <input type="file" id="modal-org-approval-input" accept="application/pdf" style="display:none" data-ie110="1">
+        </label>
+        <span id="modal-org-approval-status" style="font-size:12px;color:var(--text-muted)">не прикреплён</span>
+        <button type="button" class="btn btn-sm" id="modal-org-approval-view" style="display:none" data-ie111="1">👁️ Открыть</button>
+        <button type="button" class="btn btn-sm btn-danger" id="modal-org-approval-remove" style="display:none" data-ie112="1">🗑️ Удалить</button>
+      </div>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn" data-ie104="1">Отмена</button>
       <button class="btn" style="background:var(--success);border-color:var(--success);color:#fff" data-ie105="1">Сохранить</button>
@@ -873,6 +921,7 @@
 <script src="/js/save-export.js"></script>
 <script src="/js/request-detail.js"></script>
 <script src="/js/registry.js"></script>
+<script src="/js/dashboard.js"></script>
 <script src="/js/files.js"></script>
 <script src="/js/modals-misc.js"></script>
 <script src="/js/helpers.js"></script>

@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', function () {
   document.querySelector('[data-ie51]').addEventListener('click', function(event){ goPage(currentPage+1) });
   document.querySelector('[data-ie52]').addEventListener('click', function(event){ goPage(totalPages) });
   document.querySelector('[data-ie53]').addEventListener('change', function(event){ changePageSize() });
-  document.querySelector('[data-ie54]').addEventListener('click', function(event){ window.print() });
+  document.querySelector('[data-ie54]').addEventListener('click', function(event){ printSpec() });
   document.querySelector('[data-ie55]').addEventListener('click', function(event){ saveSpecWord() });
   document.querySelector('[data-ie56]').addEventListener('change', function(event){ loadSpecFromRegistry() });
   document.querySelector('[data-ie57]').addEventListener('change', function(event){ previewLogo(this) });
@@ -112,4 +112,9 @@ document.addEventListener('DOMContentLoaded', function () {
   document.querySelector('[data-ie107]').addEventListener('click', function(event){ proceedRestoreConfirm() });
   document.querySelector('[data-ie108]').addEventListener('keydown', function(event){ if(event.key==='Enter')doReset() });
   document.querySelector('[data-ie109]').addEventListener('click', function(event){ doReset() });
+  document.querySelector('[data-ie110]').addEventListener('change', function(event){ uploadOrgApproval(this) });
+  document.querySelector('[data-ie111]').addEventListener('click', function(event){ viewOrgApproval() });
+  document.querySelector('[data-ie112]').addEventListener('click', function(event){ removeOrgApproval() });
+  document.querySelector('[data-ie113]').addEventListener('click', function(event){ showPage('dashboard') });
+  document.querySelector('[data-ie114]').addEventListener('change', function(event){ calcTotal() });
 });

@@ -16,7 +16,9 @@ router.post('/spec-docx', operatorOrAdmin, async (req, res) => {
     res.send(buf);
   } catch(e) {
     console.error('[spec-docx]', e);
-    res.status(500).json({ error: e.message });
+    // Тот же принцип, что и в bitrix.js — не пробрасываем сырой e.message
+    // клиенту (может содержать внутренние детали шаблона/данных).
+    res.status(500).json({ error: 'Не удалось сформировать документ спецификации. Попробуйте ещё раз.' });
   }
 });
 

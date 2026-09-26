@@ -8,7 +8,7 @@ function addRow(name='', qty=1, unit='шт', price=0, link='', purchasePrice=0, 
   const tr = document.createElement('tr');
   tr.id = id;
   const pp = purchasePrice || price;
-  const isRealization = document.getElementById('realization-badge')?.style.display !== 'none';
+  const isRealization = document.getElementById('f-doc-type')?.value === 'realization';
   const commentCell = isRealization
     ? `<td><select style="width:120px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;background:var(--surface);color:var(--text);font-family:inherit" title="Организация-получатель">${db.orgs.map(o=>`<option value="${esc(o.short)}" ${rowOrgName===o.short?'selected':''}>${esc(o.short)}</option>`).join('')}<option value="На склад" ${rowOrgName==='На склад'?'selected':''}>На склад</option></select></td>`
     : `<td><input type="text" value="${esc(comment)}" style="width:120px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;font-family:inherit" placeholder="ФИО / куда"></td>`;
@@ -178,7 +178,26 @@ function onDocTypeChange() {
   if (th) th.textContent = dt === 'install' ? 'Наименование работ / услуг' : 'Наименование товара';
   const warrantyWrap = document.getElementById('f-warranty-wrap');
   if (warrantyWrap) warrantyWrap.style.display = dt === 'support' ? '' : 'none';
+
+  // Аудит-находка (при работе над округлением до рубля — попутно нашлась
+  // отдельная, более серьёзная проблема): isRealization ВЕЗДЕ в проекте
+  // вычислялся по видимости #realization-badge, а не по docType — а
+  // единственный живой путь выбрать «Реализация» (этот select) видимость
+  // бейджа вообще не трогал. Раньше это делала отдельная функция
+  // startRealization(), но вызывать её было уже неоткуда — кнопка
+  // nav-new-real, для которой она писалась, нигде не существует. Итог:
+  // isRealization после выбора «🏪 Реализация» из списка оставался false
+  // при сохранении — со всеми вытекающими (ЮЛ/ФИО колонки в Excel,
+  // per-строчный org-select, бейдж «реализация» в реестре, поле
+  // rowOrgName у позиций) для КАЖДОЙ заявки, созданной через реальный UI.
+  // Теперь единственный источник истины — сам docType (см. addRow() в
+  // этом файле и collectForm() в request-form.js), а бейдж/заголовок
+  // колонки ниже — чисто декоративны, синхронизированы с ним здесь же.
+  const badge = document.getElementById('realization-badge');
+  const commentTh = document.querySelector('#page-new table thead th:nth-child(4)');
   if (dt === 'realization') {
+    if (badge) badge.style.display = 'flex';
+    if (commentTh) { commentTh.textContent = 'ЮЛ / Получатель'; commentTh.style.color = 'var(--accent)'; }
     // Реализация — товар для себя: без наценки, поставщик и организация — по умолчанию
     const noMarkupCb = document.getElementById('f-no-markup');
     if (noMarkupCb && !noMarkupCb.checked) { noMarkupCb.checked = true; toggleNoMarkup(); }
@@ -192,6 +211,9 @@ function onDocTypeChange() {
       if (ipOrg) { orgSel.value = ipOrg.id; updateSpecNum(); fillOrgDefaults(); }
     }
     toast('🏪 Реализация: цена без наценки, организация по умолчанию');
+  } else {
+    if (badge) badge.style.display = 'none';
+    if (commentTh) { commentTh.textContent = 'Комментарий / ФИО'; commentTh.style.color = ''; }
   }
 }
 
@@ -214,6 +236,7 @@ function calcTotal() {
   const markup = (markupEl && markupEl.value !== '' ? parseNum(markupEl.value) : 5) / 100;
   const deliveryOn = document.getElementById('f-delivery-on')?.checked;
   const deliveryCost = deliveryOn ? (parseNum(document.getElementById('f-delivery-cost')?.value) || 0) : 0;
+  const roundToRuble = document.getElementById('f-round-to-ruble')?.checked || false;
 
   // Step 1: total purchase (без доставки)
   let totalPurchase = 0;
@@ -233,7 +256,7 @@ function calcTotal() {
   for (const { tr, qty, pp, purchaseSum } of rowData) {
     const id = tr.id;
     const { deliveryShare, ppWithDelivery, sellPerUnit, sellSum } = calcRowPricing({
-      purchasePrice: pp, qty, totalPurchase, deliveryCost, markup,
+      purchasePrice: pp, qty, totalPurchase, deliveryCost, markup, roundToRuble,
     });
     totalSell += sellSum;
     const sellEl = tr.querySelector(`#${id}-sell`);

@@ -2,6 +2,34 @@
 chcp 65001 >nul
 setlocal
 
+rem === Self-relocate to a temp copy before doing anything else ===
+rem Why: this script lives in tools\release\, and tools\ is exactly what
+rem step [6/9] strips from `main`. Step [4/9] below runs `git checkout
+rem main`, which swaps the ENTIRE working tree to main's — including
+rem deleting tools\release\release.bat, i.e. the very file cmd.exe is
+rem reading line-by-line right now. cmd.exe re-reads .bat files from disk
+rem as it executes (not buffered fully in memory), so the file vanishing
+rem mid-run aborts with "The system cannot find the path specified"
+rem right after the checkout (found live on a real release attempt,
+rem 26w39-r01 — merge never even ran, caught early, no data lost, but
+rem cost a manual recovery). Fix: copy this whole folder to %TEMP% once,
+rem then re-invoke the COPY with the same arguments — that copy lives
+rem outside the git working tree, so branch switches can't touch it.
+if "%PROCURE_RELEASE_RELOCATED%"=="1" goto :relocated
+set "PROCURE_RELEASE_RELOCATED=1"
+set "RELOC_DIR=%TEMP%\procure-release-%RANDOM%%RANDOM%"
+mkdir "%RELOC_DIR%" >nul 2>&1
+xcopy "%~dp0*" "%RELOC_DIR%\" /e /i /q >nul
+if errorlevel 1 (
+    echo ERROR: could not copy release scripts to a temp folder ^(%RELOC_DIR%^)
+    exit /b 1
+)
+call "%RELOC_DIR%\release.bat" %*
+set "RC=%errorlevel%"
+rmdir /s /q "%RELOC_DIR%" >nul 2>&1
+exit /b %RC%
+:relocated
+
 set "NEW_VER=%~1"
 if "%NEW_VER%"=="" (
     echo ERROR: specify version. Example: release.bat 26w35-r01

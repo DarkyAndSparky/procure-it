@@ -1,6 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# === Self-relocate to a temp copy before doing anything else ===
+# See release.bat for the full story (found live on 26w39-r01): this
+# script lives in tools/release/, and tools/ is exactly what step [6/9]
+# strips from `main`. Step [4/9] runs `git checkout main`, swapping the
+# whole working tree — bash is less fragile than cmd.exe about re-reading
+# a running script from disk, but not guaranteed immune, and the failure
+# mode (aborting mid-release, between checkout and merge) is bad enough
+# to not risk it. Relocate once, re-exec the copy, which lives outside
+# the git working tree.
+if [[ "${PROCURE_RELEASE_RELOCATED:-}" != "1" ]]; then
+    RELOC_DIR="$(mktemp -d "${TMPDIR:-/tmp}/procure-release-XXXXXX")"
+    cp -R "$(dirname "$0")/." "$RELOC_DIR/"
+    export PROCURE_RELEASE_RELOCATED=1
+    "$RELOC_DIR/release.sh" "$@"
+    RC=$?
+    rm -rf "$RELOC_DIR"
+    exit $RC
+fi
+
 NEW_VER="${1:-}"
 if [[ -z "$NEW_VER" ]]; then
     echo "ERROR: specify version. Example: ./release.sh 26w35-r01"

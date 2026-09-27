@@ -92,10 +92,11 @@ git rm    --cached --ignore-unmatch CONTRIBUTING.md    2>/dev/null || true
 git rm    --cached --ignore-unmatch ROADMAP.md         2>/dev/null || true
 git rm    --cached --ignore-unmatch ROADMAP_Q4.md        2>/dev/null || true
 git rm    --cached --ignore-unmatch ROADMAP_MIGRATION.md 2>/dev/null || true
+git rm    --cached --ignore-unmatch ROADMAP_REFACTOR.md   2>/dev/null || true
 git rm    --cached --ignore-unmatch AI_CONTEXT.md        2>/dev/null || true
 
 rm -rf test/ e2e/ tools/
-rm -f playwright.config.js test.bat test.sh test-e2e.bat test-e2e.sh CONTRIBUTING.md ROADMAP.md ROADMAP_Q4.md ROADMAP_MIGRATION.md AI_CONTEXT.md
+rm -f playwright.config.js test.bat test.sh test-e2e.bat test-e2e.sh CONTRIBUTING.md ROADMAP.md ROADMAP_Q4.md ROADMAP_MIGRATION.md ROADMAP_REFACTOR.md AI_CONTEXT.md
 echo "  done."
 
 echo "[7/9] git commit merge+strip ..."

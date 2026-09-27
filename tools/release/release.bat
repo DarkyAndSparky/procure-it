@@ -114,6 +114,7 @@ git rm    --cached --ignore-unmatch CONTRIBUTING.md    >nul 2>&1
 git rm    --cached --ignore-unmatch ROADMAP.md         >nul 2>&1
 git rm    --cached --ignore-unmatch ROADMAP_Q4.md        >nul 2>&1
 git rm    --cached --ignore-unmatch ROADMAP_MIGRATION.md >nul 2>&1
+git rm    --cached --ignore-unmatch ROADMAP_REFACTOR.md   >nul 2>&1
 git rm    --cached --ignore-unmatch AI_CONTEXT.md        >nul 2>&1
 
 if exist test\           rmdir /s /q test
@@ -128,6 +129,7 @@ if exist CONTRIBUTING.md del /q CONTRIBUTING.md
 if exist ROADMAP.md      del /q ROADMAP.md
 if exist ROADMAP_Q4.md        del /q ROADMAP_Q4.md
 if exist ROADMAP_MIGRATION.md del /q ROADMAP_MIGRATION.md
+if exist ROADMAP_REFACTOR.md  del /q ROADMAP_REFACTOR.md
 if exist AI_CONTEXT.md        del /q AI_CONTEXT.md
 echo   done.
 

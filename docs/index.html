@@ -333,7 +333,7 @@
 <aside class="sidebar">
   <div class="sidebar-logo">
     <h1>procure-it</h1>
-    <span class="version"><!--VERSION-->26w39-b01<!--/VERSION--></span>
+    <span class="version"><!--VERSION-->26w39-b02<!--/VERSION--></span>
   </div>
   <div class="nav-section">Начало</div>
   <a href="#intro"     class="nav-link active">О проекте</a>
@@ -374,7 +374,7 @@
     <h1>procure-it</h1>
     <p>Self-hosted web tool for IT asset procurement — manage purchase requests, calculate prices, generate Excel sheets and specifications.</p>
     <div class="badges">
-      <span class="badge badge-blue"><!--VERSION-->26w39-b01<!--/VERSION--></span>
+      <span class="badge badge-blue"><!--VERSION-->26w39-b02<!--/VERSION--></span>
       <span class="badge badge-green">MIT</span>
       <span class="badge badge-green">Node.js 18+</span>
       <span class="badge badge-blue">SQLite</span>
@@ -918,7 +918,7 @@ docker exec -it procure-it sh # войти в контейнер</pre>
       <tr><td>E2e-тесты (<code>e2e/</code>, <code>playwright.config.js</code>)</td><td>✅</td><td style="color:var(--red)">❌ удаляются при релизе</td></tr>
       <tr><td>Скрипты тестов (<code>test.bat</code>, <code>test.sh</code>, <code>test-e2e.*</code>)</td><td>✅</td><td style="color:var(--red)">❌ удаляются при релизе</td></tr>
       <tr><td>Release-хелпер (<code>tools/release/</code>)</td><td>✅</td><td style="color:var(--red)">❌ удаляется при релизе</td></tr>
-      <tr><td>Dev-документация (<code>CONTRIBUTING.md</code>, <code>ROADMAP.md</code>, <code>ROADMAP_Q4.md</code>, <code>ROADMAP_MIGRATION.md</code>, <code>AI_CONTEXT.md</code>)</td><td>✅</td><td style="color:var(--red)">❌ удаляется при релизе</td></tr>
+      <tr><td>Dev-документация (<code>CONTRIBUTING.md</code>, <code>ROADMAP.md</code>, <code>ROADMAP_Q4.md</code>, <code>ROADMAP_MIGRATION.md</code>, <code>ROADMAP_REFACTOR.md</code>, <code>AI_CONTEXT.md</code>)</td><td>✅</td><td style="color:var(--red)">❌ удаляется при релизе</td></tr>
     </table></div>
     <div class="alert alert-info">
       Удаление dev-only файлов из <code>main</code> выполняется автоматически release-хелпером:<br>
@@ -1038,7 +1038,7 @@ tools\release\release.bat 26w36-r01
 
 # Linux / macOS:
 ./tools/release/release.sh 26w36-r01</pre>
-          <p>Хелпер автоматически: бампит версию → <code>npm run version:sync</code> → коммит в dev → merge в main → удаляет test/, e2e/, tools/, CONTRIBUTING.md, ROADMAP.md, ROADMAP_Q4.md, ROADMAP_MIGRATION.md, AI_CONTEXT.md из main → тег → push → возвращается в dev.</p>
+          <p>Хелпер автоматически: бампит версию → <code>npm run version:sync</code> → коммит в dev → merge в main → удаляет test/, e2e/, tools/, CONTRIBUTING.md, ROADMAP.md, ROADMAP_Q4.md, ROADMAP_MIGRATION.md, ROADMAP_REFACTOR.md, AI_CONTEXT.md из main → тег → push → возвращается в dev.</p>
         </div>
       </div>
     </div>
@@ -1046,7 +1046,7 @@ tools\release\release.bat 26w36-r01
   </section>
 
   <div style="border-top:1px solid var(--border);margin-top:48px;padding-top:24px;color:var(--text2);font-size:12px;display:flex;justify-content:space-between;align-items:center">
-    <span>procure-it <!--VERSION-->26w39-b01<!--/VERSION--> · MIT License</span>
+    <span>procure-it <!--VERSION-->26w39-b02<!--/VERSION--> · MIT License</span>
     <a href="https://github.com/DarkyAndSparky" style="color:var(--text2);text-decoration:none">© DarkyAndSparky</a>
   </div>
 

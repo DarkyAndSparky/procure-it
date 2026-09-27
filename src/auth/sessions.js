@@ -1,8 +1,10 @@
 const { getDb, saveDb } = require('../db/connection');
 
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+
 function sessionCreate(token, userId) {
   const db = getDb();
-  const expiresAt = Date.now() + 8 * 60 * 60 * 1000; // 8 hours
+  const expiresAt = Date.now() + SESSION_TTL_MS;
   try {
     db.run('INSERT OR REPLACE INTO sessions (token, expires_at, user_id) VALUES (?,?,?)', [token, expiresAt, userId || 0]);
     saveDb();
@@ -11,7 +13,8 @@ function sessionCreate(token, userId) {
 
 function sessionDelete(token) {
   const db = getDb();
-  try { db.run('DELETE FROM sessions WHERE token = ?', [token]); saveDb(); } catch(e) {}
+  try { db.run('DELETE FROM sessions WHERE token = ?', [token]); saveDb(); }
+  catch(e) { console.error('[sessions] delete error:', e.message); }
 }
 
 function sessionGetUser(token) {
@@ -34,4 +37,4 @@ function sessionGetUser(token) {
   } catch(e) { return null; }
 }
 
-module.exports = { sessionCreate, sessionDelete, sessionGetUser };
+module.exports = { sessionCreate, sessionDelete, sessionGetUser, SESSION_TTL_MS };

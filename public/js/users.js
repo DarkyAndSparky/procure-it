@@ -24,18 +24,39 @@ function showChangePasswordModal(forced = false) {
       </div>
       <div class="field" style="margin-bottom:16px">
         <label>Повторите новый пароль</label>
-        <input type="password" id="cpw-confirm" placeholder="••••••••" style="width:100%"
-          onkeydown="if(event.key==='Enter')doChangePassword(${forced})">
+        <input type="password" id="cpw-confirm" placeholder="••••••••" style="width:100%">
       </div>
       <div id="cpw-error" style="color:var(--danger);font-size:12px;margin-bottom:12px;display:none"></div>
-      <button class="btn btn-primary" onclick="doChangePassword(${forced})"
+      <button class="btn btn-primary cpw-submit-btn"
         style="width:100%;background:var(--accent);border-color:var(--accent);color:#fff;justify-content:center">
         Сменить пароль
       </button>
-      ${!forced ? `<button class="btn" onclick="document.getElementById('change-pw-modal').style.display='none'"
+      ${!forced ? `<button class="btn cpw-cancel-btn"
         style="width:100%;margin-top:8px;justify-content:center">Отмена</button>` : ''}
     </div>`;
+  modal.dataset.forced = forced ? '1' : '';
   modal.style.display = 'flex';
+  if (!modal.dataset.actionsBound) {
+    modal.dataset.actionsBound = '1';
+    // Событие delegated на самом modal-контейнере, а не на его содержимом —
+    // innerHTML выше пересоздаёт содержимое КАЖДЫЙ раз, когда модалка
+    // открывается заново, что уничтожило бы напрямую навешенные слушатели;
+    // сам modal-узел не пересоздаётся (см. `if (!modal) {...}` выше), так
+    // что один делегированный набор слушателей переживает любое число
+    // повторных открытий.
+    modal.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && e.target.id === 'cpw-confirm') {
+        doChangePassword(modal.dataset.forced === '1');
+      }
+    });
+    modal.addEventListener('click', e => {
+      if (e.target.closest('.cpw-submit-btn')) {
+        doChangePassword(modal.dataset.forced === '1');
+      } else if (e.target.closest('.cpw-cancel-btn')) {
+        modal.style.display = 'none';
+      }
+    });
+  }
   if (!modal.dataset.trapBound) {
     modal.dataset.trapBound = '1';
     modal.addEventListener('keydown', function(e) {
@@ -111,29 +132,56 @@ async function loadUsers() {
       </tr></thead>
       <tbody>
         ${users.map(u => `
-          <tr style="border-bottom:1px solid var(--border-light)">
+          <tr style="border-bottom:1px solid var(--border-light)" data-user-id="${esc(u.id)}" data-username="${escJsAttr(u.username)}">
             <td style="padding:6px 8px">${esc(u.username)}</td>
             <td style="padding:6px 8px">
               <input type="email" value="${esc(u.email||'')}" placeholder="не указан"
                 style="font-size:12px;width:160px;border:1px solid var(--border);border-radius:4px;padding:2px 6px;background:var(--surface)"
-                onblur="saveUserEmail(${u.id}, this.value)">
+                class="user-email-input">
             </td>
             <td style="padding:6px 8px">
-              <select onchange="changeUserRole(${u.id}, this.value)" style="font-size:12px">
+              <select class="user-role-select" style="font-size:12px">
                 ${['viewer','operator','admin'].map(r =>
                   `<option value="${r}" ${u.role===r?'selected':''}>${ROLE_LABELS[r]}</option>`
                 ).join('')}
               </select>
             </td>
             <td style="padding:6px 8px;text-align:right">
-              <button class="btn btn-sm" onclick="resetUserPassword(${u.id},'${escJsAttr(u.username)}')"
-                title="Сменить пароль">🔑</button>
-              <button class="btn btn-sm" onclick="deleteUser(${u.id},'${escJsAttr(u.username)}')"
-                style="color:var(--danger)" title="Удалить">×</button>
+              <button class="btn btn-sm btn-reset-pw" title="Сменить пароль">🔑</button>
+              <button class="btn btn-sm btn-delete-user" style="color:var(--danger)" title="Удалить">×</button>
             </td>
           </tr>`).join('')}
       </tbody>
     </table>`;
+    if (!container.dataset.actionsBound) {
+      container.dataset.actionsBound = '1';
+      // Таблица целиком перерисовывается при каждом loadUsers() (innerHTML
+      // выше), сам #users-list — нет, поэтому один делегированный набор
+      // слушателей на контейнере переживает любое число перерисовок.
+      // ВАЖНО: 'blur' не всплывает (bubbles: false) — для делегации нужен
+      // его всплывающий аналог 'focusout'.
+      container.addEventListener('focusout', e => {
+        if (!e.target.matches('.user-email-input')) return;
+        const id = e.target.closest('tr')?.dataset.userId;
+        if (id) saveUserEmail(id, e.target.value);
+      });
+      container.addEventListener('change', e => {
+        if (!e.target.matches('.user-role-select')) return;
+        const id = e.target.closest('tr')?.dataset.userId;
+        if (id) changeUserRole(id, e.target.value);
+      });
+      container.addEventListener('click', e => {
+        const tr = e.target.closest('tr');
+        if (!tr) return;
+        const id = tr.dataset.userId;
+        const username = tr.dataset.username;
+        if (e.target.closest('.btn-reset-pw')) {
+          resetUserPassword(id, username);
+        } else if (e.target.closest('.btn-delete-user')) {
+          deleteUser(id, username);
+        }
+      });
+    }
   } catch(e) { console.error('loadUsers', e); }
 }
 

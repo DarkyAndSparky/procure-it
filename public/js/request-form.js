@@ -67,7 +67,7 @@ function collectForm() {
 
   let totalPurchase = 0;
   const positionsRaw = [];
-  const isRealization = document.getElementById('realization-badge')?.style.display !== 'none';
+  const isRealization = document.getElementById('f-doc-type')?.value === 'realization';
   for (const tr of rows) {
     // cols: [0]drag [1]№ [2]name [3]comment/ЮЛ [4]link [5]qty [6]unit [7]purchasePrice [8]sell [9]sum [10]×
     const qty = parseNum(tr.children[5].querySelector('input,select')?.value || tr.children[5].querySelector('input')?.value);
@@ -86,12 +86,23 @@ function collectForm() {
     totalPurchase += qty * pp;
   }
 
+  const roundToRuble = document.getElementById('f-round-to-ruble')?.checked || false;
+
   const positions = positionsRaw.map(p => {
-    const deliveryShare = totalPurchase > 0 ? (p.purchaseSum / totalPurchase) * deliveryCost : 0;
-    const ppWithDel = p.qty > 0 ? p.purchasePrice + deliveryShare / p.qty : p.purchasePrice;
-    const sellPerUnit = ppWithDel * (1 + markup);
-    const sellSum = sellPerUnit * p.qty;
-    return { ...p, deliveryShare, ppWithDel, sellPerUnit, sellSum };
+    // Аудит-находка при добавлении округления до рубля: здесь раньше была
+    // СВОЯ, упрощённая формула (без anti-drift округления через
+    // purchaseSum+deliveryShare — см. подробный комментарий в
+    // pricing-core.js) — то есть уже существовал риск копеечного
+    // расхождения между тем, что видно на экране (calcTotal() зовёт
+    // calcRowPricing() честно), и тем, что отправлялось на сервер отсюда.
+    // Сервер всё равно авторитетно пересчитывает при сохранении
+    // (computeAuthoritativeTotals), так что расхождение не портило
+    // сохранённые данные — но зачем тут третья формула, когда есть одна
+    // общая. Теперь и здесь calcRowPricing().
+    const pricing = calcRowPricing({
+      purchasePrice: p.purchasePrice, qty: p.qty, totalPurchase, deliveryCost, markup, roundToRuble,
+    });
+    return { ...p, deliveryShare: pricing.deliveryShare, ppWithDel: pricing.ppWithDelivery, sellPerUnit: pricing.sellPerUnit, sellSum: pricing.sellSum };
   });
 
   const total = positions.reduce((s,p) => s + p.sellSum, 0);
@@ -119,10 +130,11 @@ function collectForm() {
     contract: document.getElementById('f-contract').value,
     status: document.getElementById('f-status').value,
     comment: document.getElementById('f-comment').value,
-    isRealization: document.getElementById('realization-badge').style.display !== 'none',
+    isRealization: document.getElementById('f-doc-type')?.value === 'realization',
     docType: document.getElementById('f-doc-type')?.value || 'goods',
     deliveryCost,
     markup: markup * 100,
+    roundToRuble,
     totalPurchase,
     positions,
     total
@@ -189,7 +201,7 @@ async function layoutFilesToFolder(reqId, req) {
   try {
     const res = await fetch('/api/spec-docx', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': authToken },
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
       body: JSON.stringify(specReq)
     });
     if (res.ok) {

@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:26-alpine
 
 # OCI image labels
 LABEL org.opencontainers.image.title="procure-it" \
@@ -7,7 +7,7 @@ LABEL org.opencontainers.image.title="procure-it" \
       org.opencontainers.image.source="https://github.com/DarkyAndSparky/procure-it" \
       org.opencontainers.image.documentation="https://darkyAndsparky.github.io/procure-it" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.version="26w35-r01"
+      org.opencontainers.image.version="26w39-r01"
 
 # Install openssl (cert generation) + su-exec (privilege drop in entrypoint)
 RUN apk add --no-cache openssl su-exec

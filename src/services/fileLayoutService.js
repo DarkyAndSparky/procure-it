@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { query } = require('../db/connection');
-const { SIGNED_DIR, INVOICE_DIR } = require('../config');
+const { SIGNED_DIR, INVOICE_DIR, APPROVAL_DIR } = require('../config');
 const { RU_MONTHS_FOLDER } = require('../utils/docFormat');
 
 // Общие для WebDAV и локального режима: путь org/год/месяц + имя папки заявки.
@@ -159,6 +159,24 @@ async function layoutFilesWebDav(reqId, r, cfg, body) {
       results.push({ type: 'signed_spec', name });
     }
   }
+  // Аудит-находка: лист согласования договора поставки (прикрепляется на
+  // уровне организации, см. routes/orgs.js#approval-pdf, 26w36-b15) сюда
+  // никогда не копировался — сервис раскладки о нём просто не знал. Раз
+  // это один и тот же документ для всех заявок организации, копируем то
+  // же самое в КАЖДУЮ папку заявки — как и остальные документы пакета,
+  // чтобы при взгляде на папку конкретного заказа было видно всё сразу,
+  // не переходя в реестр организаций отдельно.
+  if (r.orgId) {
+    const orgApproval = query('SELECT approval_pdf, approval_pdf_name FROM orgs WHERE id=?', [r.orgId])[0];
+    if (orgApproval?.approval_pdf) {
+      const apprPath = path.join(APPROVAL_DIR, path.basename(orgApproval.approval_pdf));
+      if (fs.existsSync(apprPath)) {
+        const name = `${safeOrgShort}_Лист_согласования_договора.pdf`;
+        await davPut(seg(year, monthFolder, orgFolder, requestFolderName, name), fs.readFileSync(apprPath));
+        results.push({ type: 'contract_approval', name });
+      }
+    }
+  }
   if (r.invoiceFile === '__has_file__') {
     const invMeta = query('SELECT invoice_file, invoice_file_original_name FROM requests WHERE id=?', [reqId])[0];
     const invRow = invMeta?.invoice_file || '';
@@ -242,7 +260,9 @@ function findOrCreateRequestFolderLocal(orgPath, reqId, safeName) {
         break;
       }
     }
-  } catch(e) {}
+  } catch(e) {
+    console.warn(`[fileLayout] Не удалось проверить существующие папки заявки ${reqId} в ${orgPath} — возможно, будет создана папка-дубликат:`, e.message);
+  }
 
   const isNewFolder = !requestFolderName;
   if (!requestFolderName) requestFolderName = `${String(maxNum + 1).padStart(2, '0')}_${safeName}`;
@@ -250,7 +270,8 @@ function findOrCreateRequestFolderLocal(orgPath, reqId, safeName) {
   const requestPath = path.join(orgPath, requestFolderName);
   fs.mkdirSync(requestPath, { recursive: true });
   if (isNewFolder) {
-    try { fs.writeFileSync(path.join(requestPath, REQUEST_MARKER_FILE), String(reqId), 'utf8'); } catch(e) {}
+    try { fs.writeFileSync(path.join(requestPath, REQUEST_MARKER_FILE), String(reqId), 'utf8'); }
+    catch(e) { console.warn(`[fileLayout] Не удалось записать маркер-файл для заявки ${reqId} — при следующем обращении может быть создана папка-дубликат:`, e.message); }
   }
   return requestPath;
 }
@@ -284,6 +305,19 @@ async function layoutFilesLocal(reqId, r, cfg, body) {
       const name = `${safeOrgShort}_Спецификация_${safeSpecNum}_подписано.pdf`;
       fs.writeFileSync(path.join(requestPath, name), fs.readFileSync(pdfPath));
       results.push({ type: 'signed_spec', name });
+    }
+  }
+  // См. комментарий в layoutFilesWebDav выше — лист согласования договора
+  // (уровень организации) копируется в каждую папку заявки этой организации.
+  if (r.orgId) {
+    const orgApproval = query('SELECT approval_pdf, approval_pdf_name FROM orgs WHERE id=?', [r.orgId])[0];
+    if (orgApproval?.approval_pdf) {
+      const apprPath = path.join(APPROVAL_DIR, path.basename(orgApproval.approval_pdf));
+      if (fs.existsSync(apprPath)) {
+        const name = `${safeOrgShort}_Лист_согласования_договора.pdf`;
+        fs.writeFileSync(path.join(requestPath, name), fs.readFileSync(apprPath));
+        results.push({ type: 'contract_approval', name });
+      }
     }
   }
   if (r.invoiceFile === '__has_file__') {

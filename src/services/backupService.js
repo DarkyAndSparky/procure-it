@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { getDb } = require('../db/connection');
-const { BACKUP_DIR, SIGNED_DIR, INVOICE_DIR } = require('../config');
+const { BACKUP_DIR, SIGNED_DIR, INVOICE_DIR, APPROVAL_DIR } = require('../config');
 
 // Пользователь может настроить свою папку для бэкапов (Настройки → Резервная
 // копия) — например, на другой диск или сетевой ресурс, чтобы бэкап не лежал
@@ -49,7 +49,7 @@ function doBackup() {
     const snapshotFilesDir = path.join(backupDir, `files_${stamp}`);
     let filesCopied = 0;
     try {
-      for (const [srcDir, label] of [[SIGNED_DIR, 'signed_specs'], [INVOICE_DIR, 'invoices']]) {
+      for (const [srcDir, label] of [[SIGNED_DIR, 'signed_specs'], [INVOICE_DIR, 'invoices'], [APPROVAL_DIR, 'contract_approvals']]) {
         const destDir = path.join(snapshotFilesDir, label);
         fs.mkdirSync(destDir, { recursive: true });
         if (!fs.existsSync(srcDir)) continue;
@@ -75,7 +75,7 @@ function doBackup() {
     // для обратной совместимости со старым restore-кодом.
     const filesMirrorDir = path.join(backupDir, 'files_mirror');
     try {
-      for (const [srcDir, label] of [[SIGNED_DIR, 'signed_specs'], [INVOICE_DIR, 'invoices']]) {
+      for (const [srcDir, label] of [[SIGNED_DIR, 'signed_specs'], [INVOICE_DIR, 'invoices'], [APPROVAL_DIR, 'contract_approvals']]) {
         const destDir = path.join(filesMirrorDir, label);
         fs.mkdirSync(destDir, { recursive: true });
         if (!fs.existsSync(srcDir)) continue;

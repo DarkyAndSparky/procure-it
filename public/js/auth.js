@@ -2,15 +2,21 @@
 const API = '';
 
 // ── Auth token & role ────────────────────────────────────────────────────────
-let authToken = localStorage.getItem('procure_token') || '';
+// Токен сессии теперь живёт в httpOnly cookie (auth-token) — недоступен из
+// JS вообще, браузер сам шлёт её с каждым запросом на наш домен. Здесь
+// храним только CSRF-токен (обычная cookie, не httpOnly — её и нужно читать
+// из JS) и дублируем его в заголовке X-CSRF-Token на каждый небезопасный
+// запрос, иначе сервер отклонит запрос (см. src/auth/middleware.js).
+function getCsrfToken() {
+  const m = document.cookie.match(/(?:^|;\s*)csrf-token=([^;]*)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
 let userRole  = 'viewer';
 let userName  = null;
 
 async function checkAuth() {
   try {
-    const r = await fetch('/api/auth/status', {
-      headers: authToken ? { 'X-Auth-Token': authToken } : {}
-    });
+    const r = await fetch('/api/auth/status');
     const data = await r.json();
     userRole = data.role || 'viewer';
     userName = data.username || null;
@@ -103,30 +109,41 @@ function showLoginModal() {
         </div>
         <div class="field" style="margin-bottom:12px">
           <label>Логин</label>
-          <input type="text" id="login-username" placeholder="username" style="width:100%"
-            onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
+          <input type="text" id="login-username" placeholder="username" style="width:100%">
         </div>
         <div class="field" style="margin-bottom:16px">
           <label>Пароль</label>
-          <input type="password" id="login-password" placeholder="••••••••"
-            style="width:100%" onkeydown="if(event.key==='Enter')doLogin()">
+          <input type="password" id="login-password" placeholder="••••••••" style="width:100%">
         </div>
         <div id="login-error" style="color:var(--danger);font-size:12px;margin-bottom:12px;display:none"></div>
-        <button class="btn btn-primary" onclick="doLogin()"
+        <button class="btn btn-primary login-submit-btn"
           style="width:100%;background:var(--accent);border-color:var(--accent);color:#fff;justify-content:center">Войти</button>
-        <button class="btn" onclick="continueAsGuest()"
+        <button class="btn login-guest-btn"
           style="width:100%;margin-top:8px;justify-content:center;color:var(--text-secondary);position:relative;z-index:1"
           type="button">
           Продолжить как гость (только просмотр)
         </button>
         <div style="text-align:center;margin-top:10px">
-          <button type="button" onclick="showForgotPasswordModal()"
+          <button type="button" class="login-forgot-btn"
             style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--text-secondary);text-decoration:underline;padding:0">
             Забыли пароль?
           </button>
         </div>
       </div>`;
     document.body.appendChild(modal);
+    // Модалка создаётся один раз (см. `if (!modal)` выше) и дальше только
+    // показывается/прячется — значит обычный addEventListener на конкретных
+    // элементах, повешенный сразу после innerHTML, надёжен: ни сама модалка,
+    // ни эти элементы внутри неё не пересоздаются повторно.
+    document.getElementById('login-username').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('login-password').focus();
+    });
+    document.getElementById('login-password').addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+    modal.querySelector('.login-submit-btn').addEventListener('click', doLogin);
+    modal.querySelector('.login-guest-btn').addEventListener('click', continueAsGuest);
+    modal.querySelector('.login-forgot-btn').addEventListener('click', showForgotPasswordModal);
     // Ловушка фокуса: без неё Tab уводит фокус на элементы фоновой (затемнённой)
     // страницы, которые остаются в DOM и доступны с клавиатуры несмотря на
     // визуальное затемнение. Циклим Tab/Shift+Tab между полями внутри модалки.
@@ -181,10 +198,8 @@ async function doLogin() {
     });
     const data = await r.json();
     if (data.ok) {
-      authToken = data.token || '';
       userRole  = data.role || 'operator';
       userName  = data.username || username;
-      if (authToken) localStorage.setItem('procure_token', authToken);
       document.getElementById('login-modal').style.display = 'none';
       updateRoleUI();
       refreshVersionBadge();
@@ -228,7 +243,9 @@ async function api(method, path, body) {
     method,
     headers: {
       'Content-Type': 'application/json',
-      ...(authToken ? { 'X-Auth-Token': authToken } : {}),
+      // CSRF-заголовок нужен только для небезопасных методов — cookie
+      // auth-token браузер шлёт сам, а GET/HEAD не защищены CSRF-мидлваром.
+      ...(method !== 'GET' ? { 'X-CSRF-Token': getCsrfToken() } : {}),
     }
   };
   if (body) opts.body = JSON.stringify(body);
@@ -236,8 +253,6 @@ async function api(method, path, body) {
     const r = await fetch(API + path, opts);
     if (r.status === 401) {
       // Token expired or invalid
-      authToken = '';
-      localStorage.removeItem('procure_token');
       showLoginModal();
       throw new Error('Сессия истекла, войдите снова');
     }
@@ -300,14 +315,37 @@ function showForgotPasswordModal() {
         <h2 style="font-size:17px;font-weight:600">Сброс пароля</h2>
       </div>
       <div id="forgot-pw-content"></div>
-      <button class="btn" onclick="document.getElementById('forgot-pw-modal').style.display='none';showLoginModal()"
+      <button class="btn forgot-back-btn"
         style="width:100%;margin-top:12px;justify-content:center">← Назад ко входу</button>
     </div>`;
   modal.style.display = 'flex';
+  if (!modal.dataset.actionsBound) {
+    modal.dataset.actionsBound = '1';
+    // modal.innerHTML выше переписывается ЦЕЛИКОМ при каждом открытии, а
+    // #forgot-pw-content внутри него — ЕЩЁ РАЗ асинхронно после fetch ниже
+    // (email-форма появляется только когда известно, настроен ли SMTP).
+    // Делегация на самом modal-узле (который не пересоздаётся — см.
+    // `if (!modal)` выше) покрывает оба уровня сразу за счёт всплытия
+    // событий, включая элементы, которых ещё не существует в момент
+    // навешивания слушателя.
+    modal.addEventListener('click', e => {
+      if (e.target.closest('.forgot-back-btn')) {
+        modal.style.display = 'none';
+        showLoginModal();
+      } else if (e.target.closest('.reset-submit-btn')) {
+        doRequestPasswordReset();
+      }
+    });
+    modal.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && e.target.id === 'reset-email') {
+        doRequestPasswordReset();
+      }
+    });
+  }
   const content = document.getElementById('forgot-pw-content');
 
   // Проверяем, настроен ли SMTP
-  fetch('/api/auth/reset-password-info', { headers: authToken ? { 'X-Auth-Token': authToken } : {} })
+  fetch('/api/auth/reset-password-info')
     .then(r => r.json())
     .then(data => {
       if (data.smtpConfigured) {
@@ -317,11 +355,10 @@ function showForgotPasswordModal() {
           </p>
           <div class="field" style="margin-bottom:12px">
             <label>Email</label>
-            <input type="email" id="reset-email" placeholder="you@example.com" style="width:100%"
-              onkeydown="if(event.key==='Enter')doRequestPasswordReset()">
+            <input type="email" id="reset-email" placeholder="you@example.com" style="width:100%">
           </div>
           <div id="reset-error" style="color:var(--danger);font-size:12px;margin-bottom:10px;display:none"></div>
-          <button class="btn btn-primary" onclick="doRequestPasswordReset()"
+          <button class="btn btn-primary reset-submit-btn"
             style="width:100%;background:var(--accent);border-color:var(--accent);color:#fff;justify-content:center">
             Отправить ссылку
           </button>`;

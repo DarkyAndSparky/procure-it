@@ -1,18 +1,25 @@
 const express = require('express');
 const router = express.Router();
 
-const { getDb, saveDb, run } = require('../db/connection');
+const { getDb, saveDb, run, query } = require('../db/connection');
 const { getUsers, findUserByCredentials } = require('../auth/users');
-const { sessionCreate, sessionDelete, sessionGetUser } = require('../auth/sessions');
+const { sessionCreate, sessionDelete, sessionGetUser, SESSION_TTL_MS } = require('../auth/sessions');
 const { generateToken, generateSalt, hashPassword, timingSafeStringEqual } = require('../auth/crypto');
 const { adminOnly } = require('../auth/middleware');
-const { LEGACY_PASSWORD } = require('../config');
+const { LEGACY_PASSWORD, TRUST_PROXY } = require('../config');
+const { getToken } = require('../auth/middleware');
 const { isSmtpConfigured, sendPasswordResetEmail, getSmtpConfig } = require('../services/emailService');
+
+// Общие опции cookie для сессии/CSRF. secure: true требует HTTPS — сервер
+// в этом проекте всегда поднимается по HTTPS (см. server.js), так что это
+// безопасно по умолчанию.
+const COOKIE_OPTS_AUTH = { httpOnly: true, secure: true, sameSite: 'strict', maxAge: SESSION_TTL_MS };
+const COOKIE_OPTS_CSRF = { httpOnly: false, secure: true, sameSite: 'strict', maxAge: SESSION_TTL_MS };
 
 // strictLimiter применяется на login/change-password (передаётся из server.js при монтировании)
 module.exports = (strictLimiter) => {
   router.get('/auth/status', (req, res) => {
-    const token = req.headers['x-auth-token'] || (req.cookies && req.cookies['auth-token']);
+    const token = getToken(req);
     const user  = token ? sessionGetUser(token) : null;
     const users = getUsers();
     res.json({
@@ -31,20 +38,29 @@ module.exports = (strictLimiter) => {
     if (!username || !password) return res.status(400).json({ error: 'Логин и пароль обязательны' });
     const user = findUserByCredentials(username, password);
     if (!user) return res.status(401).json({ error: 'Неверный логин или пароль' });
-    const token = generateToken();
+    const token    = generateToken();
+    const csrfToken = generateToken();
     sessionCreate(token, user.id);
-    res.json({ ok: true, token, role: user.role, username: user.username, mustChangePassword: user.mustChangePassword });
+    // Токен сессии — только в httpOnly cookie (недоступен из JS, поэтому
+    // недоступен XSS-скрипту). csrf-token — в обычной cookie специально:
+    // фронтенд должен прочитать её и продублировать в заголовке
+    // X-CSRF-Token на каждый небезопасный запрос (double-submit pattern).
+    res.cookie('auth-token', token, COOKIE_OPTS_AUTH);
+    res.cookie('csrf-token', csrfToken, COOKIE_OPTS_CSRF);
+    res.json({ ok: true, role: user.role, username: user.username, mustChangePassword: user.mustChangePassword, csrfToken });
   });
 
   router.post('/auth/logout', (req, res) => {
-    const token = req.headers['x-auth-token'];
+    const token = getToken(req);
     if (token) sessionDelete(token);
+    res.clearCookie('auth-token');
+    res.clearCookie('csrf-token');
     res.json({ ok: true });
   });
 
   // Self-service password change (any authenticated user, for their own account)
   router.post('/auth/change-password', strictLimiter, (req, res) => {
-    const token = req.headers['x-auth-token'];
+    const token = getToken(req);
     const user  = token ? sessionGetUser(token) : null;
     if (!user || !user.id) return res.status(401).json({ error: 'Не авторизован' });
     const { currentPassword, newPassword } = req.body;
@@ -66,8 +82,27 @@ module.exports = (strictLimiter) => {
       }
     }
     const newSalt = generateSalt();
-    run('UPDATE users SET password=?, salt=?, must_change_password=0 WHERE id=?', [hashPassword(newPassword, newSalt), newSalt, user.id]);
-    saveDb();
+    // Читаем старые значения ДО изменения — понадобятся для отката, если
+    // запись на диск не удастся (run() теперь бросает исключение именно в
+    // этом случае — см. комментарий в db/connection.js). db.run() внутри
+    // run() применяется к in-memory БД МГНОВЕННО, до попытки сохранить на
+    // диск — если сохранение не удастся, память и диск разойдутся без
+    // явного отката (нашли вживую: первая попытка падала при записи на
+    // диск, но must_change_password=0 уже применился в памяти, и повторная
+    // попытка сразу требовала текущий пароль, которого пользователь не
+    // ожидал вводить для временного пароля).
+    const oldRow = getDb().exec('SELECT password, salt, must_change_password FROM users WHERE id=?', [user.id])[0]?.values?.[0];
+    try {
+      run('UPDATE users SET password=?, salt=?, must_change_password=0 WHERE id=?', [hashPassword(newPassword, newSalt), newSalt, user.id]);
+    } catch (e) {
+      if (oldRow) {
+        try {
+          run('UPDATE users SET password=?, salt=?, must_change_password=? WHERE id=?', [oldRow[0], oldRow[1], oldRow[2], user.id]);
+        } catch (_) { /* если и откат не сохранился на диск — ситуация уже вне восстановления в рамках одного запроса, отдаём общую 500 ниже */ }
+      }
+      console.error('[auth] Не удалось сохранить смену пароля на диск:', e.message);
+      return res.status(500).json({ error: 'Не удалось сохранить изменения. Попробуйте ещё раз.' });
+    }
     res.json({ ok: true });
   });
 
@@ -100,34 +135,68 @@ module.exports = (strictLimiter) => {
 
     if (user) {
       const token = require('crypto').randomBytes(32).toString('hex');
+      // В БД храним не сам токен, а его SHA-256-хэш: если файл БД когда-нибудь
+      // утечёт (бэкап, дамп диска), значения в password_reset_tokens нельзя
+      // будет напрямую использовать как рабочие ссылки сброса — токен из URL
+      // и его хэш в базе совпадают только через SHA-256, не обратимо.
+      const tokenHash = require('crypto').createHash('sha256').update(token).digest('hex');
       const expires = Date.now() + 60 * 60 * 1000; // 1 час
       try {
         db.run('DELETE FROM password_reset_tokens WHERE user_id=?', [user.id]);
         db.run('INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES (?,?,?)',
-          [token, user.id, expires]);
+          [tokenHash, user.id, expires]);
         const { saveDb } = require('../db/connection');
         saveDb();
 
-        // Формируем URL сброса. Берём origin из заголовка запроса — это
-        // корректный хост/порт даже за reverse-proxy (если тот прокидывает
-        // X-Forwarded-Host). Фолбэк — конструируем из req.protocol + host.
-        const origin = req.headers['x-forwarded-proto']
-          ? `${req.headers['x-forwarded-proto']}://${req.headers['x-forwarded-host'] || req.headers.host}`
-          : `${req.protocol}://${req.headers.host}`;
-        const resetUrl = `${origin}/reset-password?token=${token}`;
+        // Формируем URL сброса. X-Forwarded-* доверяем ТОЛЬКО если явно
+        // настроено (PROCURE_TRUST_PROXY=true) — иначе клиент может
+        // подставить произвольный X-Forwarded-Host и получить ссылку сброса
+        // на чужой домен (фишинг). По умолчанию — req.protocol/req.headers.host,
+        // которые Express сам вычисляет только из реального соединения
+        // (или из X-Forwarded-* при включённом app.set('trust proxy', ...)).
+        //
+        // Аудит-находка (26w36-b16): и это тоже не полная защита — сырой
+        // req.headers.host - это то, что клиент передал в HTTP Host-
+        // заголовке. У обычного браузера его нельзя подделать (он берётся
+        // из адресной строки), но ничто не мешает атакующему отправить
+        // произвольный сырой HTTP-запрос с любым Host, если приложение
+        // достижимо напрямую (без реверс-прокси, который бы это отсекал).
+        // Итог — фишинговая ссылка в ЛЕГИТИМНОМ письме сброса пароля,
+        // отправленном настоящим SMTP приложения на настоящий email
+        // пользователя. Раньше от этого не было вообще никакой защиты (кроме
+        // экранирования в письме — см. emailService.js, тоже поправлено
+        // в этом же аудите). Сверяем host/x-forwarded-host с простым
+        // форматом hostname[:port] / [IPv6][:port] — то, чем он и должен
+        // быть; если нет — не отправляем письмо вовсе, только предупреждаем
+        // в лог, а клиенту всё равно отвечаем ok (не раскрываем детали).
+        const HOST_RE = /^[a-zA-Z0-9.-]+(:\d+)?$|^\[[0-9a-fA-F:]+\](:\d+)?$/;
+        const rawHost = (TRUST_PROXY && req.headers['x-forwarded-proto'])
+          ? (req.headers['x-forwarded-host'] || req.headers.host)
+          : req.headers.host;
 
-        // Отправляем письмо асинхронно — не держим HTTP-ответ.
-        // Ошибка отправки логируется, но не возвращается клиенту
-        // (чтобы не раскрывать наличие адреса через тайминг/ошибку).
-        const smtpCfg = getSmtpConfig();
-        sendPasswordResetEmail({
-          to: email.trim(),
-          username: user.username,
-          resetUrl,
-          appName: smtpCfg.appName,
-        }).catch(e => console.error(`[auth] Ошибка отправки письма сброса для ${user.username}:`, e.message));
+        if (!rawHost || !HOST_RE.test(rawHost)) {
+          console.warn(`[auth] Подозрительный Host-заголовок при запросе сброса пароля — письмо НЕ отправлено: ${JSON.stringify(rawHost)}`);
+        } else {
+          const origin = (TRUST_PROXY && req.headers['x-forwarded-proto'])
+            ? `${req.headers['x-forwarded-proto']}://${rawHost}`
+            : `${req.protocol}://${rawHost}`;
+          const resetUrl = `${origin}/reset-password?token=${token}`;
 
-        console.log(`[auth] Сброс пароля для ${user.username} (${email}): ${resetUrl}`);
+          // Отправляем письмо асинхронно — не держим HTTP-ответ.
+          // Ошибка отправки логируется, но не возвращается клиенту
+          // (чтобы не раскрывать наличие адреса через тайминг/ошибку).
+          const smtpCfg = getSmtpConfig();
+          sendPasswordResetEmail({
+            to: email.trim(),
+            username: user.username,
+            resetUrl,
+            appName: smtpCfg.appName,
+          }).catch(e => console.error(`[auth] Ошибка отправки письма сброса для ${user.username}:`, e.message));
+        }
+
+        // Не логируем полную ссылку/токен сброса — логи не должны быть
+        // эквивалентом доступа к аккаунту.
+        console.log(`[auth] Запрошен сброс пароля для ${user.username} (${email})`);
       } catch(e) {
         console.error('[auth] Ошибка создания токена сброса:', e.message);
       }
@@ -143,24 +212,32 @@ module.exports = (strictLimiter) => {
     if (newPassword.length < 6) return res.status(400).json({ error: 'Минимум 6 символов' });
     const db = getDb();
     try {
-      const rows = db.exec('SELECT user_id, expires_at FROM password_reset_tokens WHERE token=?', [token]);
+      // password_reset_tokens хранит SHA-256(token), а не сам токен —
+      // хэшируем полученный от клиента, чтобы найти совпадение (см. reset-password-request).
+      const tokenHash = require('crypto').createHash('sha256').update(token).digest('hex');
+      const rows = db.exec('SELECT user_id, expires_at FROM password_reset_tokens WHERE token=?', [tokenHash]);
       if (!rows[0]?.values?.length) return res.status(400).json({ error: 'Недействительный или просроченный токен' });
       const [userId, expiresAt] = rows[0].values[0];
       if (Date.now() > expiresAt) {
-        db.run('DELETE FROM password_reset_tokens WHERE token=?', [token]);
+        db.run('DELETE FROM password_reset_tokens WHERE token=?', [tokenHash]);
         return res.status(400).json({ error: 'Токен истёк, запросите сброс заново' });
       }
       const { generateSalt, hashPassword } = require('../auth/crypto');
       const salt = generateSalt();
       const hash = hashPassword(newPassword, salt);
       db.run('UPDATE users SET password=?, salt=?, must_change_password=0 WHERE id=?', [hash, salt, userId]);
-      db.run('DELETE FROM password_reset_tokens WHERE token=?', [token]);
+      db.run('DELETE FROM password_reset_tokens WHERE token=?', [tokenHash]);
       db.run('DELETE FROM sessions WHERE user_id=?', [userId]);
       const { saveDb } = require('../db/connection');
       saveDb();
       res.json({ ok: true });
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      // Не отдаём e.message как есть — тот же класс утечки, что чинили в
+      // глобальном error-handler'е (server.js): непредвиденная ошибка (в
+      // т.ч. неудачная запись на диск) могла бы показать пользователю
+      // технические детали сервера вместо понятного сообщения.
+      console.error('[auth] Ошибка при сбросе пароля по токену:', e.message);
+      res.status(500).json({ error: 'Не удалось сохранить изменения. Попробуйте ещё раз.' });
     }
   });
 
@@ -178,12 +255,28 @@ module.exports = (strictLimiter) => {
       const salt = generateSalt();
       const hash = hashPassword(password, salt);
       const userEmail = (email || '').trim().toLowerCase();
-      run('INSERT INTO users (username, password, salt, role, email) VALUES (?,?,?,?,?)', [username, hash, salt, role, userEmail]);
-      saveDb();
+      // Аудит-находка (26w36-b16): run() НЕ бросает исключение на нарушении
+      // UNIQUE (email/username задублированы) — это сделано намеренно (см.
+      // db/connection.js#run: «молча возвращаем false, вызывающий код сам
+      // решает, что сказать пользователю»), но этот роут возвращаемое
+      // значение никогда не проверял. try/catch ниже на practике никогда
+      // не срабатывал — INSERT молча проваливался, а клиент получал
+      // {ok:true}, хотя пользователь не создавался (проверено вживую:
+      // повторное создание того же username отвечало ok:true, но в списке
+      // пользователей оставалась только первая запись). Теперь проверяем
+      // возврат run() явно.
+      const ok = run('INSERT INTO users (username, password, salt, role, email) VALUES (?,?,?,?,?)', [username, hash, salt, role, userEmail]);
+      if (!ok) {
+        const existingByName  = query('SELECT id FROM users WHERE username=?', [username])[0];
+        const existingByEmail = userEmail && query('SELECT id FROM users WHERE email=?', [userEmail])[0];
+        if (existingByName) return res.status(409).json({ error: 'Пользователь с таким логином уже существует' });
+        if (existingByEmail) return res.status(409).json({ error: 'Этот email уже привязан к другому пользователю' });
+        return res.status(500).json({ error: 'Не удалось сохранить изменения. Попробуйте ещё раз.' });
+      }
       res.json({ ok: true });
     } catch(e) {
-      if (e.message.includes('UNIQUE')) return res.status(409).json({ error: 'Пользователь уже существует' });
-      res.status(500).json({ error: e.message });
+      console.error('[auth] Ошибка при создании пользователя:', e.message);
+      res.status(500).json({ error: 'Не удалось сохранить изменения. Попробуйте ещё раз.' });
     }
   });
 
@@ -193,7 +286,7 @@ module.exports = (strictLimiter) => {
     if (role && !ROLES.includes(role)) return res.status(400).json({ error: `Недопустимая роль` });
 
     // Prevent self-demotion
-    const token    = req.headers['x-auth-token'];
+    const token    = getToken(req);
     const self     = token ? sessionGetUser(token) : null;
     if (self && String(self.id) === String(req.params.id) && role && role !== 'admin') {
       return res.status(400).json({ error: 'Нельзя понизить собственную роль' });
@@ -205,8 +298,14 @@ module.exports = (strictLimiter) => {
       run('UPDATE users SET password=?, salt=?, must_change_password=0 WHERE id=?', [hash, salt, req.params.id]);
     }
     if (role) run('UPDATE users SET role=? WHERE id=?', [role, req.params.id]);
-    if (email !== undefined) run('UPDATE users SET email=? WHERE id=?', [(email || '').trim().toLowerCase(), req.params.id]);
-    saveDb();
+    if (email !== undefined) {
+      const userEmail = (email || '').trim().toLowerCase();
+      // Тот же аудит-баг, что и в POST /users выше — проверяем возврат run(),
+      // иначе попытка сохранить email, уже занятый другим пользователем,
+      // молча ничего не изменит, а клиент получит {ok:true}.
+      const ok = run('UPDATE users SET email=? WHERE id=?', [userEmail, req.params.id]);
+      if (!ok) return res.status(409).json({ error: 'Этот email уже привязан к другому пользователю' });
+    }
     res.json({ ok: true });
   });
 
@@ -219,7 +318,6 @@ module.exports = (strictLimiter) => {
     }
     run('DELETE FROM users WHERE id=?', [req.params.id]);
     run('DELETE FROM sessions WHERE user_id=?', [req.params.id]);
-    saveDb();
     res.json({ ok: true });
   });
 

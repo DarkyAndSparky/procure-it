@@ -125,45 +125,22 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-function startRealization() {
-  clearForm();
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('nav-new-real')?.classList.add('active');
-  // Set realization org — prefer an org matching the configured supplier
-  // (по умолчанию подставляем поставщика, но выбор остаётся свободным),
-  // иначе — организация с префиксом 'ИП', иначе — первая в списке
-  const supplierName = (appConfig.supplierName || '').toLowerCase().trim();
-  const supplierOrg = supplierName
-    ? db.orgs.find(o => (o.full||'').toLowerCase().includes(supplierName) || (o.short||'').toLowerCase().includes(supplierName) || supplierName.includes((o.short||'').toLowerCase()))
-    : null;
-  const ipOrg = supplierOrg || db.orgs.find(o => (o.short||'').toUpperCase().startsWith('ИП') || (o.full||'').toUpperCase().startsWith('ИП')) || db.orgs[0];
-  if (ipOrg) document.getElementById('f-org').value = ipOrg.id;
-  updateSpecNum();
-
-  // Show badge
-  document.getElementById('realization-badge').style.display = 'flex';
-
-  // Update comment column header
-  const th = document.querySelector('#page-new table thead th:nth-child(4)');
-  if (th) { th.textContent = 'ЮЛ / Получатель'; th.style.color = 'var(--accent)'; }
-
-  // Hide spec number sub (no spec in realization mode)
-  document.getElementById('spec-num-sub').textContent = 'Спецификация не формируется';
-
-  showPage('new');
-  // Re-render existing rows with org select instead of text
-  const body = document.getElementById('positions-body');
-  body.innerHTML = '';
-  rowCounter = 0;
-  addRow('', 1, 'шт', 0, '', 0, '', '');
-  toast('Режим реализации: ЮЛ указывается на каждую строку');
-}
-
+// Аудит-находка: startRealization() (вызывалась несуществующей кнопкой
+// #nav-new-real — её нет нигде в разметке, только сама функция) удалена
+// как мёртвый код. Её обязанности полностью взяла на себя onDocTypeChange()
+// в positions.js — единственный реально работающий путь входа в режим
+// «Реализация» (через <select id="f-doc-type">), и именно расхождение
+// между ним и isRealization, которое проверяла эта функция, было причиной
+// реального бага: isRealization никогда не становился true при сохранении
+// через обычный UI. См. подробный комментарий в onDocTypeChange().
 function stopRealization() {
-  document.getElementById('realization-badge').style.display = 'none';
-  const th = document.querySelector('#page-new table thead th:nth-child(4)');
-  if (th) { th.textContent = 'Комментарий / ФИО'; th.style.color = ''; }
-  clearForm();
+  // × на бейдже «реализация» — теперь просто возвращает тип документа к
+  // обычному «Товары», а не трогает видимость бейджа напрямую: единственный
+  // источник истины для isRealization — сам f-doc-type (см. positions.js),
+  // так что рассинхрон исключён по построению.
+  const dt = document.getElementById('f-doc-type');
+  if (dt) dt.value = 'goods';
+  onDocTypeChange();
   toast('Обычный режим закупки');
 }
 

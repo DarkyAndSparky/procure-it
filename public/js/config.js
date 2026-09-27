@@ -1,3 +1,10 @@
+// Сентинел для «явно очистить сохранённый пароль» в PUT /api/settings —
+// отличает намеренную очистку от «поле просто оставили пустым, потому что
+// оно и так никогда не подставляется обратно» (см. saveConfig() ниже и
+// комментарий в src/routes/settings.js, 26w36-b18). Не пароль сам по себе,
+// значения совпасть не может — но на всякий случай длинный и с явным именем.
+const CLEAR_PASSWORD_SENTINEL = '__CLEAR_PASSWORD__26w36b18__';
+
 document.addEventListener('keydown', function(e) {
   // Ignore when typing in inputs/textareas
   const tag = document.activeElement?.tagName?.toLowerCase();
@@ -36,10 +43,22 @@ document.addEventListener('keydown', function(e) {
     return;
   }
 
-  // Escape — закрыть модалку / отменить редактирование
+  // Escape — закрыть любую открытую модалку / отменить редактирование.
+  // Аудит-находка (ROADMAP_Q4.md §13, «Escape закрывает modal»): раньше
+  // здесь была захардкожена только org-modal — двух других модалок в
+  // приложении (org-import-modal, restore-confirm-modal) Escape не касался
+  // вообще, хотя обе тоже позиционированы как настоящие модалки (fixed,
+  // затемнение фона). Для restore-confirm-modal нарочно вызываем именно
+  // cancelRestoreConfirm() — «отмена», а не proceedRestoreConfirm(),
+  // который реально запускает восстановление (Escape не должен подтверждать
+  // разрушительное действие).
   if (e.key === 'Escape') {
-    const modal = document.getElementById('org-modal');
-    if (modal && modal.style.display !== 'none') { closeOrgModal(); return; }
+    const orgModal = document.getElementById('org-modal');
+    if (orgModal && orgModal.style.display !== 'none') { closeOrgModal(); return; }
+    const importModal = document.getElementById('org-import-modal');
+    if (importModal && importModal.style.display !== 'none') { closeOrgImportModal(); return; }
+    const restoreModal = document.getElementById('restore-confirm-modal');
+    if (restoreModal && restoreModal.style.display !== 'none') { cancelRestoreConfirm(); return; }
     if (editingId) { cancelEdit(); return; }
     return;
   }
@@ -61,7 +80,7 @@ function showShortcutsHelp() {
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,0.4)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
         <span style="font-size:15px;font-weight:600">Горячие клавиши</span>
-        <button onclick="document.getElementById('shortcuts-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted)">×</button>
+        <button class="shortcuts-close-btn" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted)">×</button>
       </div>
       ${[
         ['Ctrl+S', 'Сохранить заявку'],
@@ -77,7 +96,9 @@ function showShortcutsHelp() {
           <kbd style="background:var(--surface-alt);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:12px;font-family:monospace">${k}</kbd>
         </div>`).join('')}
     </div>`;
-  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  modal.onclick = (e) => {
+    if (e.target === modal || e.target.closest('.shortcuts-close-btn')) modal.remove();
+  };
   document.body.appendChild(modal);
 }
 
@@ -111,7 +132,7 @@ function applyConfig() {
   const logoEl = document.getElementById('sidebar-logo-img');
   if (logoEl) {
     if (appConfig.logoBase64) {
-      logoEl.innerHTML = `<img src="${appConfig.logoBase64}" style="height:28px;width:auto;display:block" alt="logo">`;
+      logoEl.innerHTML = `<img src="${esc(appConfig.logoBase64)}" style="height:28px;width:auto;display:block" alt="logo">`;
     } else {
       logoEl.innerHTML = DEFAULT_LOGO_SVG;
     }
@@ -147,7 +168,16 @@ async function saveConfig() {
     statusWebhook: document.getElementById('cfg-status-webhook')?.value.trim() || '',
     networkFolder: document.getElementById('cfg-network-folder')?.value.trim() || '',
     networkUser:   document.getElementById('cfg-network-user')?.value.trim() || '',
-    networkPass:   document.getElementById('cfg-network-pass')?.value || '',
+    // Аудит-находка (26w36-b18): поле пароля никогда не подставляется обратно
+    // (сознательно, из соображений безопасности — см. populateConfigPage()),
+    // поэтому пустое значение здесь означает «пароль не трогали», а не
+    // «очистить» — так его теперь и трактует PUT /api/settings. Чтобы
+    // реально стереть сохранённый пароль, есть отдельный чекбокс — он шлёт
+    // особый сигнал очистки (CLEAR_PASSWORD_SENTINEL), который бэкенд отличает
+    // от «оставить как есть».
+    networkPass:   document.getElementById('cfg-network-pass-clear')?.checked
+      ? CLEAR_PASSWORD_SENTINEL
+      : (document.getElementById('cfg-network-pass')?.value || ''),
     supplierName:      document.getElementById('cfg-supplier-name')?.value.trim() || '',
     supplierSignatory: document.getElementById('cfg-supplier-signatory')?.value.trim() || '',
     supplierStamp:     document.getElementById('cfg-supplier-stamp')?.checked ? '1' : '0',
@@ -156,18 +186,39 @@ async function saveConfig() {
     smtpPort:    document.getElementById('cfg-smtp-port')?.value.trim() || '587',
     smtpSecure:  document.getElementById('cfg-smtp-secure')?.checked ? '1' : '0',
     smtpUser:    document.getElementById('cfg-smtp-user')?.value.trim() || '',
-    smtpPass:    document.getElementById('cfg-smtp-pass')?.value || '',
+    smtpPass:    document.getElementById('cfg-smtp-pass-clear')?.checked
+      ? CLEAR_PASSWORD_SENTINEL
+      : (document.getElementById('cfg-smtp-pass')?.value || ''),
     smtpFrom:    document.getElementById('cfg-smtp-from')?.value.trim() || '',
   };
 
   await api('PUT', '/api/settings', payload);
   appConfig = { ...appConfig, ...payload };
+  // Сентинел очистки — деталь протокола сохранения, наружу (в appConfig,
+  // которым руководствуется остальной фронт) он попадать не должен.
+  if (payload.networkPass === CLEAR_PASSWORD_SENTINEL) appConfig.networkPass = '';
+  if (payload.smtpPass === CLEAR_PASSWORD_SENTINEL) appConfig.smtpPass = '';
+  // Парольные поля/чекбоксы всегда возвращаем в пустое/неотмеченное
+  // состояние после сохранения — независимо от того, поменяли пароль,
+  // очистили его или просто сохранили что-то другое.
+  const npEl = document.getElementById('cfg-network-pass'); if (npEl) npEl.value = '';
+  const npcEl = document.getElementById('cfg-network-pass-clear'); if (npcEl) npcEl.checked = false;
+  const spEl = document.getElementById('cfg-smtp-pass'); if (spEl) spEl.value = '';
+  const spcEl = document.getElementById('cfg-smtp-pass-clear'); if (spcEl) spcEl.checked = false;
+  populateConfigPage();
   applyConfig();
   toast('✓ Настройки сохранены');
 }
 
 async function resetConfig() {
-  if (!confirm('Сбросить все настройки к умолчаниям?')) return;
+  // Аудит-находка (26w36-b18): confirm() ниже исторически обещал «ВСЕ
+  // настройки», а payload сбрасывал только брендинг (название/подзаголовок/
+  // лого/цвета) — вебхуки, SMTP, сетевая папка, данные поставщика оставались
+  // нетронутыми. Формулировка приведена в соответствие с реальным
+  // поведением, а не наоборот — расширять сброс на вебхуки/SMTP-пароли
+  // втихую от одной кнопки рядом с общим «Сохранить» рискованнее, чем
+  // просто не обещать лишнего.
+  if (!confirm('Сбросить оформление (название, подзаголовок, лого, цвета) к умолчаниям? Вебхуки, SMTP, сетевая папка и данные поставщика затронуты не будут.')) return;
   const defaults = {
     appName: 'Закупки ИТ', appSubtitle: 'Управление заявками',
     logoBase64: '', accentLight: '#2563eb', accentDark: '#60a5fa',
@@ -228,7 +279,7 @@ function updateConfigPreview() {
   const accL    = document.getElementById('cfg-accent-light')?.value || '#2563eb';
   const accD    = document.getElementById('cfg-accent-dark')?.value || '#60a5fa';
   const logoHtml = appConfig.logoBase64
-    ? `<img src="${appConfig.logoBase64}" style="height:24px;width:auto" alt="logo">`
+    ? `<img src="${esc(appConfig.logoBase64)}" style="height:24px;width:auto" alt="logo">`
     : DEFAULT_LOGO_SVG.replace('width="28" height="28"', 'width="24" height="24"');
 
   ['light','dark'].forEach(t => {
@@ -282,6 +333,8 @@ function populateConfigPage() {
   const nu = document.getElementById('cfg-network-user');
   if (nu) nu.value = appConfig.networkUser || '';
   // Don't pre-fill password field for security
+  const npc = document.getElementById('cfg-network-pass-clear');
+  if (npc) npc.checked = false;
   const sn = document.getElementById('cfg-supplier-name');
   if (sn) sn.value = appConfig.supplierName || '';
   const ss = document.getElementById('cfg-supplier-signatory');
@@ -303,6 +356,8 @@ function populateConfigPage() {
   // Пароль не заполняем — показываем placeholder если уже задан
   const spwd = document.getElementById('cfg-smtp-pass');
   if (spwd) spwd.placeholder = appConfig.smtpPass ? '••••••••' : 'Пароль';
+  const spc = document.getElementById('cfg-smtp-pass-clear');
+  if (spc) spc.checked = false;
   const sf = document.getElementById('cfg-smtp-from');
   if (sf) sf.value = appConfig.smtpFrom || '';
 
@@ -377,7 +432,7 @@ async function loadSystemInfoPage() {
         <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:13px;align-items:baseline">
           <span style="color:var(--text-muted)">Версия</span><span style="font-family:monospace;font-weight:600">${esc(info.version)}</span>
           <span style="color:var(--text-muted)">Описание</span><span>${esc(info.description || '—')}</span>
-          <span style="color:var(--text-muted)">Лицензия</span><span><a href="#" onclick="downloadLicense();return false;" style="color:var(--accent);text-decoration:underline dotted" title="Скачать текст лицензии">${esc(info.license)} — скачать</a></span>
+          <span style="color:var(--text-muted)">Лицензия</span><span><a href="#" class="download-license-link" style="color:var(--accent);text-decoration:underline dotted" title="Скачать текст лицензии">${esc(info.license)} — скачать</a></span>
           <span style="color:var(--text-muted)">Автор</span><span>${esc(info.author)}</span>
           <span style="color:var(--text-muted)">Репозиторий</span><span><a href="${esc(info.repository)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(info.repository)}</a></span>
         </div>
@@ -440,7 +495,7 @@ async function loadSystemInfoPage() {
     <div class="card" style="margin-bottom:16px">
       <div class="card-header">
         <span class="card-title">📦 Зависимости (${info.dependencies.length})</span>
-        <button class="btn btn-sm" id="btn-check-outdated" onclick="checkOutdatedPackages()" style="margin-left:auto">🔄 Проверить обновления</button>
+        <button class="btn btn-sm" id="btn-check-outdated" style="margin-left:auto">🔄 Проверить обновления</button>
       </div>
       <div id="outdated-summary" style="padding:0 16px;font-size:11px;color:var(--text-muted)"></div>
       <div class="table-wrap">
@@ -467,6 +522,21 @@ async function loadSystemInfoPage() {
     </div>` : ''}
   `;
   startAboutEnvPolling();
+  if (!el.dataset.actionsBound) {
+    el.dataset.actionsBound = '1';
+    // #about-page-content — статичный контейнер, но el.innerHTML выше
+    // переписывается ЦЕЛИКОМ при каждом визите на страницу «О системе»
+    // (см. registry.js: showPage('about') → loadSystemInfoPage() заново).
+    // Делегация на самом контейнере переживает любое число таких визитов.
+    el.addEventListener('click', e => {
+      if (e.target.closest('.download-license-link')) {
+        e.preventDefault();
+        downloadLicense();
+      } else if (e.target.closest('#btn-check-outdated')) {
+        checkOutdatedPackages();
+      }
+    });
+  }
 }
 
 // ── Технологии — курируемое описание стека поверх сырого списка зависимостей.

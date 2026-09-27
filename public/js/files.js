@@ -18,9 +18,7 @@ async function uploadSignedSpec(id, input) {
 
 async function downloadSignedSpec(id, specNum, orgShort) {
   try {
-    const res = await fetch(`/api/requests/${id}/signed-spec`, {
-      headers: authToken ? { 'X-Auth-Token': authToken } : {}
-    });
+    const res = await fetch(`/api/requests/${id}/signed-spec`);
     if (!res.ok) throw new Error(await res.text());
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -53,9 +51,7 @@ async function uploadInvoiceFile(id, input) {
 
 async function downloadInvoiceFile(id, specNum) {
   try {
-    const res = await fetch(`/api/requests/${id}/invoice-file`, {
-      headers: authToken ? { 'X-Auth-Token': authToken } : {}
-    });
+    const res = await fetch(`/api/requests/${id}/invoice-file`);
     if (!res.ok) throw new Error(await res.text());
     const cd = res.headers.get('Content-Disposition') || '';
     const m = /filename="([^"]+)"/.exec(cd);
@@ -68,13 +64,53 @@ async function downloadInvoiceFile(id, specNum) {
   } catch(e) { toast('Ошибка скачивания: ' + e.message); }
 }
 
+// ─── Лист согласования договора (уровень организации) ───────────────────────
+async function uploadOrgApproval(input) {
+  const id = document.getElementById('modal-org-id').value;
+  const file = input.files[0];
+  if (!file || !id) return;
+  if (file.type !== 'application/pdf') { toast('Только PDF файлы'); input.value=''; return; }
+  if (file.size > 10 * 1024 * 1024) { toast('Файл слишком большой (макс. 10МБ)'); input.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const updated = await api('POST', `/api/orgs/${id}/approval-pdf`, { file: e.target.result, name: file.name });
+      const idx = db.orgs.findIndex(o => o.id === id);
+      if (idx !== -1) db.orgs[idx] = updated;
+      refreshOrgApprovalUi(updated);
+      toast('✅ Лист согласования прикреплён');
+    } catch(err) { toast('Ошибка загрузки: ' + err.message); }
+    input.value = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+function viewOrgApproval() {
+  const id = document.getElementById('modal-org-id').value;
+  if (!id) return;
+  window.open(`/api/orgs/${id}/approval-pdf`, '_blank');
+}
+
+async function removeOrgApproval() {
+  const id = document.getElementById('modal-org-id').value;
+  if (!id) return;
+  if (!confirm('Удалить прикреплённый лист согласования договора?')) return;
+  try {
+    await api('DELETE', `/api/orgs/${id}/approval-pdf`);
+    const idx = db.orgs.findIndex(o => o.id === id);
+    if (idx !== -1) { db.orgs[idx].approval_pdf = ''; db.orgs[idx].approval_pdf_name = ''; }
+    refreshOrgApprovalUi(idx !== -1 ? db.orgs[idx] : null);
+    toast('Лист согласования удалён');
+  } catch(err) { toast('Ошибка удаления: ' + err.message); }
+}
+
 // ─── Open / create request folder ───────────────────────────────────────────
 async function openRequestFolder(id, rootPathOverride) {
   const body = rootPathOverride ? { rootPath: rootPathOverride, saveAsDefault: userRole === 'admin' } : {};
   try {
     const res = await fetch(`/api/requests/${id}/open-folder`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(authToken ? { 'X-Auth-Token': authToken } : {}) },
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
       body: JSON.stringify(body)
     });
     const result = await res.json().catch(() => ({}));
@@ -102,9 +138,7 @@ async function openRequestFolder(id, rootPathOverride) {
 async function downloadBackup(type) {
   const url = type === 'db' ? '/api/backup/db' : '/api/backup';
   try {
-    const res = await fetch(url, {
-      headers: authToken ? { 'X-Auth-Token': authToken } : {}
-    });
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
     const cd   = res.headers.get('content-disposition') || '';
@@ -173,8 +207,8 @@ async function proceedRestoreConfirm() {
   btn.disabled = true; btn.textContent = '⏳ Восстанавливаю…';
   try {
     const result = await api('POST', '/api/restore', data);
-    // Server invalidated all sessions after restore — clear local token and reload
-    localStorage.removeItem('procure_token');
+    // Server invalidated all sessions after restore — cookie auth-token no
+    // longer valid; page reload below will trigger the login modal again.
     const f = result?.files;
     let msg = '✓ Данные восстановлены.';
     if (f && (f.restored || f.missing)) {

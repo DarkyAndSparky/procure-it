@@ -16,7 +16,7 @@ const morgan      = require('morgan');
 const compression = require('compression');
 
 const {
-  PORT, BIND_HOST, DATA_DIR, DB_FILE, CERT_FILE, KEY_FILE, AUTH_ENABLED,
+  PORT, BIND_HOST, DATA_DIR, DB_FILE, CERT_FILE, KEY_FILE, TRUST_PROXY,
 } = require('./src/config');
 const { ensureCert } = require('./src/certs');
 const { initDb, getDb } = require('./src/db/connection');
@@ -24,6 +24,9 @@ const { doBackup } = require('./src/services/backupService');
 const { BACKUP_DIR } = require('./src/config');
 
 const app = express();
+// Only trust X-Forwarded-* headers when explicitly configured to run behind
+// a trusted reverse proxy (see PROCURE_TRUST_PROXY in src/config.js).
+if (TRUST_PROXY) app.set('trust proxy', 1);
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(compression());
@@ -45,8 +48,18 @@ if (helmet) {
     contentSecurityPolicy: {
       directives: {
         defaultSrc:  ["'self'"],
-        scriptSrc:   ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net", "cdnjs.cloudflare.com"],
-        scriptSrcAttr: ["'unsafe-inline'"], // allow onclick="..." / onkeydown="..." used throughout the UI
+        // Inline event handlers (onclick=/onchange=/oninput=/onkeydown=/...)
+        // are gone entirely — both on the static pages (zakupki.html,
+        // reset-password.html) and everywhere HTML is rendered at runtime
+        // (public/js/registry.js, positions.js, users.js, auth.js, config.js —
+        // login modal, registry rows, position rows, user list, org list,
+        // the about-page). Everything runs through addEventListener and event
+        // delegation instead — a single listener on the always-present parent
+        // container (not on each dynamically-created element, which would be
+        // lost on every re-render). Verified with jsdom tests per file before
+        // this line was tightened — see CHANGELOG.md for the history of what
+        // broke on the first (blind) attempt and how it was caught.
+        scriptSrc:   ["'self'", "cdn.jsdelivr.net", "cdnjs.cloudflare.com"],
         styleSrc:    ["'self'", "'unsafe-inline'"],
         styleSrcAttr: ["'unsafe-inline'"], // allow style="..." attributes used throughout the UI
         imgSrc:      ["'self'", "data:", "blob:"],
@@ -106,13 +119,25 @@ app.use('/api/', apiLimiter);
 // до 20mb (спасала только ручная проверка длины поля logoBase64 внутри
 // самого роута, а не парсер).
 //
-// Правильный порядок: сначала монтируем роутер с файловыми загрузками
-// (routes/files.js) — там каждый POST сам объявляет свой express.json(limit),
-// и раз это первый парсер, тронувший тело запроса, он реально работает.
-// Затем — точечный лимит для /api/settings. И только потом — общий дефолт
-// для всех остальных /api-роутов (orgs, requests, auth, backup/restore,
-// docx, bitrix), которые сами парсер не объявляют.
+// Правильный порядок: сначала монтируем роутеры с собственными файловыми
+// загрузками (routes/files.js, routes/orgs.js — там POST/PUT сами объявляют
+// свой express.json(limit) на каждом роуте) — раз это первый парсер,
+// тронувший тело запроса, он реально работает. Затем — точечный лимит для
+// /api/settings. И только потом — общий дефолт для всех остальных
+// /api-роутов (requests, auth, backup/restore, docx, bitrix), которые сами
+// парсер не объявляют.
+// CSRF-защита (double-submit cookie) для cookie-based auth — см. комментарий
+// в src/auth/middleware.js. Не требует распарсенного body, поэтому стоит
+// перед files.js и остальными /api-роутами, включая file-upload эндпоинты,
+// которые сами объявляют свой express.json() ниже по цепочке.
+const { csrfProtection } = require('./src/auth/middleware');
+app.use('/api', (req, res, next) => {
+  if (req.path === '/auth/login' || req.path === '/auth/status') return next();
+  return csrfProtection(req, res, next);
+});
+
 app.use('/api', require('./src/routes/files'));
+app.use('/api', require('./src/routes/orgs'));
 app.use('/api/settings', express.json({ limit: '600kb' }));
 app.use('/api', express.json({ limit: '15mb' }));
 
@@ -143,9 +168,8 @@ app.get('/reset-password', (req, res) => {
 });
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-// (routes/files уже смонтирован выше — см. секцию Body parsers, порядок там критичен)
+// (routes/files и routes/orgs уже смонтированы выше — см. секцию Body parsers, порядок там критичен)
 app.use('/api', require('./src/routes/auth')(strictLimiter));
-app.use('/api', require('./src/routes/orgs'));
 app.use('/api', require('./src/routes/requests'));
 app.use('/api', require('./src/routes/backup')(strictLimiter));
 const { router: settingsRouter, PKG_VERSION } = require('./src/routes/settings');
@@ -171,8 +195,18 @@ app.use((req, res) => {
 
 app.use((err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
-  const message = err.message || 'Внутренняя ошибка сервера';
   console.error(`[ERROR] ${req.method} ${req.path}:`, err.stack || err);
+  // Раньше сюда попадал err.message как есть — для непредвиденных (500)
+  // ошибок это утекало в UI напрямую техническими деталями сервера,
+  // включая полные пути к файлам на диске (нашли вживую: неудавшийся
+  // atomic rename в saveDb() из-за временной блокировки файла на Windows
+  // показывал пользователю "EPERM: operation not permitted, rename
+  // 'C:\Users\...\zakupki.db.tmp-NNNN' -> 'C:\Users\...\zakupki.db'"
+  // прямо в форме смены пароля). Для намеренных, написанных для
+  // пользователя ошибок (res.status(4xx).json({error:'...'}) внутри самих
+  // route-обработчиков) это не проблема — они возвращаются напрямую и
+  // сюда, в error-handler для непойманных исключений, не попадают.
+  const message = status < 500 ? (err.message || 'Ошибка запроса') : 'Внутренняя ошибка сервера. Попробуйте ещё раз через несколько секунд.';
   res.status(status).json({ error: message });
 });
 
@@ -226,8 +260,7 @@ function extractFileFromTarGz(gzBuf, innerPath) {
 async function ensureXlsx() {
   const dest = path.join(__dirname, 'public', 'xlsx.full.min.js');
   if (fs.existsSync(dest) && fs.statSync(dest).size > 100_000) return;
-  throw new Error('Не найден обязательный локальный файл public/xlsx.full.min.js');
-  console.log('[xlsx] Скачиваю xlsx-js-style локально (с проверкой контрольной суммы)...');
+  console.log('[xlsx] Локальный файл отсутствует или повреждён — скачиваю xlsx-js-style (с проверкой контрольной суммы)...');
   try {
     const tarball = await new Promise((resolve, reject) => {
       const chunks = [];
@@ -290,14 +323,7 @@ initDb().then(async () => {
     console.log(`  Локально:    ${proto}://localhost:${PORT}`);
     ips.forEach(ip => console.log(`  По сети:     ${proto}://${ip}:${PORT}`));
     console.log(`  База данных: ${DB_FILE}`);
-    console.log(`  Авторизация: ${AUTH_ENABLED ? '✓ Включена (пароль задан)' : '✗ Выключена (PROCURE_PASSWORD не задан)'}`);
     console.log(`  Логи:        ${path.join(__dirname, 'logs', 'access.log')}`);
-    if (!AUTH_ENABLED) {
-      console.log('');
-      console.log('  ⚠️  Для включения пароля установите переменную:');
-      console.log('     Windows: set PROCURE_PASSWORD=yourpassword');
-      console.log('     Linux:   PROCURE_PASSWORD=yourpassword node server.js');
-    }
     if (proto === 'https') {
       console.log('');
       console.log('  ⚠️  Первый раз браузер покажет предупреждение');

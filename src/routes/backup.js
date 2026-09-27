@@ -5,7 +5,7 @@ const path = require('path');
 
 const { getDb, query, saveDb, rowToRequest } = require('../db/connection');
 const { adminOnly, operatorOrAdmin } = require('../auth/middleware');
-const { BACKUP_DIR, SIGNED_DIR, INVOICE_DIR, DEFAULT_SETTINGS } = require('../config');
+const { BACKUP_DIR, SIGNED_DIR, INVOICE_DIR, APPROVAL_DIR, DEFAULT_SETTINGS } = require('../config');
 const { doBackup, resolveBackupDir } = require('../services/backupService');
 
 module.exports = (strictLimiter) => {
@@ -26,7 +26,16 @@ module.exports = (strictLimiter) => {
       invoiceFileOriginalName: rawFileRows[r.id]?.invoice_file_original_name || '',
     }));
     const addresses = query('SELECT address FROM addresses').map(r => r.address);
-    const templates = query('SELECT * FROM templates').map(r => ({ ...r, positions: JSON.parse(r.positions||'[]') }));
+    const templates = query('SELECT * FROM templates').map(r => {
+      let positions = [];
+      try {
+        const parsed = JSON.parse(r.positions || '[]');
+        if (Array.isArray(parsed)) positions = parsed;
+      } catch(e) {
+        console.warn(`[backup] Битый JSON в positions шаблона ${r.id}, подставлен [] — не даём одному битому шаблону сорвать весь экспорт бэкапа:`, e.message);
+      }
+      return { ...r, positions };
+    });
     const date = new Date().toISOString().slice(0,10);
     const auditRows = query('SELECT * FROM audit_log ORDER BY id DESC LIMIT 1000');
     const settingsRows = query('SELECT key, value FROM settings');
@@ -93,9 +102,30 @@ module.exports = (strictLimiter) => {
         txRun('DELETE FROM orgs');
         for (const o of orgs) {
           if (!o.full || !o.short) { console.warn(`[restore] Организация без full/short пропущена: id=${o.id}`); continue; }
-          const ok = txRun('INSERT OR REPLACE INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp,folder) VALUES (?,?,?,?,?,?,?,?,?,?)',
-            [safeId(o.id, 'org-'), o.full, o.short, o.prefix||'', o.signatory||'', o.contract||'', o.address||'', o.supplier||'', o.stamp !== undefined ? String(o.stamp) : '1', o.folder||'']);
-          if (ok) orgsInserted++;
+          const orgId = safeId(o.id, 'org-');
+          const ok = txRun('INSERT OR REPLACE INTO orgs (id,full,short,prefix,signatory,contract,address,supplier,stamp,folder,approval_pdf,approval_pdf_name) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+            [orgId, o.full, o.short, o.prefix||'', o.signatory||'', o.contract||'', o.address||'', o.supplier||'', o.stamp !== undefined ? String(o.stamp) : '1', o.folder||'', o.approval_pdf||'', o.approval_pdf_name||'']);
+          if (ok) {
+            orgsInserted++;
+            // Файл листа согласования (как и signed_spec_pdf/invoice_file у заявок)
+            // в JSON-бэкапе не лежит — только имя. Если его нет на диске (например,
+            // восстанавливаемся после потери data/contract_approvals), достаём из
+            // зеркала files_mirror, которое обновляется при каждом автобэкапе.
+            if (o.approval_pdf) {
+              const destPath = path.join(APPROVAL_DIR, path.basename(o.approval_pdf));
+              if (!fs.existsSync(destPath)) {
+                const mirrorPath = path.join(resolveBackupDir(), 'files_mirror', 'contract_approvals', path.basename(o.approval_pdf));
+                if (fs.existsSync(mirrorPath)) {
+                  fs.mkdirSync(APPROVAL_DIR, { recursive: true });
+                  fs.copyFileSync(mirrorPath, destPath);
+                  filesRestored++;
+                } else {
+                  filesMissing++;
+                  console.warn(`[restore] Лист согласования не найден ни на диске, ни в зеркале бэкапов: ${o.approval_pdf} (организация ${orgId})`);
+                }
+              }
+            }
+          }
         }
       }
       if (requests.length) {
@@ -229,7 +259,8 @@ module.exports = (strictLimiter) => {
       db.run('COMMIT');
       saveDb();
       // Invalidate all sessions after restore — DB state changed, force re-login
-      try { db.run('DELETE FROM sessions'); saveDb(); } catch(e) {}
+      try { db.run('DELETE FROM sessions'); saveDb(); }
+      catch(e) { console.error('[restore] Не удалось инвалидировать сессии после восстановления — старые сессии могут остаться активными:', e.message); }
       res.json({
         ok: true,
         restored: { orgs: orgsInserted, requests: requestsInserted, users: usersInserted },
@@ -237,8 +268,17 @@ module.exports = (strictLimiter) => {
       });
     } catch(e) {
       try { db.run('ROLLBACK'); } catch(e2) {}
-      console.error('[restore] Ошибка, откат транзакции:', e.message);
-      res.status(500).json({ error: e.message });
+      // Если ошибка произошла ПОСЛЕ db.run('COMMIT') (строка выше) — сама
+      // транзакция в sql.js уже завершена, и это ROLLBACK ничего не
+      // откатывает (типичный случай: COMMIT прошёл, а saveDb() после него
+      // не смогла записать файл на диск — та же EPERM/EBUSY-природа на
+      // Windows, что и в auth.js/change-password, только для восстановления
+      // бэкапа полноценный откат многотабличной транзакции сложнее и здесь
+      // не реализован — известное ограничение). Не отдаём e.message как
+      // есть клиенту в любом случае — та же утечка технических деталей
+      // сервера, что чинили в других местах этой сессии.
+      console.error('[restore] Ошибка при восстановлении:', e.message);
+      res.status(500).json({ error: 'Не удалось восстановить бэкап. Попробуйте ещё раз.' });
     }
   });
 
@@ -252,7 +292,8 @@ module.exports = (strictLimiter) => {
       const latest = path.join(dir, files[0]);
       res.download(latest, files[0]);
     } catch(e) {
-      res.status(500).json({ error: e.message });
+      console.error('[backup] Ошибка создания/скачивания бэкапа:', e.message);
+      res.status(500).json({ error: 'Не удалось создать бэкап. Попробуйте ещё раз.' });
     }
   });
 
@@ -262,7 +303,9 @@ module.exports = (strictLimiter) => {
     const params = [];
     if (request_id) { sql += ' WHERE request_id = ?'; params.push(request_id); }
     sql += ' ORDER BY id DESC LIMIT ?';
-    params.push(parseInt(limit) || 50);
+    const parsedLimit = parseInt(limit);
+    const safeLimit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 500) : 50;
+    params.push(safeLimit);
     res.json(query(sql, params));
   });
 

@@ -8,22 +8,22 @@ function addRow(name='', qty=1, unit='шт', price=0, link='', purchasePrice=0, 
   const tr = document.createElement('tr');
   tr.id = id;
   const pp = purchasePrice || price;
-  const isRealization = document.getElementById('realization-badge')?.style.display !== 'none';
+  const isRealization = document.getElementById('f-doc-type')?.value === 'realization';
   const commentCell = isRealization
-    ? `<td><select style="width:120px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;background:var(--surface);color:var(--text);font-family:inherit" title="Организация-получатель">${db.orgs.map(o=>`<option value="${o.short}" ${rowOrgName===o.short?'selected':''}>${o.short}</option>`).join('')}<option value="На склад" ${rowOrgName==='На склад'?'selected':''}>На склад</option></select></td>`
+    ? `<td><select style="width:120px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:11px;background:var(--surface);color:var(--text);font-family:inherit" title="Организация-получатель">${db.orgs.map(o=>`<option value="${esc(o.short)}" ${rowOrgName===o.short?'selected':''}>${esc(o.short)}</option>`).join('')}<option value="На склад" ${rowOrgName==='На склад'?'selected':''}>На склад</option></select></td>`
     : `<td><input type="text" value="${esc(comment)}" style="width:120px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;font-family:inherit" placeholder="ФИО / куда"></td>`;
   tr.innerHTML = `
     <td class="drag-handle" title="Перетащить для сортировки" style="cursor:grab;text-align:center;color:var(--text-muted);font-size:16px;user-select:none;padding:0 2px">⠿</td>
     <td style="color:var(--text-muted);font-size:12px;text-align:center">${body.children.length + 1}</td>
-    <td><input type="text" value="${esc(name)}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;font-family:inherit" placeholder="Наименование товара" oninput="renumber()"></td>
+    <td><input type="text" value="${esc(name)}" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px;font-family:inherit" placeholder="Наименование товара" class="pos-name"></td>
     ${commentCell}
     <td><input type="text" value="${esc(link)}" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:11px;font-family:inherit" placeholder="URL" title="${esc(link)}"></td>
-    <td><input type="number" value="${esc(qty)}" min="1" step="1" style="width:58px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" oninput="calcRow('${id}')"></td>
+    <td><input type="number" value="${esc(qty)}" min="1" step="1" style="width:58px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" class="pos-qty"></td>
     <td><input type="text" value="${esc(unit)}" style="width:42px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px"></td>
-    <td><input type="text" inputmode="decimal" value="${esc(pp||'')}" style="width:100px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" oninput="this.value=this.value.replace(/[\\s\\u00a0\\u202f]/g,'');calcRow('${id}')" onpaste="setTimeout(()=>{this.value=this.value.replace(/[\\s\\u00a0\\u202f]/g,'');calcRow('${id}')},0)" title="Цена закупа за единицу"></td>
+    <td><input type="text" inputmode="decimal" value="${esc(pp||'')}" style="width:100px;border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12px" class="pos-price" title="Цена закупа за единицу"></td>
     <td id="${id}-sell" style="font-size:12px;font-weight:500;text-align:right;padding-right:8px;color:var(--accent)">—</td>
     <td id="${id}-sum" style="font-size:12px;font-weight:500;text-align:right;padding-right:8px">—</td>
-    <td><button class="del-btn" onclick="removeRow('${id}')">×</button></td>`;
+    <td><button class="del-btn" type="button">×</button></td>`;
   body.appendChild(tr);
   calcTotal();
 }
@@ -119,6 +119,44 @@ function initDragDrop() {
     // Keep focus on the same input after move
     input.focus();
   });
+
+  // ── Event delegation for dynamically-rendered position rows ──────────────
+  // Rows are created by addRow() at runtime (innerHTML), so per-element
+  // addEventListener at page load can't reach them — and CSP script-src-attr
+  // blocks inline onclick/oninput/onpaste attributes (see server.js). One
+  // delegated listener per event type on the always-present #positions-body
+  // container covers every row, present and future, without re-wiring on
+  // each addRow()/removeRow() call.
+  tbody.addEventListener('click', e => {
+    const delBtn = e.target.closest('.del-btn');
+    if (delBtn) {
+      const tr = delBtn.closest('tr');
+      if (tr) removeRow(tr.id);
+    }
+  });
+
+  tbody.addEventListener('input', e => {
+    if (e.target.matches('.pos-name')) {
+      renumber();
+    } else if (e.target.matches('.pos-qty')) {
+      const tr = e.target.closest('tr');
+      if (tr) calcRow(tr.id);
+    } else if (e.target.matches('.pos-price')) {
+      e.target.value = e.target.value.replace(/[\s\u00a0\u202f]/g, '');
+      const tr = e.target.closest('tr');
+      if (tr) calcRow(tr.id);
+    }
+  });
+
+  tbody.addEventListener('paste', e => {
+    if (!e.target.matches('.pos-price')) return;
+    const el = e.target;
+    setTimeout(() => {
+      el.value = el.value.replace(/[\s\u00a0\u202f]/g, '');
+      const tr = el.closest('tr');
+      if (tr) calcRow(tr.id);
+    }, 0);
+  });
 }
 
 function calcRow(id) {
@@ -140,7 +178,26 @@ function onDocTypeChange() {
   if (th) th.textContent = dt === 'install' ? 'Наименование работ / услуг' : 'Наименование товара';
   const warrantyWrap = document.getElementById('f-warranty-wrap');
   if (warrantyWrap) warrantyWrap.style.display = dt === 'support' ? '' : 'none';
+
+  // Аудит-находка (при работе над округлением до рубля — попутно нашлась
+  // отдельная, более серьёзная проблема): isRealization ВЕЗДЕ в проекте
+  // вычислялся по видимости #realization-badge, а не по docType — а
+  // единственный живой путь выбрать «Реализация» (этот select) видимость
+  // бейджа вообще не трогал. Раньше это делала отдельная функция
+  // startRealization(), но вызывать её было уже неоткуда — кнопка
+  // nav-new-real, для которой она писалась, нигде не существует. Итог:
+  // isRealization после выбора «🏪 Реализация» из списка оставался false
+  // при сохранении — со всеми вытекающими (ЮЛ/ФИО колонки в Excel,
+  // per-строчный org-select, бейдж «реализация» в реестре, поле
+  // rowOrgName у позиций) для КАЖДОЙ заявки, созданной через реальный UI.
+  // Теперь единственный источник истины — сам docType (см. addRow() в
+  // этом файле и collectForm() в request-form.js), а бейдж/заголовок
+  // колонки ниже — чисто декоративны, синхронизированы с ним здесь же.
+  const badge = document.getElementById('realization-badge');
+  const commentTh = document.querySelector('#page-new table thead th:nth-child(4)');
   if (dt === 'realization') {
+    if (badge) badge.style.display = 'flex';
+    if (commentTh) { commentTh.textContent = 'ЮЛ / Получатель'; commentTh.style.color = 'var(--accent)'; }
     // Реализация — товар для себя: без наценки, поставщик и организация — по умолчанию
     const noMarkupCb = document.getElementById('f-no-markup');
     if (noMarkupCb && !noMarkupCb.checked) { noMarkupCb.checked = true; toggleNoMarkup(); }
@@ -154,6 +211,9 @@ function onDocTypeChange() {
       if (ipOrg) { orgSel.value = ipOrg.id; updateSpecNum(); fillOrgDefaults(); }
     }
     toast('🏪 Реализация: цена без наценки, организация по умолчанию');
+  } else {
+    if (badge) badge.style.display = 'none';
+    if (commentTh) { commentTh.textContent = 'Комментарий / ФИО'; commentTh.style.color = ''; }
   }
 }
 
@@ -176,6 +236,7 @@ function calcTotal() {
   const markup = (markupEl && markupEl.value !== '' ? parseNum(markupEl.value) : 5) / 100;
   const deliveryOn = document.getElementById('f-delivery-on')?.checked;
   const deliveryCost = deliveryOn ? (parseNum(document.getElementById('f-delivery-cost')?.value) || 0) : 0;
+  const roundToRuble = document.getElementById('f-round-to-ruble')?.checked || false;
 
   // Step 1: total purchase (без доставки)
   let totalPurchase = 0;
@@ -195,7 +256,7 @@ function calcTotal() {
   for (const { tr, qty, pp, purchaseSum } of rowData) {
     const id = tr.id;
     const { deliveryShare, ppWithDelivery, sellPerUnit, sellSum } = calcRowPricing({
-      purchasePrice: pp, qty, totalPurchase, deliveryCost, markup,
+      purchasePrice: pp, qty, totalPurchase, deliveryCost, markup, roundToRuble,
     });
     totalSell += sellSum;
     const sellEl = tr.querySelector(`#${id}-sell`);

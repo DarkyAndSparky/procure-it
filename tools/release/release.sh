@@ -66,8 +66,18 @@ git commit -m "chore: bump version to $NEW_VER"
 echo "[4/9] git checkout main ..."
 git checkout main
 
-echo "[5/9] git merge dev --no-ff ..."
-git merge dev --no-ff -m "release: v$NEW_VER"
+echo "[5/9] git merge dev (content always taken from dev, no conflicts possible) ..."
+# `main` is a build target, not an independently-edited branch: content
+# should always be exactly dev's tree (minus the strip below), whatever
+# a stray direct push to main might contain. A plain three-way merge
+# conflicts the moment main has anything dev doesn't share ancestry
+# with (found live on 26w39-r01: 12 conflicts, from old dev-only files
+# plus 3 commits pushed straight to main outside the release process).
+# `-s ours` records the merge (both parents, correct history/blame)
+# but keeps the CURRENT tree — `checkout dev -- .` then overwrites it
+# with dev's in full. dev always wins entirely, structurally.
+git merge --no-commit --no-ff -s ours dev
+git checkout dev -- .
 
 echo "[6/9] removing dev-only files from main ..."
 git rm -r --cached --ignore-unmatch test/              2>/dev/null || true
@@ -88,12 +98,12 @@ rm -rf test/ e2e/ tools/
 rm -f playwright.config.js test.bat test.sh test-e2e.bat test-e2e.sh CONTRIBUTING.md ROADMAP.md ROADMAP_Q4.md ROADMAP_MIGRATION.md AI_CONTEXT.md
 echo "  done."
 
-echo "[7/9] git commit strip ..."
-if ! git diff --cached --quiet; then
-    git commit -m "chore: strip dev-only files for release"
-else
-    echo "  nothing to commit, ok."
-fi
+echo "[7/9] git commit merge+strip ..."
+# The merge from step 5 is still uncommitted (--no-commit) — this is
+# the one commit that actually lands, combining "take dev's tree" and
+# "minus the strip" in one step, so main's history shows one release
+# commit, not two.
+git commit --allow-empty -m "release: v$NEW_VER"
 
 echo "[8/9] git tag v$NEW_VER ..."
 git tag "v$NEW_VER"

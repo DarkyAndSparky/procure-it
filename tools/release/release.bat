@@ -83,12 +83,23 @@ echo [4/9] git checkout main ...
 git checkout main
 if errorlevel 1 ( echo ERROR: checkout main & exit /b 1 )
 
-echo [5/9] git merge dev --no-ff ...
-git merge dev --no-ff -m "release: v%NEW_VER%"
-if errorlevel 1 (
-    echo ERROR: merge conflict. Resolve manually.
-    exit /b 1
-)
+echo [5/9] git merge dev (content always taken from dev, no conflicts possible) ...
+rem `main` is a build target, not an independently-edited branch: its
+rem content should always be exactly dev's tree (minus the strip in
+rem step 6), regardless of what a stray direct push to main might
+rem contain. A plain three-way `git merge dev` conflicts the moment
+rem anyone (or any earlier broken release) put content into main that
+rem dev doesn't share ancestry with (found live on 26w39-r01: 12
+rem conflicts, from old dev-only files plus 3 commits pushed straight to
+rem main outside the release process). `-s ours` records the merge
+rem (both parents, so history/blame stay correct) but keeps the CURRENT
+rem tree — then `checkout dev -- .` overwrites that tree with dev's in
+rem full. Net effect: dev always wins entirely, structurally, no
+rem per-file conflict resolution ever needed here.
+git merge --no-commit --no-ff -s ours dev
+if errorlevel 1 ( echo ERROR: merge -s ours failed & exit /b 1 )
+git checkout dev -- .
+if errorlevel 1 ( echo ERROR: checkout dev -- . failed & exit /b 1 )
 
 echo [6/9] removing dev-only files from main ...
 git rm -r --cached --ignore-unmatch test/              >nul 2>&1
@@ -120,13 +131,13 @@ if exist ROADMAP_MIGRATION.md del /q ROADMAP_MIGRATION.md
 if exist AI_CONTEXT.md        del /q AI_CONTEXT.md
 echo   done.
 
-echo [7/9] git commit strip ...
-git diff --cached --quiet
-if errorlevel 1 (
-    git commit -m "chore: strip dev-only files for release"
-) else (
-    echo   nothing to commit, ok.
-)
+echo [7/9] git commit merge+strip ...
+rem With the -s ours/checkout-dev trick above, the merge from step 5 is
+rem still uncommitted (--no-commit) — this is the one commit that
+rem actually lands, combining "take dev's tree" and "minus the strip"
+rem in one step, so `main`'s history shows one release commit, not two.
+git commit --allow-empty -m "release: v%NEW_VER%"
+if errorlevel 1 ( echo ERROR: commit release & exit /b 1 )
 
 echo [8/9] git tag v%NEW_VER% ...
 git tag "v%NEW_VER%"
